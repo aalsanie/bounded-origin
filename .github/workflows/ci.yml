@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Check
+        run: ./gradlew clean check --stacktrace
+        if: runner.os != 'Windows'
+      - name: Check
+        run: .\gradlew.bat clean check --stacktrace
+        if: runner.os == 'Windows'
+      - name: Verify dependency locks
+        run: ./scripts/verify-locks.sh
+        if: runner.os != 'Windows'
+      - name: Verify dependency locks
+        run: .\scripts\verify-locks.ps1
+        shell: powershell
+        if: runner.os == 'Windows'
+
+  reproducibility:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Verify reproducible JARs
+        run: ./scripts/verify-reproducible.sh
