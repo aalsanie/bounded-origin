@@ -1,11 +1,11 @@
 # bounded-origin-api public API
 public final class io.github.aalsanie.boundedorigin.api.Artifact extends java.lang.Record {
   public io.github.aalsanie.boundedorigin.api.Artifact(long, java.util.Map<java.lang.String, java.lang.String>, io.github.aalsanie.boundedorigin.api.ArtifactBody);
+  public java.util.Map<java.lang.String, java.lang.String> metadata();
   public final java.lang.String toString();
   public final int hashCode();
   public final boolean equals(java.lang.Object);
   public long contentLength();
-  public java.util.Map<java.lang.String, java.lang.String> metadata();
   public io.github.aalsanie.boundedorigin.api.ArtifactBody body();
 }
 public interface io.github.aalsanie.boundedorigin.api.ArtifactBody {
@@ -34,12 +34,12 @@ public final class io.github.aalsanie.boundedorigin.api.Canonicalizers {
 }
 public final class io.github.aalsanie.boundedorigin.api.ClientComputation extends java.lang.Record {
   public io.github.aalsanie.boundedorigin.api.ClientComputation(java.lang.String, java.lang.String, java.util.Map<java.lang.String, java.lang.String>);
+  public java.util.Map<java.lang.String, java.lang.String> parameters();
   public final java.lang.String toString();
   public final int hashCode();
   public final boolean equals(java.lang.Object);
   public java.lang.String type();
   public java.lang.String version();
-  public java.util.Map<java.lang.String, java.lang.String> parameters();
 }
 public final class io.github.aalsanie.boundedorigin.api.DenialReason extends java.lang.Enum<io.github.aalsanie.boundedorigin.api.DenialReason> {
   public static final io.github.aalsanie.boundedorigin.api.DenialReason POLICY_DENIED;
@@ -58,16 +58,20 @@ public final class io.github.aalsanie.boundedorigin.api.ExecutionStrategy extend
   public static io.github.aalsanie.boundedorigin.api.ExecutionStrategy[] values();
   public static io.github.aalsanie.boundedorigin.api.ExecutionStrategy valueOf(java.lang.String);
 }
+public final class io.github.aalsanie.boundedorigin.api.MaterializationException extends java.lang.Exception {
+  public io.github.aalsanie.boundedorigin.api.MaterializationException(java.lang.String);
+  public io.github.aalsanie.boundedorigin.api.MaterializationException(java.lang.String, java.lang.Throwable);
+}
 public interface io.github.aalsanie.boundedorigin.api.Materializer {
-  public abstract io.github.aalsanie.boundedorigin.api.Artifact materialize(io.github.aalsanie.boundedorigin.api.Operation) throws java.lang.Exception;
+  public abstract io.github.aalsanie.boundedorigin.api.Artifact materialize(io.github.aalsanie.boundedorigin.api.Operation) throws io.github.aalsanie.boundedorigin.api.MaterializationException;
 }
 public final class io.github.aalsanie.boundedorigin.api.Operation extends java.lang.Record {
   public io.github.aalsanie.boundedorigin.api.Operation(java.lang.String, java.util.Map<java.lang.String, java.util.List<java.lang.String>>);
+  public java.util.Map<java.lang.String, java.util.List<java.lang.String>> dimensions();
   public final java.lang.String toString();
   public final int hashCode();
   public final boolean equals(java.lang.Object);
   public java.lang.String type();
-  public java.util.Map<java.lang.String, java.util.List<java.lang.String>> dimensions();
 }
 public final class io.github.aalsanie.boundedorigin.api.OperationKey extends java.lang.Record {
   public io.github.aalsanie.boundedorigin.api.OperationKey(java.lang.String, long, java.lang.String, java.lang.String);
@@ -118,11 +122,11 @@ public interface io.github.aalsanie.boundedorigin.api.PolicyMatcher {
 }
 public final class io.github.aalsanie.boundedorigin.api.RequestDescriptor extends java.lang.Record {
   public io.github.aalsanie.boundedorigin.api.RequestDescriptor(java.lang.String, java.util.Map<java.lang.String, java.util.List<java.lang.String>>, io.github.aalsanie.boundedorigin.api.TrustLevel);
+  public java.util.Map<java.lang.String, java.util.List<java.lang.String>> attributes();
   public final java.lang.String toString();
   public final int hashCode();
   public final boolean equals(java.lang.Object);
   public java.lang.String name();
-  public java.util.Map<java.lang.String, java.util.List<java.lang.String>> attributes();
   public io.github.aalsanie.boundedorigin.api.TrustLevel trustLevel();
 }
 public final class io.github.aalsanie.boundedorigin.api.TrustLevel extends java.lang.Enum<io.github.aalsanie.boundedorigin.api.TrustLevel> {
