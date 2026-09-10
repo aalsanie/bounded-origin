@@ -11,8 +11,10 @@ import io.github.aalsanie.boundedorigin.api.ExecutionStrategy;
 import io.github.aalsanie.boundedorigin.api.Operation;
 import io.github.aalsanie.boundedorigin.api.OriginDecision;
 import io.github.aalsanie.boundedorigin.api.OriginPolicy;
+import io.github.aalsanie.boundedorigin.api.PolicyMatcher;
 import io.github.aalsanie.boundedorigin.api.RequestDescriptor;
 import io.github.aalsanie.boundedorigin.api.TrustLevel;
+import java.lang.reflect.Proxy;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -124,7 +126,7 @@ class PolicyEngineTest {
             request -> {
               throw new IllegalStateException("broken");
             });
-    PolicyRule nullClassifier = new PolicyRule(materialize("null", 2), request -> null);
+    PolicyRule nullClassifier = new PolicyRule(materialize("null", 2), nullReturningMatcher());
     OriginPolicy throwingCanonicalizer =
         OriginPolicy.materialize(
             "canonical",
@@ -237,5 +239,18 @@ class PolicyEngineTest {
 
   private static OriginPolicy fallback() {
     return OriginPolicy.deny("fallback", 1, Integer.MIN_VALUE);
+  }
+
+  private static PolicyMatcher nullReturningMatcher() {
+    return (PolicyMatcher)
+        Proxy.newProxyInstance(
+            PolicyMatcher.class.getClassLoader(),
+            new Class<?>[] {PolicyMatcher.class},
+            (proxy, method, arguments) -> {
+              if (method.getName().equals("classify")) {
+                return null;
+              }
+              throw new UnsupportedOperationException(method.getName());
+            });
   }
 }

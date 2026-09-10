@@ -1,6 +1,5 @@
 package io.github.aalsanie.boundedorigin.api;
 
-import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
@@ -12,6 +11,11 @@ public record ClientComputation(String type, String version, Map<String, String>
     parameters = immutableParameters(parameters);
   }
 
+  @Override
+  public Map<String, String> parameters() {
+    return Map.copyOf(parameters);
+  }
+
   private static Map<String, String> immutableParameters(Map<String, String> values) {
     Objects.requireNonNull(values, "parameters");
     Map<String, String> copy = new LinkedHashMap<>();
@@ -21,7 +25,7 @@ public record ClientComputation(String type, String version, Map<String, String>
           Objects.requireNonNull(value, "parameter value");
           copy.put(validatedKey, value);
         });
-    return Collections.unmodifiableMap(copy);
+    return Map.copyOf(copy);
   }
 
   private static String requireNonBlank(String value, String label) {

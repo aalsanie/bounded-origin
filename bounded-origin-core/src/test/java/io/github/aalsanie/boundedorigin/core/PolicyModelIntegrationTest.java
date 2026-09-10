@@ -9,6 +9,7 @@ import io.github.aalsanie.boundedorigin.api.Artifact;
 import io.github.aalsanie.boundedorigin.api.ArtifactStore;
 import io.github.aalsanie.boundedorigin.api.Budget;
 import io.github.aalsanie.boundedorigin.api.Canonicalizers;
+import io.github.aalsanie.boundedorigin.api.MaterializationException;
 import io.github.aalsanie.boundedorigin.api.Materializer;
 import io.github.aalsanie.boundedorigin.api.Operation;
 import io.github.aalsanie.boundedorigin.api.OperationKey;
@@ -30,7 +31,7 @@ import org.junit.jupiter.api.Test;
 
 class PolicyModelIntegrationTest {
   @Test
-  void inMemoryOriginUsesSemanticKeyWithoutHttp() throws Exception {
+  void inMemoryOriginUsesSemanticKeyWithoutHttp() throws IOException, MaterializationException {
     OriginPolicy policy =
         OriginPolicy.materialize(
             "render",
@@ -94,7 +95,7 @@ class PolicyModelIntegrationTest {
 
   private static Artifact getOrMaterialize(
       ArtifactStore store, Materializer materializer, OriginDecision.Selected decision)
-      throws Exception {
+      throws IOException, MaterializationException {
     Optional<Artifact> existing = store.get(decision.operationKey());
     if (existing.isPresent()) {
       return existing.orElseThrow();

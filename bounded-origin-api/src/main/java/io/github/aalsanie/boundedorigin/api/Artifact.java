@@ -1,6 +1,5 @@
 package io.github.aalsanie.boundedorigin.api;
 
-import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
@@ -14,6 +13,11 @@ public record Artifact(long contentLength, Map<String, String> metadata, Artifac
     body = Objects.requireNonNull(body, "body");
   }
 
+  @Override
+  public Map<String, String> metadata() {
+    return Map.copyOf(metadata);
+  }
+
   private static Map<String, String> immutableMetadata(Map<String, String> values) {
     Objects.requireNonNull(values, "metadata");
     Map<String, String> copy = new LinkedHashMap<>();
@@ -23,6 +27,6 @@ public record Artifact(long contentLength, Map<String, String> metadata, Artifac
           Objects.requireNonNull(value, "metadata value");
           copy.put(key, value);
         });
-    return Collections.unmodifiableMap(copy);
+    return Map.copyOf(copy);
   }
 }

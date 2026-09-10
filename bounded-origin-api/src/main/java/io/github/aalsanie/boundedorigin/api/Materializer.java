@@ -2,5 +2,5 @@ package io.github.aalsanie.boundedorigin.api;
 
 @FunctionalInterface
 public interface Materializer {
-  Artifact materialize(Operation operation) throws Exception;
+  Artifact materialize(Operation operation) throws MaterializationException;
 }

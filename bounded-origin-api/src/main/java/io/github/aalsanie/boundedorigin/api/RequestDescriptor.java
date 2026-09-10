@@ -1,6 +1,5 @@
 package io.github.aalsanie.boundedorigin.api;
 
-import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -14,6 +13,11 @@ public record RequestDescriptor(
     trustLevel = Objects.requireNonNull(trustLevel, "trustLevel");
   }
 
+  @Override
+  public Map<String, List<String>> attributes() {
+    return Map.copyOf(attributes);
+  }
+
   private static Map<String, List<String>> immutableMultiMap(
       Map<String, List<String>> values, String label) {
     Objects.requireNonNull(values, label);
@@ -25,10 +29,9 @@ public record RequestDescriptor(
           if (entries.isEmpty()) {
             throw new IllegalArgumentException(label + " values must not be empty");
           }
-          List<String> entryCopy = List.copyOf(entries);
-          copy.put(validatedKey, entryCopy);
+          copy.put(validatedKey, List.copyOf(entries));
         });
-    return Collections.unmodifiableMap(copy);
+    return Map.copyOf(copy);
   }
 
   private static String requireNonBlank(String value, String label) {
