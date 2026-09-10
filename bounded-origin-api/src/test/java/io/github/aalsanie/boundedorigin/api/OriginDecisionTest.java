@@ -30,6 +30,28 @@ class OriginDecisionTest {
   }
 
   @Test
+  void selectedRejectsKeyThatDoesNotMatchPolicyIdentity() {
+    OriginPolicy policy = OriginPolicy.artifactOnly("p", 2, 1, "m2", Canonicalizers.byDimensions());
+    Operation operation = new Operation("op", Map.of());
+
+    assertThrows(
+        IllegalArgumentException.class,
+        () ->
+            new OriginDecision.Selected(
+                policy, operation, new OperationKey("other", 2, "identity", "m2")));
+    assertThrows(
+        IllegalArgumentException.class,
+        () ->
+            new OriginDecision.Selected(
+                policy, operation, new OperationKey("p", 3, "identity", "m2")));
+    assertThrows(
+        IllegalArgumentException.class,
+        () ->
+            new OriginDecision.Selected(
+                policy, operation, new OperationKey("p", 2, "identity", "other")));
+  }
+
+  @Test
   void deniedCopiesAndValidatesPolicyIds() {
     List<String> ids = new ArrayList<>(List.of("a", "b"));
     OriginDecision.Denied denied = new OriginDecision.Denied(DenialReason.AMBIGUOUS_POLICY, ids);

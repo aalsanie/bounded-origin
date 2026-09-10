@@ -1,4 +1,39 @@
 # bounded-origin-core public API
+public final class io.github.aalsanie.boundedorigin.core.BoundedOriginExecutor implements java.lang.AutoCloseable {
+  public io.github.aalsanie.boundedorigin.core.BoundedOriginExecutor(io.github.aalsanie.boundedorigin.api.Budget, java.time.Duration, int);
+  public java.util.concurrent.CompletionStage<io.github.aalsanie.boundedorigin.api.Artifact> execute(io.github.aalsanie.boundedorigin.api.OriginDecision$Selected, io.github.aalsanie.boundedorigin.api.Materializer);
+  public void close();
+}
+class io.github.aalsanie.boundedorigin.core.BoundedOriginExecutor$1 {
+}
+final class io.github.aalsanie.boundedorigin.core.BoundedOriginExecutor$Job {
+}
+final class io.github.aalsanie.boundedorigin.core.BoundedOriginExecutor$Termination extends java.lang.Enum<io.github.aalsanie.boundedorigin.core.BoundedOriginExecutor$Termination> {
+  public static final io.github.aalsanie.boundedorigin.core.BoundedOriginExecutor$Termination NONE;
+  public static final io.github.aalsanie.boundedorigin.core.BoundedOriginExecutor$Termination COMPLETED;
+  public static final io.github.aalsanie.boundedorigin.core.BoundedOriginExecutor$Termination TIMEOUT;
+  public static final io.github.aalsanie.boundedorigin.core.BoundedOriginExecutor$Termination CLOSED;
+  public static final io.github.aalsanie.boundedorigin.core.BoundedOriginExecutor$Termination INTERNAL_ERROR;
+  public static io.github.aalsanie.boundedorigin.core.BoundedOriginExecutor$Termination[] values();
+  public static io.github.aalsanie.boundedorigin.core.BoundedOriginExecutor$Termination valueOf(java.lang.String);
+}
+final class io.github.aalsanie.boundedorigin.core.BoundedOriginExecutor$WorkOutcome {
+}
+public final class io.github.aalsanie.boundedorigin.core.OriginExecutionException extends java.lang.RuntimeException {
+  public io.github.aalsanie.boundedorigin.core.OriginExecutionFailure failure();
+}
+public final class io.github.aalsanie.boundedorigin.core.OriginExecutionFailure extends java.lang.Enum<io.github.aalsanie.boundedorigin.core.OriginExecutionFailure> {
+  public static final io.github.aalsanie.boundedorigin.core.OriginExecutionFailure GLOBAL_QUEUE_LIMIT;
+  public static final io.github.aalsanie.boundedorigin.core.OriginExecutionFailure POLICY_QUEUE_LIMIT;
+  public static final io.github.aalsanie.boundedorigin.core.OriginExecutionFailure TIMEOUT;
+  public static final io.github.aalsanie.boundedorigin.core.OriginExecutionFailure RESULT_TOO_LARGE;
+  public static final io.github.aalsanie.boundedorigin.core.OriginExecutionFailure MATERIALIZATION_FAILED;
+  public static final io.github.aalsanie.boundedorigin.core.OriginExecutionFailure COOLDOWN;
+  public static final io.github.aalsanie.boundedorigin.core.OriginExecutionFailure CLOSED;
+  public static final io.github.aalsanie.boundedorigin.core.OriginExecutionFailure INTERNAL_ERROR;
+  public static io.github.aalsanie.boundedorigin.core.OriginExecutionFailure[] values();
+  public static io.github.aalsanie.boundedorigin.core.OriginExecutionFailure valueOf(java.lang.String);
+}
 public final class io.github.aalsanie.boundedorigin.core.PolicyEngine {
   public io.github.aalsanie.boundedorigin.core.PolicyEngine(java.util.List<io.github.aalsanie.boundedorigin.core.PolicyRule>, io.github.aalsanie.boundedorigin.api.OriginPolicy);
   public io.github.aalsanie.boundedorigin.api.OriginDecision evaluate(io.github.aalsanie.boundedorigin.api.RequestDescriptor);

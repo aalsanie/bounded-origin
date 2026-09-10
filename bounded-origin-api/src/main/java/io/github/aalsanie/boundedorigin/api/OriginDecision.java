@@ -15,6 +15,16 @@ public sealed interface OriginDecision permits OriginDecision.Selected, OriginDe
       if (policy.strategy() == ExecutionStrategy.DENY) {
         throw new IllegalArgumentException("selected decision cannot use DENY strategy");
       }
+      if (!policy.id().equals(operationKey.policyId())) {
+        throw new IllegalArgumentException("operationKey policyId must match policy");
+      }
+      if (policy.version() != operationKey.policyVersion()) {
+        throw new IllegalArgumentException("operationKey policyVersion must match policy");
+      }
+      String materializerVersion = policy.materializerVersion().orElseThrow();
+      if (!materializerVersion.equals(operationKey.materializerVersion())) {
+        throw new IllegalArgumentException("operationKey materializerVersion must match policy");
+      }
     }
   }
 
