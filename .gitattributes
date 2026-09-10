@@ -15,5 +15,6 @@
 *.toml text eol=lf
 *.yml text eol=lf
 *.yaml text eol=lf
+*.api text eol=lf
 
 gradle/wrapper/gradle-wrapper.jar binary
