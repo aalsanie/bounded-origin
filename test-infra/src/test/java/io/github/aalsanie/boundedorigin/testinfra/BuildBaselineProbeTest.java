@@ -5,18 +5,18 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import org.junit.jupiter.api.Test;
 
 class BuildBaselineProbeTest {
-    @Test
-    void normalizesNull() {
-        assertEquals("empty", BuildBaselineProbe.normalize(null));
-    }
+  @Test
+  void normalizesNull() {
+    assertEquals("empty", BuildBaselineProbe.normalize(null));
+  }
 
-    @Test
-    void normalizesBlank() {
-        assertEquals("empty", BuildBaselineProbe.normalize("   "));
-    }
+  @Test
+  void normalizesBlank() {
+    assertEquals("empty", BuildBaselineProbe.normalize("   "));
+  }
 
-    @Test
-    void normalizesValue() {
-        assertEquals("bounded origin", BuildBaselineProbe.normalize("  BOUNDED ORIGIN  "));
-    }
+  @Test
+  void normalizesValue() {
+    assertEquals("bounded origin", BuildBaselineProbe.normalize("  BOUNDED ORIGIN  "));
+  }
 }
