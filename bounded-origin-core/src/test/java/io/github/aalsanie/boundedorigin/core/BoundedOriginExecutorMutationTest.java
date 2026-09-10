@@ -22,6 +22,7 @@ import java.util.concurrent.CompletionStage;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import org.junit.jupiter.api.Test;
@@ -215,7 +216,8 @@ class BoundedOriginExecutorMutationTest {
   void timeoutFailsStageInterruptsWorkerAndKeepsCapacityUntilWorkerStops()
       throws InterruptedException {
     Budget global = new Budget(1, 0, Duration.ofSeconds(5), 16);
-    OriginPolicy selectedPolicy = policy("p", new Budget(1, 0, Duration.ofNanos(1), 16));
+    OriginPolicy selectedPolicy =
+        policy("p", new Budget(1, 0, Duration.ofNanos(1), 16));
     CountDownLatch started = new CountDownLatch(1);
     CountDownLatch release = new CountDownLatch(1);
     CountDownLatch interrupted = new CountDownLatch(1);
@@ -225,7 +227,12 @@ class BoundedOriginExecutorMutationTest {
 
     try (BoundedOriginExecutor executor =
         new BoundedOriginExecutor(
-            global, Duration.ofSeconds(1), 8, System::nanoTime, workers, timeouts)) {
+            global,
+            Duration.ofSeconds(1),
+            8,
+            System::nanoTime,
+            workers,
+            timeouts)) {
       CompletionStage<Artifact> first =
           executor.execute(
               decision(selectedPolicy, "first"),
@@ -417,7 +424,13 @@ class BoundedOriginExecutorMutationTest {
     ManualThreadFactory timeouts = new ManualThreadFactory();
 
     try (BoundedOriginExecutor executor =
-        new BoundedOriginExecutor(budget, Duration.ofNanos(10), 2, now::get, workers, timeouts)) {
+        new BoundedOriginExecutor(
+            budget,
+            Duration.ofNanos(10),
+            2,
+            now::get,
+            workers,
+            timeouts)) {
       failMaterialization(executor, workers, selectedPolicy, "a", 0);
       now.set(1);
       failMaterialization(executor, workers, selectedPolicy, "b", 1);
@@ -448,15 +461,17 @@ class BoundedOriginExecutorMutationTest {
     Budget budget = new Budget(1, 0, Duration.ofSeconds(5), 16);
     OriginPolicy selectedPolicy = policy("p", budget);
     IllegalStateException creationFailure = new IllegalStateException("create");
-    ThreadFactory throwingFactory =
-        ignored -> {
-          throw creationFailure;
-        };
+    ThreadFactory throwingFactory = ignored -> { throw creationFailure; };
     ManualThreadFactory timeouts = new ManualThreadFactory();
 
     try (BoundedOriginExecutor executor =
         new BoundedOriginExecutor(
-            budget, Duration.ofSeconds(1), 4, System::nanoTime, throwingFactory, timeouts)) {
+            budget,
+            Duration.ofSeconds(1),
+            4,
+            System::nanoTime,
+            throwingFactory,
+            timeouts)) {
       OriginExecutionException failure =
           assertFailure(
               executor.execute(decision(selectedPolicy, "create"), ignored -> artifact(1)),
@@ -467,7 +482,7 @@ class BoundedOriginExecutorMutationTest {
       assertEquals(1, executor.cooldownEntries());
     }
 
-    IllegalStateException startFailure = new IllegalStateException("start");
+    AssertionError startFailure = new AssertionError("start");
     ManualThreadFactory failingWorkers = new ManualThreadFactory(0, startFailure);
     ManualThreadFactory secondTimeouts = new ManualThreadFactory();
     try (BoundedOriginExecutor executor = executor(budget, failingWorkers, secondTimeouts)) {
@@ -493,7 +508,12 @@ class BoundedOriginExecutorMutationTest {
 
     try (BoundedOriginExecutor executor =
         new BoundedOriginExecutor(
-            budget, Duration.ofSeconds(1), 4, System::nanoTime, workers, nullTimeouts)) {
+            budget,
+            Duration.ofSeconds(1),
+            4,
+            System::nanoTime,
+            workers,
+            nullTimeouts)) {
       assertFailure(
           executor.execute(decision(selectedPolicy, "create"), ignored -> artifact(1)),
           OriginExecutionFailure.INTERNAL_ERROR);
@@ -504,7 +524,7 @@ class BoundedOriginExecutorMutationTest {
     }
 
     ManualThreadFactory secondWorkers = new ManualThreadFactory();
-    IllegalStateException startFailure = new IllegalStateException("timeout-start");
+    AssertionError startFailure = new AssertionError("timeout-start");
     ManualThreadFactory failingTimeouts = new ManualThreadFactory(0, startFailure);
     try (BoundedOriginExecutor executor = executor(budget, secondWorkers, failingTimeouts)) {
       CompletionStage<Artifact> stage =
@@ -522,6 +542,7 @@ class BoundedOriginExecutorMutationTest {
       assertEquals(0, executor.cooldownEntries());
     }
   }
+
 
   @Test
   void samePolicyActiveAccountingDecrementsOneJobAtATime() {
@@ -564,7 +585,12 @@ class BoundedOriginExecutorMutationTest {
         };
     BoundedOriginExecutor executor =
         new BoundedOriginExecutor(
-            budget, Duration.ofSeconds(1), 4, System::nanoTime, workers, closingTimeouts);
+            budget,
+            Duration.ofSeconds(1),
+            4,
+            System::nanoTime,
+            workers,
+            closingTimeouts);
     executorRef.set(executor);
 
     CompletionStage<Artifact> stage =
@@ -594,11 +620,16 @@ class BoundedOriginExecutorMutationTest {
               }
             };
     ManualThreadFactory failingTimeouts =
-        new ManualThreadFactory(0, new IllegalStateException("timeout-start"));
+        new ManualThreadFactory(0, new AssertionError("timeout-start"));
 
     try (BoundedOriginExecutor executor =
         new BoundedOriginExecutor(
-            budget, Duration.ofSeconds(1), 4, System::nanoTime, inlineWorkers, failingTimeouts)) {
+            budget,
+            Duration.ofSeconds(1),
+            4,
+            System::nanoTime,
+            inlineWorkers,
+            failingTimeouts)) {
       CompletionStage<Artifact> stage =
           executor.execute(
               decision(selectedPolicy, "fast"),
@@ -632,12 +663,22 @@ class BoundedOriginExecutorMutationTest {
         NullPointerException.class,
         () ->
             new BoundedOriginExecutor(
-                budget, Duration.ofSeconds(1), 1, System::nanoTime, null, factory));
+                budget,
+                Duration.ofSeconds(1),
+                1,
+                System::nanoTime,
+                null,
+                factory));
     assertThrows(
         NullPointerException.class,
         () ->
             new BoundedOriginExecutor(
-                budget, Duration.ofSeconds(1), 1, System::nanoTime, factory, null));
+                budget,
+                Duration.ofSeconds(1),
+                1,
+                System::nanoTime,
+                factory,
+                null));
   }
 
   @Test
@@ -649,8 +690,7 @@ class BoundedOriginExecutorMutationTest {
 
     try (BoundedOriginExecutor executor = executor(budget, workers, timeouts)) {
       NullPointerException nullDecision =
-          assertThrows(
-              NullPointerException.class, () -> executor.execute(null, ignored -> artifact(1)));
+          assertThrows(NullPointerException.class, () -> executor.execute(null, ignored -> artifact(1)));
       assertEquals("decision", nullDecision.getMessage());
       NullPointerException nullMaterializer =
           assertThrows(
@@ -669,7 +709,9 @@ class BoundedOriginExecutorMutationTest {
     assertThrows(
         NullPointerException.class,
         () -> new BoundedOriginExecutor(null, Duration.ofSeconds(1), 1));
-    assertThrows(NullPointerException.class, () -> new BoundedOriginExecutor(budget, null, 1));
+    assertThrows(
+        NullPointerException.class,
+        () -> new BoundedOriginExecutor(budget, null, 1));
     assertThrows(
         NullPointerException.class,
         () -> new BoundedOriginExecutor(budget, Duration.ofSeconds(1), 1, null));
@@ -833,7 +875,12 @@ class BoundedOriginExecutorMutationTest {
   private static BoundedOriginExecutor executor(
       Budget budget, ManualThreadFactory workers, ManualThreadFactory timeouts) {
     return new BoundedOriginExecutor(
-        budget, Duration.ofSeconds(1), 8, System::nanoTime, workers, timeouts);
+        budget,
+        Duration.ofSeconds(1),
+        8,
+        System::nanoTime,
+        workers,
+        timeouts);
   }
 
   private static OriginExecutionException assertFailure(

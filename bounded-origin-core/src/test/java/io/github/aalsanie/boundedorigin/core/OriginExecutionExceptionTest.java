@@ -1,6 +1,7 @@
 package io.github.aalsanie.boundedorigin.core;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -21,8 +22,11 @@ class OriginExecutionExceptionTest {
     assertEquals(OriginExecutionFailure.MATERIALIZATION_FAILED, withCause.failure());
     assertEquals("failed", withCause.getMessage());
     assertSame(cause, withCause.getCause());
-    assertThrows(NullPointerException.class, () -> new OriginExecutionException(null, "message"));
     assertThrows(
-        NullPointerException.class, () -> new OriginExecutionException(null, "message", cause));
+        NullPointerException.class,
+        () -> assertNotNull(new OriginExecutionException(null, "message")));
+    assertThrows(
+        NullPointerException.class,
+        () -> assertNotNull(new OriginExecutionException(null, "message", cause)));
   }
 }

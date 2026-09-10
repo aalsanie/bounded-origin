@@ -8,13 +8,13 @@ import java.util.concurrent.ThreadFactory;
 final class ManualThreadFactory implements ThreadFactory {
   private final List<ManualThread> threads = new ArrayList<>();
   private final int failingStartIndex;
-  private final RuntimeException startFailure;
+  private final Error startFailure;
 
   ManualThreadFactory() {
     this(-1, null);
   }
 
-  ManualThreadFactory(int failingStartIndex, RuntimeException startFailure) {
+  ManualThreadFactory(int failingStartIndex, Error startFailure) {
     this.failingStartIndex = failingStartIndex;
     this.startFailure = startFailure;
   }
@@ -22,7 +22,7 @@ final class ManualThreadFactory implements ThreadFactory {
   @Override
   public synchronized Thread newThread(Runnable runnable) {
     int index = threads.size();
-    RuntimeException failure = index == failingStartIndex ? startFailure : null;
+    Error failure = index == failingStartIndex ? startFailure : null;
     ManualThread thread = new ManualThread(runnable, failure);
     threads.add(thread);
     return thread;
@@ -54,11 +54,11 @@ final class ManualThreadFactory implements ThreadFactory {
 
   private static final class ManualThread extends Thread {
     private final Runnable task;
-    private final RuntimeException startFailure;
+    private final Error startFailure;
     private boolean started;
     private boolean interruptedByExecutor;
 
-    private ManualThread(Runnable task, RuntimeException startFailure) {
+    private ManualThread(Runnable task, Error startFailure) {
       this.task = Objects.requireNonNull(task, "task");
       this.startFailure = startFailure;
     }
