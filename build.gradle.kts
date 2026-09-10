@@ -12,6 +12,7 @@ import org.gradle.api.plugins.JavaPluginExtension
 import org.gradle.api.tasks.bundling.AbstractArchiveTask
 import org.gradle.api.tasks.compile.JavaCompile
 import org.gradle.api.tasks.testing.Test
+import org.gradle.api.tasks.PathSensitivity
 import org.gradle.jvm.toolchain.JavaLanguageVersion
 import org.gradle.testing.jacoco.plugins.JacocoPluginExtension
 import org.gradle.testing.jacoco.tasks.JacocoCoverageVerification
@@ -33,8 +34,9 @@ val jacocoVersion = libs.versions.jacoco.get()
 val googleJavaFormatVersion = libs.versions.google.java.format.get()
 val spotbugsVersion = libs.versions.spotbugs.get()
 val junitJupiterDependency = libs.junit.jupiter
-val pitestVersion = libs.versions.pitest.get()
-val pitestJunit5Version = libs.versions.pitest.junit5.get()
+val junitPlatformLauncherDependency = libs.junit.platform.launcher
+val pitestToolVersion = libs.versions.pitest.get()
+val pitestJunit5Version = libs.versions.pitestJunit5.get()
 val apiSnapshotModules = setOf(
     "bounded-origin-api",
     "bounded-origin-core",
@@ -48,6 +50,44 @@ val lockedConfigurations = setOf(
     "testCompileClasspath",
     "testRuntimeClasspath",
 )
+
+val verificationMetadataFile =
+    layout.projectDirectory.file("gradle/verification-metadata.xml")
+
+val verifyDependencyVerification = tasks.register("verifyDependencyVerification") {
+    group = "verification"
+    description = "Verifies that dependency verification metadata contains SHA-256 checksums."
+
+    inputs.files(verificationMetadataFile)
+        .withPathSensitivity(PathSensitivity.RELATIVE)
+
+    doLast {
+        val file = verificationMetadataFile.asFile
+
+        if (!file.isFile) {
+            throw GradleException(
+                "Missing gradle/verification-metadata.xml"
+            )
+        }
+
+        val content = file.readText(Charsets.UTF_8)
+
+        if (!content.contains("<verify-metadata>true</verify-metadata>")) {
+            throw GradleException(
+                "Dependency metadata verification is not enabled"
+            )
+        }
+
+        val sha256 =
+            Regex("""<sha256\b[^>]*\bvalue="[0-9a-fA-F]{64}"[^>]*/>""")
+
+        if (!sha256.containsMatchIn(content)) {
+            throw GradleException(
+                "Dependency verification metadata contains no SHA-256 checksums"
+            )
+        }
+    }
+}
 
 fun publicApiSnapshot(projectName: String, classesDir: File): String {
     val header = "# $projectName public API\n"
@@ -160,6 +200,7 @@ subprojects {
 
     dependencies {
         add("testImplementation", junitJupiterDependency)
+        add("testRuntimeOnly", junitPlatformLauncherDependency)
     }
 
     configurations.configureEach {
@@ -219,18 +260,26 @@ subprojects {
     }
 
     if (name in apiSnapshotModules) {
-        val snapshotFile = layout.projectDirectory.file("api/$name.api")
+        val moduleName = project.name
+        val snapshotFile = layout.projectDirectory.file("api/$moduleName.api")
         val classesDir = layout.buildDirectory.dir("classes/java/main")
 
-        val apiDump = tasks.register("apiDump") {
+        tasks.register("apiDump") {
             group = "verification"
             description = "Writes the bytecode-derived public API snapshot."
             dependsOn(tasks.named("classes"))
+
+            inputs.files(classesDir)
+                .withPathSensitivity(PathSensitivity.RELATIVE)
             outputs.file(snapshotFile)
+
             doLast {
                 val target = snapshotFile.asFile
                 target.parentFile.mkdirs()
-                target.writeText(publicApiSnapshot(name, classesDir.get().asFile), Charsets.UTF_8)
+                target.writeText(
+                    publicApiSnapshot(moduleName, classesDir.get().asFile),
+                    Charsets.UTF_8,
+                )
             }
         }
 
@@ -238,17 +287,36 @@ subprojects {
             group = "verification"
             description = "Fails when the public API differs from the committed snapshot."
             dependsOn(tasks.named("classes"))
-            inputs.dir(classesDir)
+
+            inputs.files(classesDir)
+                .withPathSensitivity(PathSensitivity.RELATIVE)
             inputs.file(snapshotFile)
+                .withPathSensitivity(PathSensitivity.NONE)
+
             doLast {
                 val expectedFile = snapshotFile.asFile
+
                 if (!expectedFile.isFile) {
-                    throw GradleException("Missing API snapshot ${expectedFile.relativeTo(rootDir)}. Run :$name:apiDump.")
+                    throw GradleException(
+                        "Missing API snapshot ${expectedFile.relativeTo(rootDir)}. Run :$moduleName:apiDump."
+                    )
                 }
-                val expected = expectedFile.readText(Charsets.UTF_8).replace("\r\n", "\n")
-                val actual = publicApiSnapshot(name, classesDir.get().asFile)
+
+                val expected =
+                    expectedFile
+                        .readText(Charsets.UTF_8)
+                        .replace("\r\n", "\n")
+
+                val actual =
+                    publicApiSnapshot(
+                        moduleName,
+                        classesDir.get().asFile,
+                    )
+
                 if (expected != actual) {
-                    throw GradleException("Public API changed in $name. Review it, then run :$name:apiDump if intentional.")
+                    throw GradleException(
+                        "Public API changed in $moduleName. Review it, then run :$moduleName:apiDump if intentional."
+                    )
                 }
             }
         }
@@ -257,7 +325,6 @@ subprojects {
             dependsOn(apiCheck)
         }
     }
-
     tasks.named("check") {
         dependsOn("jacocoTestCoverageVerification", "jacocoTestReport", "spotlessCheck")
     }
@@ -266,7 +333,7 @@ subprojects {
 project(":bounded-origin-core") {
     apply(plugin = "info.solidsoft.pitest")
     extensions.configure<PitestPluginExtension> {
-        pitestVersion.set(pitestVersion)
+        pitestVersion.set(pitestToolVersion)
         junit5PluginVersion.set(pitestJunit5Version)
         targetClasses.set(setOf("io.github.aalsanie.boundedorigin.core.*"))
         mutationThreshold.set(90)
@@ -415,6 +482,7 @@ tasks.named("check") {
         verifyPinnedVersions,
         verifyWrapperConfiguration,
         verifyDependencyLocks,
+        verifyDependencyVerification,
         verifyNoProductionPlaceholders,
         verifyNoSecrets,
         "spotlessCheck",
