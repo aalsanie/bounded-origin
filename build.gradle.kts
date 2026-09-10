@@ -13,6 +13,7 @@ import org.gradle.api.tasks.bundling.AbstractArchiveTask
 import org.gradle.api.tasks.compile.JavaCompile
 import org.gradle.api.tasks.testing.Test
 import org.gradle.api.tasks.PathSensitivity
+import org.gradle.jvm.toolchain.JavaToolchainService
 import org.gradle.jvm.toolchain.JavaLanguageVersion
 import org.gradle.testing.jacoco.plugins.JacocoPluginExtension
 import org.gradle.testing.jacoco.tasks.JacocoCoverageVerification
@@ -89,7 +90,11 @@ val verifyDependencyVerification = tasks.register("verifyDependencyVerification"
     }
 }
 
-fun publicApiSnapshot(projectName: String, classesDir: File): String {
+fun publicApiSnapshot(
+    projectName: String,
+    classesDir: File,
+    javaHome: File,
+): String {
     val header = "# $projectName public API\n"
     if (!classesDir.exists()) return header
 
@@ -102,7 +107,6 @@ fun publicApiSnapshot(projectName: String, classesDir: File): String {
 
     if (classNames.isEmpty()) return header
 
-    val javaHome = File(System.getProperty("java.home"))
     val javap = File(javaHome, "bin/${if (System.getProperty("os.name").startsWith("Windows")) "javap.exe" else "javap"}")
     if (!javap.isFile) throw GradleException("javap was not found under ${javaHome.absolutePath}")
 
@@ -118,7 +122,14 @@ fun publicApiSnapshot(projectName: String, classesDir: File): String {
             val output = process.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
             val exit = process.waitFor()
             if (exit != 0) throw GradleException("javap failed for $className:\n$output")
-            append(output.lineSequence().filterNot { it.startsWith("Compiled from ") }.joinToString("\n"))
+            val normalizedOutput =
+                output
+                    .lineSequence()
+                    .filterNot { it.startsWith("Compiled from ") }
+                    .joinToString("\n")
+                    .trimEnd('\r', '\n')
+
+            append(normalizedOutput)
             append("\n")
         }
     }
@@ -166,10 +177,20 @@ subprojects {
     apply(plugin = "com.diffplug.spotless")
     apply(plugin = "com.github.spotbugs")
 
-    extensions.configure<JavaPluginExtension> {
+    val javaExtension = extensions.getByType<JavaPluginExtension>()
+
+    javaExtension.apply {
         toolchain.languageVersion.set(JavaLanguageVersion.of(21))
         withSourcesJar()
     }
+
+    val apiSnapshotLauncher =
+        extensions
+            .getByType<JavaToolchainService>()
+            .launcherFor(javaExtension.toolchain)
+
+    val apiSnapshotRuntimeVersion =
+        apiSnapshotLauncher.map { it.metadata.javaRuntimeVersion }
 
     extensions.configure<JacocoPluginExtension> {
         toolVersion = jacocoVersion
@@ -268,6 +289,10 @@ subprojects {
             group = "verification"
             description = "Writes the bytecode-derived public API snapshot."
             dependsOn(tasks.named("classes"))
+            inputs.property(
+                "apiSnapshotRuntimeVersion",
+                apiSnapshotRuntimeVersion,
+            )
 
             inputs.files(classesDir)
                 .withPathSensitivity(PathSensitivity.RELATIVE)
@@ -277,7 +302,15 @@ subprojects {
                 val target = snapshotFile.asFile
                 target.parentFile.mkdirs()
                 target.writeText(
-                    publicApiSnapshot(moduleName, classesDir.get().asFile),
+                    publicApiSnapshot(
+                        moduleName,
+                        classesDir.get().asFile,
+                        apiSnapshotLauncher
+                            .get()
+                            .metadata
+                            .installationPath
+                            .asFile,
+                    ),
                     Charsets.UTF_8,
                 )
             }
@@ -292,6 +325,10 @@ subprojects {
                 .withPathSensitivity(PathSensitivity.RELATIVE)
             inputs.file(snapshotFile)
                 .withPathSensitivity(PathSensitivity.NONE)
+            inputs.property(
+                "apiSnapshotRuntimeVersion",
+                apiSnapshotRuntimeVersion,
+            )
 
             doLast {
                 val expectedFile = snapshotFile.asFile
@@ -311,6 +348,11 @@ subprojects {
                     publicApiSnapshot(
                         moduleName,
                         classesDir.get().asFile,
+                        apiSnapshotLauncher
+                            .get()
+                            .metadata
+                            .installationPath
+                            .asFile,
                     )
 
                 if (expected != actual) {
