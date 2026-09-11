@@ -21,7 +21,9 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
+import java.util.Objects;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -29,7 +31,8 @@ class FileSystemArtifactStoreBoundaryTest {
   @TempDir Path tempDirectory;
 
   @Test
-  void metadataAndDigestPredicatesUseExactBoundaries() throws Throwable {
+  void metadataAndDigestPredicatesUseExactBoundaries()
+      throws ReflectiveOperationException, IOException {
     Method metadataName = method(FileSystemArtifactStore.class, "isMetadataName", String.class);
     Method metadataValue =
         method(FileSystemArtifactStore.class, "containsUnsafeMetadataValueCharacter", String.class);
@@ -37,8 +40,8 @@ class FileSystemArtifactStoreBoundaryTest {
 
     for (String valid :
         new String[] {
-          "a", "z", "A", "Z", "0", "9", "!", "#", "$", "%", "&", "'", "*", "+", "-",
-          ".", "^", "_", "`", "|", "~"
+          "a", "z", "A", "Z", "0", "9", "!", "#", "$", "%", "&", "'", "*", "+", "-", ".", "^", "_",
+          "`", "|", "~"
         }) {
       assertTrue((Boolean) invoke(metadataName, null, valid), valid);
     }
@@ -66,8 +69,10 @@ class FileSystemArtifactStoreBoundaryTest {
   }
 
   @Test
-  void hashEncodingAndSizeArithmeticUseExactBytes() throws Throwable {
-    Method updateInt = method(FileSystemArtifactStore.class, "updateInt", MessageDigest.class, int.class);
+  void hashEncodingAndSizeArithmeticUseExactBytes()
+      throws ReflectiveOperationException, IOException, NoSuchAlgorithmException {
+    Method updateInt =
+        method(FileSystemArtifactStore.class, "updateInt", MessageDigest.class, int.class);
     Method updateLong =
         method(FileSystemArtifactStore.class, "updateLong", MessageDigest.class, long.class);
     Method checkedAdd = method(FileSystemArtifactStore.class, "checkedAdd", long.class, long.class);
@@ -79,10 +84,9 @@ class FileSystemArtifactStoreBoundaryTest {
     MessageDigest actualDigest = MessageDigest.getInstance("SHA-256");
     invoke(updateInt, null, actualDigest, 0x01020304);
     invoke(updateLong, null, actualDigest, 0x05060708090a0b0cL);
-    byte[] expectedBytes = {
-      0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c
-    };
-    assertArrayEquals(MessageDigest.getInstance("SHA-256").digest(expectedBytes), actualDigest.digest());
+    byte[] expectedBytes = {0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c};
+    assertArrayEquals(
+        MessageDigest.getInstance("SHA-256").digest(expectedBytes), actualDigest.digest());
 
     assertEquals(0L, invoke(checkedAdd, null, 0L, 0L));
     assertEquals(3L, invoke(checkedAdd, null, 1L, 2L));
@@ -105,7 +109,8 @@ class FileSystemArtifactStoreBoundaryTest {
   }
 
   @Test
-  void pathAndReaderHelpersPreserveCasLayoutAndCounts() throws Throwable {
+  void pathAndReaderHelpersPreserveCasLayoutAndCounts()
+      throws ReflectiveOperationException, IOException {
     Path root = tempDirectory.resolve("paths");
     String digest = "abcdef" + "0".repeat(58);
     String keyHash = "012345" + "a".repeat(58);
@@ -147,7 +152,6 @@ class FileSystemArtifactStoreBoundaryTest {
     }
   }
 
-
   @Test
   void corruptionFlagAndReaderCloseHaveObservableSemantics() throws IOException {
     assertTrue(new CorruptStoreException("object", true).objectCorruption());
@@ -168,7 +172,8 @@ class FileSystemArtifactStoreBoundaryTest {
   }
 
   @Test
-  void limitedOutputStreamEnforcesCapacityAndDelegatesLifecycle() throws Throwable {
+  void limitedOutputStreamEnforcesCapacityAndDelegatesLifecycle()
+      throws ReflectiveOperationException, IOException {
     Class<?> type =
         Class.forName(
             "io.github.aalsanie.boundedorigin.store.fs.StoreEntryCodec$LimitedOutputStream");
@@ -189,8 +194,7 @@ class FileSystemArtifactStoreBoundaryTest {
     invoke(writeMany, output, new byte[] {0x02, 0x03, 0x04}, 0, 3);
     assertArrayEquals(new byte[] {0x01, 0x02, 0x03, 0x04}, delegate.bytes());
     assertThrows(IOException.class, () -> invoke(writeOne, output, 0x05));
-    assertThrows(
-        IOException.class, () -> invoke(writeMany, output, new byte[] {0x01}, 0, -1));
+    assertThrows(IOException.class, () -> invoke(writeMany, output, new byte[] {0x01}, 0, -1));
 
     invoke(flush, output);
     assertTrue(delegate.flushed);
@@ -205,21 +209,29 @@ class FileSystemArtifactStoreBoundaryTest {
     return method;
   }
 
-  private static Object invoke(Method method, Object target, Object... arguments) throws Throwable {
+  private static Object invoke(Method method, Object target, Object... arguments)
+      throws IOException {
     try {
       return method.invoke(target, arguments);
+    } catch (IllegalAccessException exception) {
+      throw new AssertionError(exception);
     } catch (InvocationTargetException exception) {
-      throw exception.getCause();
+      Throwable cause = exception.getCause();
+      if (cause instanceof IOException ioException) {
+        throw ioException;
+      }
+      throw new AssertionError(cause);
     }
   }
 
   private static String objectName(Path root) throws IOException {
     try (var paths = Files.walk(root.resolve("objects"))) {
-      return paths.filter(Files::isRegularFile).findFirst().orElseThrow().getFileName().toString();
+      Path object = paths.filter(Files::isRegularFile).findFirst().orElseThrow();
+      return Objects.requireNonNull(object.getFileName(), "object file name").toString();
     }
   }
 
-  private static String operationKeyHash(OperationKey key) throws Exception {
+  private static String operationKeyHash(OperationKey key) throws NoSuchAlgorithmException {
     MessageDigest digest = MessageDigest.getInstance("SHA-256");
     updateString(digest, key.policyId());
     updateLong(digest, key.policyVersion());

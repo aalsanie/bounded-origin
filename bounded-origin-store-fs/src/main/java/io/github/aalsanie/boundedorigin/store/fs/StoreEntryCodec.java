@@ -106,7 +106,7 @@ final class StoreEntryCodec {
       OperationKey key;
       try {
         key = new OperationKey(policyId, policyVersion, semanticIdentity, materializerVersion);
-      } catch (IllegalArgumentException | NullPointerException exception) {
+      } catch (IllegalArgumentException exception) {
         throw new CorruptStoreException("invalid operation key", false);
       }
 

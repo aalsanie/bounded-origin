@@ -164,13 +164,13 @@ public final class FileSystemArtifactStore implements ArtifactStore, AutoCloseab
       stateLock.readLock().unlock();
     }
 
-    if (corruption != null && entry != null) {
-      removeCorruption(entry, corruption.objectCorruption());
-      IOException failure = new IOException("artifact corruption detected for operation key");
-      failure.initCause(corruption);
-      throw failure;
+    if (entry == null) {
+      throw new IOException("artifact store state became inconsistent");
     }
-    throw new IOException("artifact store state became inconsistent");
+    removeCorruption(entry, corruption.objectCorruption());
+    IOException failure = new IOException("artifact corruption detected for operation key");
+    failure.initCause(corruption);
+    throw failure;
   }
 
   @Override
@@ -588,11 +588,12 @@ public final class FileSystemArtifactStore implements ArtifactStore, AutoCloseab
 
   private void publishObject(Path source, String digest, long length) throws IOException {
     Path target = objectPath(digest);
-    Files.createDirectories(target.getParent());
+    Path parent = Objects.requireNonNull(target.getParent(), "object target parent");
+    Files.createDirectories(parent);
     long updatedStoredBytes = checkedAdd(storedBytes, length);
     atomicMove(source, target);
     try {
-      forceDirectory(target.getParent());
+      forceDirectory(parent);
     } catch (IOException exception) {
       try {
         Files.deleteIfExists(target);
@@ -607,9 +608,10 @@ public final class FileSystemArtifactStore implements ArtifactStore, AutoCloseab
 
   private void publishEntry(Path source, StoreEntry entry) throws IOException {
     Path target = entryPath(entry.keyHash());
-    Files.createDirectories(target.getParent());
+    Path parent = Objects.requireNonNull(target.getParent(), "entry target parent");
+    Files.createDirectories(parent);
     atomicMove(source, target);
-    forceDirectory(target.getParent());
+    forceDirectory(parent);
   }
 
   private void evictToFit(long additionalBytes, String preserveObjectDigest) throws IOException {
@@ -915,7 +917,7 @@ public final class FileSystemArtifactStore implements ArtifactStore, AutoCloseab
   }
 
   private String entryHash(Path path) {
-    String name = path.getFileName().toString();
+    String name = Objects.requireNonNull(path.getFileName(), "entry file name").toString();
     if (!name.endsWith(".entry")) {
       return null;
     }
@@ -924,7 +926,7 @@ public final class FileSystemArtifactStore implements ArtifactStore, AutoCloseab
   }
 
   private String objectDigest(Path path) {
-    String value = path.getFileName().toString();
+    String value = Objects.requireNonNull(path.getFileName(), "object file name").toString();
     return isDigest(value) ? value : null;
   }
 

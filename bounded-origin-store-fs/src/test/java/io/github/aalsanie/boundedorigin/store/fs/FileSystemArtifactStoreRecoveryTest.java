@@ -16,6 +16,7 @@ import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
+import java.util.Objects;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -114,7 +115,7 @@ class FileSystemArtifactStoreRecoveryTest {
     Files.write(root.resolve("tmp").resolve("leftover.tmp"), bytes(5, 1));
     String digest = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
     Path orphan = root.resolve("objects").resolve("aa").resolve("aa").resolve(digest);
-    Files.createDirectories(orphan.getParent());
+    Files.createDirectories(Objects.requireNonNull(orphan.getParent(), "orphan object parent"));
     Files.write(orphan, bytes(5, 2));
 
     try (FileSystemArtifactStore store = new FileSystemArtifactStore(root, 10_000, 1_000)) {

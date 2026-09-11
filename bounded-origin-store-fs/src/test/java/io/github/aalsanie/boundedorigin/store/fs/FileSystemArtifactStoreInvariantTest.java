@@ -50,8 +50,7 @@ class FileSystemArtifactStoreInvariantTest {
         () -> new FileSystemArtifactStore(tempDirectory.resolve("null-output"), 10, 0, null));
 
     assertEquals(
-        new FileSystemArtifactStoreStats(0, 0, 0, 0),
-        new FileSystemArtifactStoreStats(0, 0, 0, 0));
+        new FileSystemArtifactStoreStats(0, 0, 0, 0), new FileSystemArtifactStoreStats(0, 0, 0, 0));
     assertThrows(
         IllegalArgumentException.class, () -> new FileSystemArtifactStoreStats(-1, 0, 0, 0));
     assertThrows(
@@ -63,7 +62,7 @@ class FileSystemArtifactStoreInvariantTest {
   }
 
   @Test
-  void capacityAndAccountingGuardsUseExactBoundaries() throws Throwable {
+  void capacityAndAccountingGuardsUseExactBoundaries() throws IOException {
     Path root = tempDirectory.resolve("accounting");
     try (FileSystemArtifactStore store = new FileSystemArtifactStore(root, 1_000, 100)) {
       Method exceedsCapacity = method(FileSystemArtifactStore.class, "exceedsCapacity", long.class);
@@ -71,8 +70,7 @@ class FileSystemArtifactStoreInvariantTest {
           method(FileSystemArtifactStore.class, "evictToFit", long.class, String.class);
       Method releaseReader = method(FileSystemArtifactStore.class, "releaseReader", String.class);
       Method endWriter = method(FileSystemArtifactStore.class, "endWriter");
-      Method maybeReleaseResources =
-          method(FileSystemArtifactStore.class, "maybeReleaseResources");
+      Method maybeReleaseResources = method(FileSystemArtifactStore.class, "maybeReleaseResources");
 
       setLong(store, "storedBytes", 900L);
       assertFalse((Boolean) invoke(exceedsCapacity, store, 100L));
@@ -111,7 +109,7 @@ class FileSystemArtifactStoreInvariantTest {
   }
 
   @Test
-  void removalMaintainsReferenceAndObjectAccountingAcrossEveryBranch() throws Throwable {
+  void removalMaintainsReferenceAndObjectAccountingAcrossEveryBranch() throws IOException {
     Path preservedRoot = tempDirectory.resolve("preserved");
     try (FileSystemArtifactStore store = new FileSystemArtifactStore(preservedRoot, 10_000, 100)) {
       store.put(key("a"), artifact(bytes(16, 1)));
@@ -207,14 +205,7 @@ class FileSystemArtifactStoreInvariantTest {
     Path exact = Files.createFile(tempDirectory.resolve("exact-field.entry"));
     StoreEntry exactEntry =
         new StoreEntry(
-            DIGEST_A,
-            key("exact-field"),
-            200,
-            0,
-            DIGEST_B,
-            0,
-            Map.of("x", "v".repeat(65_536)),
-            0);
+            DIGEST_A, key("exact-field"), 200, 0, DIGEST_B, 0, Map.of("x", "v".repeat(65_536)), 0);
     long exactSize =
         StoreEntryCodec.write(exact, exactEntry, FileSystemArtifactStoreInvariantTest::open);
     assertEquals(exactEntry.withEntryFileSize(exactSize), StoreEntryCodec.read(exact, DIGEST_A));
@@ -222,14 +213,7 @@ class FileSystemArtifactStoreInvariantTest {
     Path tooLarge = Files.createFile(tempDirectory.resolve("large-field.entry"));
     StoreEntry largeEntry =
         new StoreEntry(
-            DIGEST_A,
-            key("large-field"),
-            200,
-            0,
-            DIGEST_B,
-            0,
-            Map.of("x", "v".repeat(65_537)),
-            0);
+            DIGEST_A, key("large-field"), 200, 0, DIGEST_B, 0, Map.of("x", "v".repeat(65_537)), 0);
     assertThrows(
         IOException.class,
         () ->
@@ -260,64 +244,94 @@ class FileSystemArtifactStoreInvariantTest {
   }
 
   private static StoreEntry currentEntry(FileSystemArtifactStore store, OperationKey key)
-      throws Throwable {
+      throws IOException {
     Method keyHash = method(FileSystemArtifactStore.class, "keyHash", OperationKey.class);
     String hash = (String) invoke(keyHash, store, key);
     Object entries = field(store, "entries");
     return (StoreEntry) get(entries, hash);
   }
 
-  private static Method method(Class<?> owner, String name, Class<?>... parameterTypes)
-      throws NoSuchMethodException {
-    Method method = owner.getDeclaredMethod(name, parameterTypes);
-    method.setAccessible(true);
-    return method;
-  }
-
-  private static Object invoke(Method method, Object target, Object... arguments) throws Throwable {
+  private static Method method(Class<?> owner, String name, Class<?>... parameterTypes) {
     try {
-      return method.invoke(target, arguments);
-    } catch (InvocationTargetException exception) {
-      throw exception.getCause();
+      Method method = owner.getDeclaredMethod(name, parameterTypes);
+      method.setAccessible(true);
+      return method;
+    } catch (NoSuchMethodException exception) {
+      throw new AssertionError(exception);
     }
   }
 
-  private static Object field(Object target, String name) throws ReflectiveOperationException {
-    Field field = target.getClass().getDeclaredField(name);
-    field.setAccessible(true);
-    return field.get(target);
+  private static Object invoke(Method method, Object target, Object... arguments)
+      throws IOException {
+    try {
+      return method.invoke(target, arguments);
+    } catch (IllegalAccessException exception) {
+      throw new AssertionError(exception);
+    } catch (InvocationTargetException exception) {
+      Throwable cause = exception.getCause();
+      if (cause instanceof IOException ioException) {
+        throw ioException;
+      }
+      throw new AssertionError(cause);
+    }
   }
 
-  private static void setLong(Object target, String name, long value)
-      throws ReflectiveOperationException {
-    Field field = target.getClass().getDeclaredField(name);
-    field.setAccessible(true);
-    field.setLong(target, value);
+  private static Object field(Object target, String name) {
+    try {
+      Field field = target.getClass().getDeclaredField(name);
+      field.setAccessible(true);
+      return field.get(target);
+    } catch (ReflectiveOperationException exception) {
+      throw new AssertionError(exception);
+    }
   }
 
-  private static void setBoolean(Object target, String name, boolean value)
-      throws ReflectiveOperationException {
-    Field field = target.getClass().getDeclaredField(name);
-    field.setAccessible(true);
-    field.setBoolean(target, value);
+  private static void setLong(Object target, String name, long value) {
+    try {
+      Field field = target.getClass().getDeclaredField(name);
+      field.setAccessible(true);
+      field.setLong(target, value);
+    } catch (ReflectiveOperationException exception) {
+      throw new AssertionError(exception);
+    }
   }
 
-  private static AtomicInteger atomicInteger(Object target, String name)
-      throws ReflectiveOperationException {
+  private static void setBoolean(Object target, String name, boolean value) {
+    try {
+      Field field = target.getClass().getDeclaredField(name);
+      field.setAccessible(true);
+      field.setBoolean(target, value);
+    } catch (ReflectiveOperationException exception) {
+      throw new AssertionError(exception);
+    }
+  }
+
+  private static AtomicInteger atomicInteger(Object target, String name) {
     return (AtomicInteger) field(target, name);
   }
 
-  private static Object get(Object map, Object key) throws ReflectiveOperationException {
-    return Map.class.getMethod("get", Object.class).invoke(map, key);
+  private static Object get(Object map, Object key) {
+    try {
+      return Map.class.getMethod("get", Object.class).invoke(map, key);
+    } catch (ReflectiveOperationException exception) {
+      throw new AssertionError(exception);
+    }
   }
 
-  private static void put(Object map, Object key, Object value)
-      throws ReflectiveOperationException {
-    Map.class.getMethod("put", Object.class, Object.class).invoke(map, key, value);
+  private static void put(Object map, Object key, Object value) {
+    try {
+      Map.class.getMethod("put", Object.class, Object.class).invoke(map, key, value);
+    } catch (ReflectiveOperationException exception) {
+      throw new AssertionError(exception);
+    }
   }
 
-  private static void remove(Object map, Object key) throws ReflectiveOperationException {
-    Map.class.getMethod("remove", Object.class).invoke(map, key);
+  private static void remove(Object map, Object key) {
+    try {
+      Map.class.getMethod("remove", Object.class).invoke(map, key);
+    } catch (ReflectiveOperationException exception) {
+      throw new AssertionError(exception);
+    }
   }
 
   private static java.io.OutputStream open(Path path) throws IOException {

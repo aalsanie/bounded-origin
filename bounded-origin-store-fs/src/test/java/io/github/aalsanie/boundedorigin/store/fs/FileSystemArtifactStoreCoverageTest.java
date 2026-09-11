@@ -26,6 +26,7 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -159,7 +160,8 @@ class FileSystemArtifactStoreCoverageTest {
 
     try (FileSystemArtifactStore store = new FileSystemArtifactStore(root, 10_000, 100)) {
       Path object = objectPath(root, digest);
-      Files.createDirectories(object.getParent());
+      Files.createDirectories(
+          Objects.requireNonNull(object.getParent(), "preexisting object parent"));
       Files.write(object, bytes(body.length, 9));
 
       store.put(key("x"), artifact(body));
@@ -214,18 +216,21 @@ class FileSystemArtifactStoreCoverageTest {
 
     String hash = digest('a');
     Path badEntry = root.resolve("entries").resolve("wrong").resolve(hash + ".entry");
-    Files.createDirectories(badEntry.getParent());
+    Files.createDirectories(Objects.requireNonNull(badEntry.getParent(), "bad entry parent"));
     Files.write(badEntry, bytes(4, 1));
     Path wrongExtension = root.resolve("entries").resolve("junk.txt");
-    Files.createDirectories(wrongExtension.getParent());
+    Files.createDirectories(
+        Objects.requireNonNull(wrongExtension.getParent(), "wrong extension parent"));
     Files.write(wrongExtension, bytes(4, 1));
 
     Path malformedObject = root.resolve("objects").resolve("zz").resolve("not-a-digest");
-    Files.createDirectories(malformedObject.getParent());
+    Files.createDirectories(
+        Objects.requireNonNull(malformedObject.getParent(), "malformed object parent"));
     Files.write(malformedObject, bytes(2, 1));
     String uppercase = "A".repeat(64);
     Path uppercaseObject = root.resolve("objects").resolve("AA").resolve(uppercase);
-    Files.createDirectories(uppercaseObject.getParent());
+    Files.createDirectories(
+        Objects.requireNonNull(uppercaseObject.getParent(), "uppercase object parent"));
     Files.write(uppercaseObject, bytes(2, 1));
 
     try (FileSystemArtifactStore store = new FileSystemArtifactStore(root, 10_000, 100)) {
@@ -373,7 +378,9 @@ class FileSystemArtifactStoreCoverageTest {
     Path writeRoot = tempDirectory.resolve("entry-write-failure");
     TempOutputFactory entryWriteFailure =
         path -> {
-          if (path.getFileName().toString().startsWith("entry-")) {
+          String fileName =
+              Objects.requireNonNull(path.getFileName(), "temporary file name").toString();
+          if (fileName.startsWith("entry-")) {
             throw new IOException("entry output failed");
           }
           return openTruncated(path);
@@ -561,7 +568,7 @@ class FileSystemArtifactStoreCoverageTest {
 
   private static void writeStoreEntry(Path root, String hash, StoreEntry entry) throws IOException {
     Path path = entryPath(root, hash);
-    Files.createDirectories(path.getParent());
+    Files.createDirectories(Objects.requireNonNull(path.getParent(), "entry path parent"));
     StoreEntryCodec.write(path, entry, FileSystemArtifactStoreCoverageTest::openTruncated);
   }
 
@@ -581,7 +588,7 @@ class FileSystemArtifactStoreCoverageTest {
   }
 
   private static String entryHash(Path path) {
-    String name = path.getFileName().toString();
+    String name = Objects.requireNonNull(path.getFileName(), "entry file name").toString();
     return name.substring(0, name.length() - ".entry".length());
   }
 

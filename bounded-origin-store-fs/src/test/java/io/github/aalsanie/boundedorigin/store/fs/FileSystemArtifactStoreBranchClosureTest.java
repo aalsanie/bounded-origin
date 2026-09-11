@@ -57,14 +57,13 @@ class FileSystemArtifactStoreBranchClosureTest {
       assertEquals(exact, store.get(key("exact")).orElseThrow().metadata());
 
       assertThrows(
-          IOException.class,
-          () -> store.put(key("too-many"), artifact(200, bytes(1, 2), tooMany)));
+          IOException.class, () -> store.put(key("too-many"), artifact(200, bytes(1, 2), tooMany)));
       assertEquals(1, store.stats().entryCount());
     }
   }
 
   @Test
-  void operationKeyMismatchIsTreatedAsEntryCorruption() throws Throwable {
+  void operationKeyMismatchIsTreatedAsEntryCorruption() throws IOException {
     Path root = tempDirectory.resolve("key-mismatch");
     OperationKey requested = key("requested");
 
@@ -118,7 +117,7 @@ class FileSystemArtifactStoreBranchClosureTest {
   }
 
   @Test
-  void accountingUnderflowAndRepeatedResourceReleaseAreGuarded() throws Throwable {
+  void accountingUnderflowAndRepeatedResourceReleaseAreGuarded() throws IOException {
     Method checkedSubtract =
         method(FileSystemArtifactStore.class, "checkedSubtract", long.class, long.class);
     assertEquals(4L, invoke(checkedSubtract, null, 9L, 5L));
@@ -140,25 +139,38 @@ class FileSystemArtifactStoreBranchClosureTest {
   }
 
   @SuppressWarnings("unchecked")
-  private static Map<String, StoreEntry> entries(FileSystemArtifactStore store)
-      throws ReflectiveOperationException {
-    Field field = FileSystemArtifactStore.class.getDeclaredField("entries");
-    field.setAccessible(true);
-    return (Map<String, StoreEntry>) field.get(store);
+  private static Map<String, StoreEntry> entries(FileSystemArtifactStore store) {
+    try {
+      Field field = FileSystemArtifactStore.class.getDeclaredField("entries");
+      field.setAccessible(true);
+      return (Map<String, StoreEntry>) field.get(store);
+    } catch (ReflectiveOperationException exception) {
+      throw new AssertionError(exception);
+    }
   }
 
-  private static Method method(Class<?> owner, String name, Class<?>... parameterTypes)
-      throws NoSuchMethodException {
-    Method method = owner.getDeclaredMethod(name, parameterTypes);
-    method.setAccessible(true);
-    return method;
+  private static Method method(Class<?> owner, String name, Class<?>... parameterTypes) {
+    try {
+      Method method = owner.getDeclaredMethod(name, parameterTypes);
+      method.setAccessible(true);
+      return method;
+    } catch (NoSuchMethodException exception) {
+      throw new AssertionError(exception);
+    }
   }
 
-  private static Object invoke(Method method, Object target, Object... arguments) throws Throwable {
+  private static Object invoke(Method method, Object target, Object... arguments)
+      throws IOException {
     try {
       return method.invoke(target, arguments);
+    } catch (IllegalAccessException exception) {
+      throw new AssertionError(exception);
     } catch (InvocationTargetException exception) {
-      throw exception.getCause();
+      Throwable cause = exception.getCause();
+      if (cause instanceof IOException ioException) {
+        throw ioException;
+      }
+      throw new AssertionError(cause);
     }
   }
 }

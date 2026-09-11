@@ -30,13 +30,10 @@ class FileSystemArtifactStoreFinalMutationClosureTest {
     try (FileSystemArtifactStore store =
         new FileSystemArtifactStore(tempDirectory.resolve("streaming-boundary"), 10_000, 100)) {
       Artifact oversized =
-          new Artifact(
-              200,
-              1,
-              Map.of(),
-              () -> new ByteArrayInputStream(new byte[] {1, 2}));
+          new Artifact(200, 1, Map.of(), () -> new ByteArrayInputStream(new byte[] {1, 2}));
 
-      IOException failure = assertThrows(IOException.class, () -> store.put(key("oversized"), oversized));
+      IOException failure =
+          assertThrows(IOException.class, () -> store.put(key("oversized"), oversized));
 
       assertEquals("artifact body exceeds declared content length", failure.getMessage());
       assertTrue(store.get(key("oversized")).isEmpty());
@@ -45,7 +42,7 @@ class FileSystemArtifactStoreFinalMutationClosureTest {
 
   @Test
   void removingEntriesForOneObjectNeverTouchesAnotherAndCanPreserveTheTargetObject()
-      throws Throwable {
+      throws IOException {
     Path root = tempDirectory.resolve("targeted-object-removal");
     OperationKey targetKey = key("target");
     OperationKey unrelatedKey = key("unrelated");
@@ -60,10 +57,7 @@ class FileSystemArtifactStoreFinalMutationClosureTest {
       Path unrelatedObject = objectPath(store, unrelated.contentDigest());
       Method removeEntriesForObject =
           method(
-              FileSystemArtifactStore.class,
-              "removeEntriesForObject",
-              String.class,
-              boolean.class);
+              FileSystemArtifactStore.class, "removeEntriesForObject", String.class, boolean.class);
 
       invoke(removeEntriesForObject, store, target.contentDigest(), true);
 
@@ -76,7 +70,7 @@ class FileSystemArtifactStoreFinalMutationClosureTest {
   }
 
   @Test
-  void zeroReaderCorruptionDoesNotLeaveADeferredDeleteMarker() throws Throwable {
+  void zeroReaderCorruptionDoesNotLeaveADeferredDeleteMarker() throws IOException {
     Path root = tempDirectory.resolve("zero-reader-corruption");
     OperationKey operationKey = key("corrupt");
 
@@ -85,10 +79,7 @@ class FileSystemArtifactStoreFinalMutationClosureTest {
       StoreEntry detected = currentEntry(store, operationKey);
       Method removeCorruption =
           method(
-              FileSystemArtifactStore.class,
-              "removeCorruption",
-              StoreEntry.class,
-              boolean.class);
+              FileSystemArtifactStore.class, "removeCorruption", StoreEntry.class, boolean.class);
 
       invoke(removeCorruption, store, detected, true);
 
@@ -100,42 +91,59 @@ class FileSystemArtifactStoreFinalMutationClosureTest {
   }
 
   private static StoreEntry currentEntry(FileSystemArtifactStore store, OperationKey key)
-      throws Throwable {
+      throws IOException {
     Method keyHash = method(FileSystemArtifactStore.class, "keyHash", OperationKey.class);
     String hash = (String) invoke(keyHash, store, key);
-    Field entriesField = FileSystemArtifactStore.class.getDeclaredField("entries");
-    entriesField.setAccessible(true);
-    @SuppressWarnings("unchecked")
-    Map<String, StoreEntry> entries = (Map<String, StoreEntry>) entriesField.get(store);
-    return entries.get(hash);
+    try {
+      Field entriesField = FileSystemArtifactStore.class.getDeclaredField("entries");
+      entriesField.setAccessible(true);
+      @SuppressWarnings("unchecked")
+      Map<String, StoreEntry> entries = (Map<String, StoreEntry>) entriesField.get(store);
+      return entries.get(hash);
+    } catch (ReflectiveOperationException exception) {
+      throw new AssertionError(exception);
+    }
   }
 
-  private static Path objectPath(FileSystemArtifactStore store, String digest) throws Throwable {
+  private static Path objectPath(FileSystemArtifactStore store, String digest) throws IOException {
     Method objectPath = method(FileSystemArtifactStore.class, "objectPath", String.class);
     return (Path) invoke(objectPath, store, digest);
   }
 
-  private static Set<String> pendingObjectDeletes(FileSystemArtifactStore store)
-      throws ReflectiveOperationException {
-    Field field = FileSystemArtifactStore.class.getDeclaredField("pendingObjectDeletes");
-    field.setAccessible(true);
-    @SuppressWarnings("unchecked")
-    Set<String> values = (Set<String>) field.get(store);
-    return Set.copyOf(values);
+  private static Set<String> pendingObjectDeletes(FileSystemArtifactStore store) {
+    try {
+      Field field = FileSystemArtifactStore.class.getDeclaredField("pendingObjectDeletes");
+      field.setAccessible(true);
+      @SuppressWarnings("unchecked")
+      Set<String> values = (Set<String>) field.get(store);
+      return Set.copyOf(values);
+    } catch (ReflectiveOperationException exception) {
+      throw new AssertionError(exception);
+    }
   }
 
-  private static Method method(Class<?> owner, String name, Class<?>... parameterTypes)
-      throws NoSuchMethodException {
-    Method method = owner.getDeclaredMethod(name, parameterTypes);
-    method.setAccessible(true);
-    return method;
+  private static Method method(Class<?> owner, String name, Class<?>... parameterTypes) {
+    try {
+      Method method = owner.getDeclaredMethod(name, parameterTypes);
+      method.setAccessible(true);
+      return method;
+    } catch (NoSuchMethodException exception) {
+      throw new AssertionError(exception);
+    }
   }
 
-  private static Object invoke(Method method, Object target, Object... arguments) throws Throwable {
+  private static Object invoke(Method method, Object target, Object... arguments)
+      throws IOException {
     try {
       return method.invoke(target, arguments);
+    } catch (IllegalAccessException exception) {
+      throw new AssertionError(exception);
     } catch (InvocationTargetException exception) {
-      throw exception.getCause();
+      Throwable cause = exception.getCause();
+      if (cause instanceof IOException ioException) {
+        throw ioException;
+      }
+      throw new AssertionError(cause);
     }
   }
 }

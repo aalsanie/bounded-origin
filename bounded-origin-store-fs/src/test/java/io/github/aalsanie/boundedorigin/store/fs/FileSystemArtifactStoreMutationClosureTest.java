@@ -60,7 +60,7 @@ class FileSystemArtifactStoreMutationClosureTest {
   }
 
   @Test
-  void evictionAdmissionAcceptsExactlyTheWholeEmptyStoreCapacity() throws Throwable {
+  void evictionAdmissionAcceptsExactlyTheWholeEmptyStoreCapacity() throws IOException {
     try (FileSystemArtifactStore store =
         new FileSystemArtifactStore(tempDirectory.resolve("exact-capacity"), 1_000, 100)) {
       Method evictToFit =
@@ -72,7 +72,7 @@ class FileSystemArtifactStoreMutationClosureTest {
   }
 
   @Test
-  void removingEverySharedReferenceDeletesTheCasObjectAndAllAccounting() throws Throwable {
+  void removingEverySharedReferenceDeletesTheCasObjectAndAllAccounting() throws IOException {
     Path root = tempDirectory.resolve("shared-reference-zero");
     byte[] body = bytes(16, 4);
     OperationKey firstKey = key("shared-first");
@@ -111,10 +111,7 @@ class FileSystemArtifactStoreMutationClosureTest {
 
     Path exactMaximum = tempDirectory.resolve("exact-max.entry");
     try (FileChannel channel =
-        FileChannel.open(
-            exactMaximum,
-            StandardOpenOption.CREATE_NEW,
-            StandardOpenOption.WRITE)) {
+        FileChannel.open(exactMaximum, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE)) {
       channel.position(StoreEntryCodec.MAX_ENTRY_BYTES - 1);
       channel.write(ByteBuffer.wrap(new byte[] {0}));
     }
@@ -140,17 +137,10 @@ class FileSystemArtifactStoreMutationClosureTest {
   void codecRoundTripAcceptsAZeroLengthPersistedString() throws IOException {
     Path path = Files.createFile(tempDirectory.resolve("empty-value.entry"));
     StoreEntry entry =
-        new StoreEntry(
-            DIGEST_A,
-            key("empty-value"),
-            599,
-            0,
-            DIGEST_B,
-            0,
-            Map.of("etag", ""),
-            0);
+        new StoreEntry(DIGEST_A, key("empty-value"), 599, 0, DIGEST_B, 0, Map.of("etag", ""), 0);
 
-    long size = StoreEntryCodec.write(path, entry, FileSystemArtifactStoreMutationClosureTest::open);
+    long size =
+        StoreEntryCodec.write(path, entry, FileSystemArtifactStoreMutationClosureTest::open);
     StoreEntry decoded = StoreEntryCodec.read(path, DIGEST_A);
 
     assertEquals(entry.withEntryFileSize(size), decoded);
@@ -158,7 +148,8 @@ class FileSystemArtifactStoreMutationClosureTest {
   }
 
   @Test
-  void limitedOutputStreamAcceptsZeroLengthWritesAtTheLimit() throws Throwable {
+  void limitedOutputStreamAcceptsZeroLengthWritesAtTheLimit()
+      throws ReflectiveOperationException, IOException {
     Class<?> type =
         Class.forName(
             "io.github.aalsanie.boundedorigin.store.fs.StoreEntryCodec$LimitedOutputStream");
@@ -178,28 +169,42 @@ class FileSystemArtifactStoreMutationClosureTest {
   }
 
   private static StoreEntry currentEntry(FileSystemArtifactStore store, OperationKey key)
-      throws Throwable {
+      throws IOException {
     Method keyHash = method(FileSystemArtifactStore.class, "keyHash", OperationKey.class);
     String hash = (String) invoke(keyHash, store, key);
-    Field entriesField = FileSystemArtifactStore.class.getDeclaredField("entries");
-    entriesField.setAccessible(true);
-    @SuppressWarnings("unchecked")
-    Map<String, StoreEntry> entries = (Map<String, StoreEntry>) entriesField.get(store);
-    return entries.get(hash);
+    try {
+      Field entriesField = FileSystemArtifactStore.class.getDeclaredField("entries");
+      entriesField.setAccessible(true);
+      @SuppressWarnings("unchecked")
+      Map<String, StoreEntry> entries = (Map<String, StoreEntry>) entriesField.get(store);
+      return entries.get(hash);
+    } catch (ReflectiveOperationException exception) {
+      throw new AssertionError(exception);
+    }
   }
 
-  private static Method method(Class<?> owner, String name, Class<?>... parameterTypes)
-      throws NoSuchMethodException {
-    Method method = owner.getDeclaredMethod(name, parameterTypes);
-    method.setAccessible(true);
-    return method;
+  private static Method method(Class<?> owner, String name, Class<?>... parameterTypes) {
+    try {
+      Method method = owner.getDeclaredMethod(name, parameterTypes);
+      method.setAccessible(true);
+      return method;
+    } catch (NoSuchMethodException exception) {
+      throw new AssertionError(exception);
+    }
   }
 
-  private static Object invoke(Method method, Object target, Object... arguments) throws Throwable {
+  private static Object invoke(Method method, Object target, Object... arguments)
+      throws IOException {
     try {
       return method.invoke(target, arguments);
+    } catch (IllegalAccessException exception) {
+      throw new AssertionError(exception);
     } catch (InvocationTargetException exception) {
-      throw exception.getCause();
+      Throwable cause = exception.getCause();
+      if (cause instanceof IOException ioException) {
+        throw ioException;
+      }
+      throw new AssertionError(cause);
     }
   }
 
