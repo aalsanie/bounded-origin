@@ -1,10 +1,12 @@
 # bounded-origin-api public API
 public final class io.github.aalsanie.boundedorigin.api.Artifact extends java.lang.Record {
+  public io.github.aalsanie.boundedorigin.api.Artifact(int, long, java.util.Map<java.lang.String, java.lang.String>, io.github.aalsanie.boundedorigin.api.ArtifactBody);
   public io.github.aalsanie.boundedorigin.api.Artifact(long, java.util.Map<java.lang.String, java.lang.String>, io.github.aalsanie.boundedorigin.api.ArtifactBody);
   public java.util.Map<java.lang.String, java.lang.String> metadata();
   public final java.lang.String toString();
   public final int hashCode();
   public final boolean equals(java.lang.Object);
+  public int statusCode();
   public long contentLength();
   public io.github.aalsanie.boundedorigin.api.ArtifactBody body();
 }
