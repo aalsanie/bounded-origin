@@ -1,10 +1,23 @@
 # bounded-origin-store-fs public API
+final class io.github.aalsanie.boundedorigin.store.fs.CorruptStoreException extends java.io.IOException {
+}
 public final class io.github.aalsanie.boundedorigin.store.fs.FileSystemArtifactStore implements io.github.aalsanie.boundedorigin.api.ArtifactStore,java.lang.AutoCloseable {
   public io.github.aalsanie.boundedorigin.store.fs.FileSystemArtifactStore(java.nio.file.Path, long, long) throws java.io.IOException;
   public java.util.Optional<io.github.aalsanie.boundedorigin.api.Artifact> get(io.github.aalsanie.boundedorigin.api.OperationKey) throws java.io.IOException;
   public void put(io.github.aalsanie.boundedorigin.api.OperationKey, io.github.aalsanie.boundedorigin.api.Artifact) throws java.io.IOException;
   public io.github.aalsanie.boundedorigin.store.fs.FileSystemArtifactStoreStats stats();
   public void close() throws java.io.IOException;
+}
+final class io.github.aalsanie.boundedorigin.store.fs.FileSystemArtifactStore$ReaderInputStream extends java.io.FilterInputStream {
+  public void close() throws java.io.IOException;
+}
+final class io.github.aalsanie.boundedorigin.store.fs.FileSystemArtifactStore$StagedBody extends java.lang.Record {
+  public final java.lang.String toString();
+  public final int hashCode();
+  public final boolean equals(java.lang.Object);
+  public java.nio.file.Path path();
+  public java.lang.String digest();
+  public long length();
 }
 public final class io.github.aalsanie.boundedorigin.store.fs.FileSystemArtifactStoreStats extends java.lang.Record {
   public io.github.aalsanie.boundedorigin.store.fs.FileSystemArtifactStoreStats(long, long, long, long);
@@ -15,4 +28,28 @@ public final class io.github.aalsanie.boundedorigin.store.fs.FileSystemArtifactS
   public long entryCount();
   public long corruptionCount();
   public long evictionCount();
+}
+final class io.github.aalsanie.boundedorigin.store.fs.StoreEntry extends java.lang.Record {
+  public final java.lang.String toString();
+  public final int hashCode();
+  public final boolean equals(java.lang.Object);
+  public java.lang.String keyHash();
+  public io.github.aalsanie.boundedorigin.api.OperationKey key();
+  public int statusCode();
+  public long contentLength();
+  public java.lang.String contentDigest();
+  public long generation();
+  public java.util.Map<java.lang.String, java.lang.String> metadata();
+  public long entryFileSize();
+}
+final class io.github.aalsanie.boundedorigin.store.fs.StoreEntryCodec {
+}
+final class io.github.aalsanie.boundedorigin.store.fs.StoreEntryCodec$LimitedOutputStream extends java.io.OutputStream {
+  public void write(int) throws java.io.IOException;
+  public void write(byte[], int, int) throws java.io.IOException;
+  public void flush() throws java.io.IOException;
+  public void close() throws java.io.IOException;
+}
+interface io.github.aalsanie.boundedorigin.store.fs.TempOutputFactory {
+  public abstract java.io.OutputStream open(java.nio.file.Path) throws java.io.IOException;
 }

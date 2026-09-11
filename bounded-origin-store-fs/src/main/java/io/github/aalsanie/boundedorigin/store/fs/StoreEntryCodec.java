@@ -10,6 +10,11 @@ import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.DigestInputStream;
+import java.security.DigestOutputStream;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.TreeMap;
@@ -19,6 +24,7 @@ final class StoreEntryCodec {
 
   private static final int MAGIC = 0x424f4531;
   private static final int VERSION = 1;
+  private static final int CHECKSUM_BYTES = 8;
   private static final int MAX_FIELD_BYTES = 65_536;
   private static final int MAX_METADATA_ENTRIES = 256;
 
@@ -26,9 +32,11 @@ final class StoreEntryCodec {
 
   static long write(Path path, StoreEntry entry, TempOutputFactory outputFactory)
       throws IOException {
+    MessageDigest checksum = sha256();
     try (OutputStream raw = outputFactory.open(path);
         LimitedOutputStream limited = new LimitedOutputStream(raw, MAX_ENTRY_BYTES);
-        DataOutputStream output = new DataOutputStream(limited)) {
+        DigestOutputStream digested = new DigestOutputStream(limited, checksum);
+        DataOutputStream output = new DataOutputStream(digested)) {
       output.writeInt(MAGIC);
       output.writeInt(VERSION);
       output.writeLong(entry.generation());
@@ -49,6 +57,11 @@ final class StoreEntryCodec {
         writeString(output, value.getKey());
         writeString(output, value.getValue());
       }
+
+      output.flush();
+      byte[] checksumBytes = Arrays.copyOf(checksum.digest(), CHECKSUM_BYTES);
+      digested.on(false);
+      output.write(checksumBytes);
     }
     return Files.size(path);
   }
@@ -59,8 +72,11 @@ final class StoreEntryCodec {
       throw new CorruptStoreException("invalid entry size", false);
     }
 
+    MessageDigest checksum = sha256();
     try (InputStream raw = Files.newInputStream(path);
-        DataInputStream input = new DataInputStream(new BufferedInputStream(raw, 8_192))) {
+        BufferedInputStream buffered = new BufferedInputStream(raw, 8_192);
+        DigestInputStream digested = new DigestInputStream(buffered, checksum);
+        DataInputStream input = new DataInputStream(digested)) {
       if (input.readInt() != MAGIC || input.readInt() != VERSION) {
         throw new CorruptStoreException("invalid entry header", false);
       }
@@ -86,15 +102,25 @@ final class StoreEntryCodec {
           throw new CorruptStoreException("duplicate metadata key", false);
         }
       }
-      if (input.read() != -1) {
-        throw new CorruptStoreException("trailing entry bytes", false);
-      }
 
       OperationKey key;
       try {
         key = new OperationKey(policyId, policyVersion, semanticIdentity, materializerVersion);
       } catch (IllegalArgumentException | NullPointerException exception) {
         throw new CorruptStoreException("invalid operation key", false);
+      }
+
+      digested.on(false);
+      byte[] persistedChecksum = input.readNBytes(CHECKSUM_BYTES);
+      if (persistedChecksum.length != CHECKSUM_BYTES) {
+        throw new CorruptStoreException("truncated entry checksum", false);
+      }
+      byte[] actualChecksum = Arrays.copyOf(checksum.digest(), CHECKSUM_BYTES);
+      if (!MessageDigest.isEqual(actualChecksum, persistedChecksum)) {
+        throw new CorruptStoreException("entry checksum mismatch", false);
+      }
+      if (input.read() != -1) {
+        throw new CorruptStoreException("trailing entry bytes", false);
       }
 
       return new StoreEntry(
@@ -125,6 +151,14 @@ final class StoreEntryCodec {
       throw new CorruptStoreException("truncated string", false);
     }
     return new String(bytes, StandardCharsets.UTF_8);
+  }
+
+  private static MessageDigest sha256() {
+    try {
+      return MessageDigest.getInstance("SHA-256");
+    } catch (NoSuchAlgorithmException exception) {
+      throw new IllegalStateException("SHA-256 is unavailable", exception);
+    }
   }
 
   private static final class LimitedOutputStream extends OutputStream {
