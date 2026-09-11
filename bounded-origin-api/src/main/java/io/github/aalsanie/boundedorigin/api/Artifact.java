@@ -4,13 +4,21 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 
-public record Artifact(long contentLength, Map<String, String> metadata, ArtifactBody body) {
+public record Artifact(
+    int statusCode, long contentLength, Map<String, String> metadata, ArtifactBody body) {
   public Artifact {
+    if (statusCode < 200 || statusCode > 599) {
+      throw new IllegalArgumentException("statusCode must be between 200 and 599");
+    }
     if (contentLength < 0) {
       throw new IllegalArgumentException("contentLength must be non-negative");
     }
     metadata = immutableMetadata(metadata);
     body = Objects.requireNonNull(body, "body");
+  }
+
+  public Artifact(long contentLength, Map<String, String> metadata, ArtifactBody body) {
+    this(200, contentLength, metadata, body);
   }
 
   @Override
