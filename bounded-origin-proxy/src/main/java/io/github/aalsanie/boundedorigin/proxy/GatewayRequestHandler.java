@@ -286,9 +286,7 @@ final class GatewayRequestHandler extends ChannelInboundHandlerAdapter {
           .append(bytes)
           .whenComplete(
               (ignored, failure) ->
-                  context
-                      .executor()
-                      .execute(() -> spoolWriteFinished(context, state, failure)));
+                  context.executor().execute(() -> spoolWriteFinished(context, state, failure)));
     } catch (StreamingSpool.BodyLimitExceededException exception) {
       state.pendingSpoolWrites--;
       respondError(context, state, 413, "request body exceeds configured limit\n", true, false);
@@ -314,8 +312,7 @@ final class GatewayRequestHandler extends ChannelInboundHandlerAdapter {
     if (failure != null) {
       Throwable cause = unwrap(failure);
       if (cause instanceof StreamingSpool.BodyLimitExceededException) {
-        respondError(
-            context, state, 413, "request body exceeds configured limit\n", true, false);
+        respondError(context, state, 413, "request body exceeds configured limit\n", true, false);
       } else if (cause instanceof StreamingSpool.SpoolCapacityExceededException) {
         respondError(context, state, 503, "temporary capacity unavailable\n", true, true);
       } else {

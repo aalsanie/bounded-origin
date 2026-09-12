@@ -130,8 +130,7 @@ class BoundedOriginGatewayLifecycleTest {
                   "PT5S",
                   "drain.timeout",
                   "PT3S"));
-      GatewayTestFixtures.MemoryArtifactStore store =
-          new GatewayTestFixtures.MemoryArtifactStore();
+      GatewayTestFixtures.MemoryArtifactStore store = new GatewayTestFixtures.MemoryArtifactStore();
       AtomicBoolean disconnectExpected = new AtomicBoolean();
 
       try (BoundedOriginGateway gateway =
@@ -165,15 +164,9 @@ class BoundedOriginGatewayLifecycleTest {
           client.close();
 
           awaitMetric(
-              gateway.adminAddress(),
-              "bounded_origin_active_requests",
-              0,
-              Duration.ofSeconds(2));
+              gateway.adminAddress(), "bounded_origin_active_requests", 0, Duration.ofSeconds(2));
           awaitMetric(
-              gateway.adminAddress(),
-              "bounded_origin_origin_active",
-              1,
-              Duration.ofSeconds(2));
+              gateway.adminAddress(), "bounded_origin_origin_active", 1, Duration.ofSeconds(2));
 
           Future<?> closing = tasks.submit(gateway::close);
           Thread.sleep(150);
@@ -196,10 +189,7 @@ class BoundedOriginGatewayLifecycleTest {
   }
 
   private static void awaitMetric(
-      java.net.InetSocketAddress adminAddress,
-      String name,
-      long expected,
-      Duration timeout)
+      java.net.InetSocketAddress adminAddress, String name, long expected, Duration timeout)
       throws Exception {
     long deadline = System.nanoTime() + timeout.toNanos();
     AssertionError lastFailure = null;
@@ -212,8 +202,7 @@ class BoundedOriginGatewayLifecycleTest {
           if (actual == expected) {
             return;
           }
-          lastFailure =
-              new AssertionError(name + " expected " + expected + " but was " + actual);
+          lastFailure = new AssertionError(name + " expected " + expected + " but was " + actual);
         }
       } catch (IOException exception) {
         lastFailure = new AssertionError("admin metrics request failed", exception);

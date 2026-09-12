@@ -167,8 +167,7 @@ final class ArtifactResponseWriter {
     }
   }
 
-  private void streamBody(
-      Channel channel, Artifact artifact, Consumer<Throwable> completion)
+  private void streamBody(Channel channel, Artifact artifact, Consumer<Throwable> completion)
       throws IOException, InterruptedException {
     byte[] buffer = new byte[config.maxChunkSize()];
     long remaining = artifact.contentLength();
@@ -190,9 +189,7 @@ final class ArtifactResponseWriter {
           }
           metrics.bytesServed(artifact.contentLength());
           writeFinal(
-              channel,
-              new DefaultLastHttpContent(Unpooled.wrappedBuffer(chunk)),
-              completion);
+              channel, new DefaultLastHttpContent(Unpooled.wrappedBuffer(chunk)), completion);
           return;
         }
         sync(channel.writeAndFlush(new DefaultHttpContent(Unpooled.wrappedBuffer(chunk))));
@@ -201,8 +198,7 @@ final class ArtifactResponseWriter {
     throw new IOException("artifact body did not produce a final content chunk");
   }
 
-  private static void writeFinal(
-      Channel channel, Object message, Consumer<Throwable> completion) {
+  private static void writeFinal(Channel channel, Object message, Consumer<Throwable> completion) {
     ChannelPromise promise = channel.newPromise();
     promise.addListener(future -> completion.accept(future.isSuccess() ? null : future.cause()));
     channel.writeAndFlush(message, promise);

@@ -317,6 +317,7 @@ final class NettyOriginClient implements AutoCloseable {
       boolean selfDelimited =
           bodyForbidden || headerLength >= 0 || HttpUtil.isTransferEncodingChunked(response);
       reusable = HttpUtil.isKeepAlive(response) && selfDelimited;
+      reusable = HttpUtil.isKeepAlive(response) && selfDelimited;
       try {
         spool =
             new StreamingSpool(
@@ -369,10 +370,17 @@ final class NettyOriginClient implements AutoCloseable {
                 (ignored, failure) -> {
                   if (failure != null) {
                     fail(unwrap(failure));
-                  } else if (last) {
-                    finishResponse();
-                  } else if (!finished.get()) {
-                    context.executor().execute(context::read);
+                  } else {
+                    context
+                        .executor()
+                        .execute(
+                            () -> {
+                              if (!finished.get()
+                                  && !lastContentReceived
+                                  && context.channel().isActive()) {
+                                context.read();
+                              }
+                            });
                   }
                 });
       } catch (RuntimeException exception) {

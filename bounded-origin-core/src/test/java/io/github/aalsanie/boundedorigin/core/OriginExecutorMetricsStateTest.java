@@ -62,8 +62,7 @@ class OriginExecutorMetricsStateTest {
                 throw new IllegalStateException("expected");
               });
 
-      assertEquals(
-          OriginExecutionFailure.MATERIALIZATION_FAILED, failure(failed).failure());
+      assertEquals(OriginExecutionFailure.MATERIALIZATION_FAILED, failure(failed).failure());
       assertEquals(new OriginExecutorStats(0, 0, 0, 1), OriginExecutorMetrics.snapshot(executor));
     }
   }
