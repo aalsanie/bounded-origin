@@ -25,7 +25,8 @@ class OriginResponseMutationBoundaryTest {
           "/600",
           (request, socket) -> {
             TestOriginServer.write(
-                socket, "HTTP/1.1 600 Invalid\r\nContent-Length: 0\r\nConnection: keep-alive\r\n\r\n");
+                socket,
+                "HTTP/1.1 600 Invalid\r\nContent-Length: 0\r\nConnection: keep-alive\r\n\r\n");
             return true;
           });
 
@@ -45,8 +46,7 @@ class OriginResponseMutationBoundaryTest {
           "/exact",
           (request, socket) -> {
             TestOriginServer.write(
-                socket,
-                "HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: keep-alive\r\n\r\nok");
+                socket, "HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: keep-alive\r\n\r\nok");
             return true;
           });
       origin.respond(
