@@ -163,7 +163,7 @@ final class NettyOriginClient implements AutoCloseable {
   }
 
   private static void sync(ChannelFuture future) throws IOException, InterruptedException {
-    future.sync();
+    future.await();
     if (!future.isSuccess()) {
       Throwable cause = future.cause();
       if (cause instanceof IOException ioException) {
@@ -230,7 +230,7 @@ final class NettyOriginClient implements AutoCloseable {
     }
 
     void cancel(Throwable cause) {
-      fail(cause);
+      executeOnEventLoop(() -> fail(cause));
     }
 
     @Override
@@ -250,7 +250,7 @@ final class NettyOriginClient implements AutoCloseable {
     @Override
     public void channelInactive(ChannelHandlerContext context) {
       if (!finished.get()) {
-        if (closeDelimited && spool != null && !informationalResponse) {
+        if (closeDelimited) {
           finishResponse();
         } else if (!lastContentReceived) {
           fail(new IOException("origin closed the connection before completing the response"));
@@ -373,22 +373,21 @@ final class NettyOriginClient implements AutoCloseable {
         spool
             .append(bytes)
             .whenComplete(
-                (ignored, failure) -> {
-                  if (failure != null) {
-                    fail(unwrap(failure));
-                  } else if (last) {
-                    finishResponse();
-                  } else {
+                (ignored, failure) ->
                     context
                         .executor()
                         .execute(
                             () -> {
-                              if (!finished.get() && context.channel().isActive()) {
+                              if (failure != null) {
+                                fail(unwrap(failure));
+                              } else if (last) {
+                                finishResponse();
+                              } else if (!finished.get()
+                                  && !lastContentReceived
+                                  && context.channel().isActive()) {
                                 context.read();
                               }
-                            });
-                  }
-                });
+                            }));
       } catch (RuntimeException exception) {
         fail(exception);
       }
@@ -396,10 +395,6 @@ final class NettyOriginClient implements AutoCloseable {
 
     private void finishResponse() {
       StreamingSpool current = spool;
-      if (current == null) {
-        fail(new IOException("origin response spool is unavailable"));
-        return;
-      }
       if (!finished.compareAndSet(false, true)) {
         return;
       }
@@ -408,36 +403,33 @@ final class NettyOriginClient implements AutoCloseable {
       try {
         completion = current.finish();
       } catch (RuntimeException exception) {
-        detachAndRelease(false);
-        result.completeExceptionally(exception);
+        completeFailure(exception);
         return;
       }
       completion.whenComplete(
-          (spooled, failure) -> {
-            if (failure != null) {
-              detachAndRelease(false);
-              result.completeExceptionally(unwrap(failure));
-              return;
-            }
-            if (!bodyForbidden && declaredLength >= 0 && declaredLength != spooled.length()) {
-              spooled.close();
-              detachAndRelease(false);
-              result.completeExceptionally(
-                  new IOException("origin response length did not match Content-Length"));
-              return;
-            }
-            try {
-              TemporaryArtifactBody body = new TemporaryArtifactBody(spooled);
-              Artifact artifact = new Artifact(statusCode, spooled.length(), metadata, body);
-              metrics.originResponseBytes(spooled.length());
-              detachAndRelease(reusable);
-              result.complete(artifact);
-            } catch (RuntimeException | Error exception) {
-              spooled.close();
-              detachAndRelease(false);
-              result.completeExceptionally(exception);
-            }
-          });
+          (spooled, failure) -> executeOnEventLoop(() -> completeResponse(spooled, failure)));
+    }
+
+    private void completeResponse(StreamingSpool.Result spooled, Throwable failure) {
+      if (failure != null) {
+        completeFailure(unwrap(failure));
+        return;
+      }
+      if (!bodyForbidden && declaredLength >= 0 && declaredLength != spooled.length()) {
+        spooled.close();
+        completeFailure(new IOException("origin response length did not match Content-Length"));
+        return;
+      }
+      try {
+        TemporaryArtifactBody body = new TemporaryArtifactBody(spooled);
+        Artifact artifact = new Artifact(statusCode, spooled.length(), metadata, body);
+        metrics.originResponseBytes(spooled.length());
+        detachAndRelease(reusable);
+        result.complete(artifact);
+      } catch (RuntimeException | Error exception) {
+        spooled.close();
+        completeFailure(exception);
+      }
     }
 
     private void fail(Throwable cause) {
@@ -449,26 +441,31 @@ final class NettyOriginClient implements AutoCloseable {
       if (current != null) {
         current.close();
       }
+      completeFailure(cause);
+    }
+
+    private void completeFailure(Throwable cause) {
       detachAndRelease(false);
       result.completeExceptionally(cause);
     }
 
     private void detachAndRelease(boolean canReuse) {
       Channel channel = lease.channel();
-      Runnable release =
-          () -> {
-            if (channel.pipeline().context(this) != null) {
-              channel.pipeline().remove(this);
-            }
-            if (!canReuse) {
-              lease.invalidate();
-            }
-            lease.close();
-          };
+      if (channel.pipeline().context(this) != null) {
+        channel.pipeline().remove(this);
+      }
+      if (!canReuse) {
+        lease.invalidate();
+      }
+      lease.close();
+    }
+
+    private void executeOnEventLoop(Runnable action) {
+      Channel channel = lease.channel();
       if (channel.eventLoop().inEventLoop()) {
-        release.run();
+        action.run();
       } else {
-        channel.eventLoop().execute(release);
+        channel.eventLoop().execute(action);
       }
     }
 

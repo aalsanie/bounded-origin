@@ -172,7 +172,7 @@ final class ArtifactResponseWriter {
     byte[] buffer = new byte[config.maxChunkSize()];
     long remaining = artifact.contentLength();
     try (InputStream input = artifact.body().openStream()) {
-      while (remaining > 0) {
+      while (true) {
         int maximum = (int) Math.min(buffer.length, remaining);
         int count = input.read(buffer, 0, maximum);
         if (count < 0) {
@@ -195,7 +195,6 @@ final class ArtifactResponseWriter {
         sync(channel.writeAndFlush(new DefaultHttpContent(Unpooled.wrappedBuffer(chunk))));
       }
     }
-    throw new IOException("artifact body did not produce a final content chunk");
   }
 
   private static void writeFinal(Channel channel, Object message, Consumer<Throwable> completion) {
@@ -205,7 +204,7 @@ final class ArtifactResponseWriter {
   }
 
   private static void sync(ChannelFuture future) throws IOException, InterruptedException {
-    future.sync();
+    future.await();
     if (!future.isSuccess()) {
       Throwable cause = future.cause();
       if (cause instanceof IOException ioException) {

@@ -36,7 +36,7 @@ final class GatewayRuntimeState {
 
   boolean register(Channel channel) {
     synchronized (lock) {
-      if (!accepting || closed || clients.size() >= maxClientConnections) {
+      if (!accepting || clients.size() >= maxClientConnections) {
         return false;
       }
       return clients.add(channel);
@@ -52,7 +52,7 @@ final class GatewayRuntimeState {
 
   boolean beginRequest() {
     synchronized (lock) {
-      if (!accepting || closed) {
+      if (!accepting) {
         return false;
       }
       activeRequests++;
@@ -124,7 +124,7 @@ final class GatewayRuntimeState {
 
   boolean ready() {
     synchronized (lock) {
-      return accepting && !closed;
+      return accepting;
     }
   }
 

@@ -264,7 +264,8 @@ public final class BoundedOriginGateway implements AutoCloseable {
   }
 
   private static Channel bind(ServerBootstrap bootstrap, InetSocketAddress address) {
-    ChannelFuture future = bootstrap.bind(address).syncUninterruptibly();
+    ChannelFuture future = bootstrap.bind(address);
+    future.awaitUninterruptibly();
     if (!future.isSuccess()) {
       throw new IllegalStateException("server bind failed", future.cause());
     }
