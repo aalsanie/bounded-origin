@@ -2,10 +2,10 @@
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-image="bounded-origin-p05-smoke:${GITHUB_SHA:-local}"
-network="bounded-origin-p05-$RANDOM-$$"
-origin="bounded-origin-p05-origin-$$"
-gateway="bounded-origin-p05-gateway-$$"
+image="bounded-origin-smoke:${GITHUB_SHA:-local}"
+network="bounded-origin-smoke-$RANDOM-$$"
+origin="bounded-origin-smoke-origin-$$"
+gateway="bounded-origin-smoke-gateway-$$"
 
 cleanup() {
   docker rm -f "$gateway" "$origin" >/dev/null 2>&1 || true

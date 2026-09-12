@@ -28,6 +28,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -199,6 +200,7 @@ final class NettyOriginClient implements AutoCloseable {
     private boolean bodyForbidden;
     private boolean informationalResponse;
     private boolean lastContentReceived;
+    private boolean closeDelimited;
     private ScheduledFuture<?> timeout;
 
     private OriginExchangeHandler(
@@ -247,8 +249,12 @@ final class NettyOriginClient implements AutoCloseable {
 
     @Override
     public void channelInactive(ChannelHandlerContext context) {
-      if (!finished.get() && !lastContentReceived) {
-        fail(new IOException("origin closed the connection before completing the response"));
+      if (!finished.get()) {
+        if (closeDelimited && spool != null && !informationalResponse) {
+          finishResponse();
+        } else if (!lastContentReceived) {
+          fail(new IOException("origin closed the connection before completing the response"));
+        }
       }
       context.fireChannelInactive();
     }
@@ -316,7 +322,7 @@ final class NettyOriginClient implements AutoCloseable {
       }
       boolean selfDelimited =
           bodyForbidden || headerLength >= 0 || HttpUtil.isTransferEncodingChunked(response);
-      reusable = HttpUtil.isKeepAlive(response) && selfDelimited;
+      closeDelimited = !selfDelimited;
       reusable = HttpUtil.isKeepAlive(response) && selfDelimited;
       try {
         spool =
@@ -370,14 +376,14 @@ final class NettyOriginClient implements AutoCloseable {
                 (ignored, failure) -> {
                   if (failure != null) {
                     fail(unwrap(failure));
+                  } else if (last) {
+                    finishResponse();
                   } else {
                     context
                         .executor()
                         .execute(
                             () -> {
-                              if (!finished.get()
-                                  && !lastContentReceived
-                                  && context.channel().isActive()) {
+                              if (!finished.get() && context.channel().isActive()) {
                                 context.read();
                               }
                             });
@@ -394,30 +400,44 @@ final class NettyOriginClient implements AutoCloseable {
         fail(new IOException("origin response spool is unavailable"));
         return;
       }
-      current
-          .finish()
-          .whenComplete(
-              (spooled, failure) -> {
-                if (failure != null) {
-                  fail(unwrap(failure));
-                  return;
-                }
-                if (!bodyForbidden && declaredLength >= 0 && declaredLength != spooled.length()) {
-                  spooled.close();
-                  fail(new IOException("origin response length did not match Content-Length"));
-                  return;
-                }
-                if (!finished.compareAndSet(false, true)) {
-                  spooled.close();
-                  return;
-                }
-                cancelTimeout();
-                TemporaryArtifactBody body = new TemporaryArtifactBody(spooled);
-                Artifact artifact = new Artifact(statusCode, spooled.length(), metadata, body);
-                metrics.originResponseBytes(spooled.length());
-                detachAndRelease(reusable);
-                result.complete(artifact);
-              });
+      if (!finished.compareAndSet(false, true)) {
+        return;
+      }
+      cancelTimeout();
+      CompletionStage<StreamingSpool.Result> completion;
+      try {
+        completion = current.finish();
+      } catch (RuntimeException exception) {
+        detachAndRelease(false);
+        result.completeExceptionally(exception);
+        return;
+      }
+      completion.whenComplete(
+          (spooled, failure) -> {
+            if (failure != null) {
+              detachAndRelease(false);
+              result.completeExceptionally(unwrap(failure));
+              return;
+            }
+            if (!bodyForbidden && declaredLength >= 0 && declaredLength != spooled.length()) {
+              spooled.close();
+              detachAndRelease(false);
+              result.completeExceptionally(
+                  new IOException("origin response length did not match Content-Length"));
+              return;
+            }
+            try {
+              TemporaryArtifactBody body = new TemporaryArtifactBody(spooled);
+              Artifact artifact = new Artifact(statusCode, spooled.length(), metadata, body);
+              metrics.originResponseBytes(spooled.length());
+              detachAndRelease(reusable);
+              result.complete(artifact);
+            } catch (RuntimeException | Error exception) {
+              spooled.close();
+              detachAndRelease(false);
+              result.completeExceptionally(exception);
+            }
+          });
     }
 
     private void fail(Throwable cause) {
