@@ -83,6 +83,7 @@ final class NettyOriginClient implements AutoCloseable {
     channel.pipeline().addLast(exchange);
     try {
       sendRequest(channel, request);
+      exchange.startTimeout();
       channel.read();
       return await(exchange);
     } catch (InterruptedException exception) {
@@ -214,8 +215,15 @@ final class NettyOriginClient implements AutoCloseable {
       this.config = config;
       this.metrics = metrics;
       this.spoolQuota = spoolQuota;
+    }
+
+    CompletableFuture<Artifact> result() {
+      return result;
+    }
+
+    void startTimeout() {
       Duration responseTimeout = config.originResponseTimeout();
-      this.timeout =
+      timeout =
           lease
               .channel()
               .eventLoop()
@@ -223,10 +231,6 @@ final class NettyOriginClient implements AutoCloseable {
                   () -> fail(new TimeoutException("origin response timed out")),
                   responseTimeout.toNanos(),
                   TimeUnit.NANOSECONDS);
-    }
-
-    CompletableFuture<Artifact> result() {
-      return result;
     }
 
     void cancel(Throwable cause) {
