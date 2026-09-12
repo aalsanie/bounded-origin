@@ -19,6 +19,9 @@ import java.util.Objects;
 import java.util.Set;
 
 final class HttpRequestSecurity {
+  static final String REPRESENTATION_CONTENT_LENGTH =
+      "x-bounded-origin-internal-representation-content-length";
+
   private static final Set<String> HOP_BY_HOP =
       Set.of(
           "connection",
@@ -43,8 +46,10 @@ final class HttpRequestSecurity {
           "trailer",
           "transfer-encoding",
           "upgrade",
+          "authentication-info",
           "content-length",
           "date",
+          "proxy-authentication-info",
           "set-cookie",
           "set-cookie2",
           "www-authenticate");

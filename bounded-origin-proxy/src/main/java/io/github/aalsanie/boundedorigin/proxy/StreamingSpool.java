@@ -1,5 +1,6 @@
 package io.github.aalsanie.boundedorigin.proxy;
 
+import java.io.FilterInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
@@ -199,7 +200,10 @@ final class StreamingSpool implements AutoCloseable {
     private final long length;
     private final String sha256;
     private final SpoolQuota.Reservation reservation;
-    private final AtomicBoolean released = new AtomicBoolean();
+
+    private boolean released;
+    private boolean cleaned;
+    private int openStreams;
 
     Result(Path path, long length, String sha256, SpoolQuota.Reservation reservation) {
       this.path = Objects.requireNonNull(path, "path");
@@ -224,28 +228,94 @@ final class StreamingSpool implements AutoCloseable {
     }
 
     InputStream openStream() throws IOException {
-      if (released.get()) {
-        throw new IOException("temporary spool was released");
+      synchronized (this) {
+        if (released) {
+          throw new IOException("temporary spool was released");
+        }
+        openStreams++;
       }
-      return Files.newInputStream(path);
+
+      InputStream input;
+      try {
+        input = Files.newInputStream(path);
+      } catch (IOException exception) {
+        streamClosed();
+        throw exception;
+      }
+      return new TrackedInputStream(input, this);
     }
 
-    boolean released() {
-      return released.get();
+    synchronized boolean released() {
+      return released;
     }
 
     @Override
     public void close() {
-      if (!released.compareAndSet(false, true)) {
-        return;
+      boolean cleanup;
+      synchronized (this) {
+        if (released) {
+          return;
+        }
+        released = true;
+        cleanup = openStreams == 0;
+      }
+      if (cleanup) {
+        cleanup();
+      }
+    }
+
+    private void streamClosed() {
+      boolean cleanup;
+      synchronized (this) {
+        if (openStreams <= 0) {
+          throw new IllegalStateException("temporary spool stream accounting underflow");
+        }
+        openStreams--;
+        cleanup = released && openStreams == 0;
+      }
+      if (cleanup) {
+        cleanup();
+      }
+    }
+
+    private void cleanup() {
+      synchronized (this) {
+        if (cleaned) {
+          return;
+        }
+        cleaned = true;
       }
       try {
         Files.deleteIfExists(path);
+        reservation.close();
       } catch (IOException exception) {
+        synchronized (this) {
+          cleaned = false;
+        }
         System.getLogger(StreamingSpool.class.getName())
             .log(System.Logger.Level.WARNING, "failed to delete completed spool", exception);
-      } finally {
-        reservation.close();
+      }
+    }
+
+    private static final class TrackedInputStream extends FilterInputStream {
+      private final Result owner;
+      private final AtomicBoolean closed = new AtomicBoolean();
+
+      private TrackedInputStream(InputStream input, Result owner) {
+        super(input);
+        this.owner = owner;
+      }
+
+      @Override
+      public void close() throws IOException {
+        if (!closed.compareAndSet(false, true)) {
+          return;
+        }
+        try {
+          super.close();
+        } finally {
+          owner.streamClosed();
+        }
       }
     }
   }

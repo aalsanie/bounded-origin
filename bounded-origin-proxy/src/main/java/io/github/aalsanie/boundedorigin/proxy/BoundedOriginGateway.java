@@ -75,19 +75,22 @@ public final class BoundedOriginGateway implements AutoCloseable {
       if (started) {
         throw new IllegalStateException("gateway is already started");
       }
-      Files.createDirectories(config.temporaryDirectory());
-      runtime.started();
       try {
+        Files.createDirectories(config.temporaryDirectory());
+        runtime.started();
         clientServer = bindClient();
         adminServer = bindAdmin();
         started = true;
-      } catch (RuntimeException exception) {
+      } catch (IOException | RuntimeException exception) {
         runtime.beginDrain();
         closeChannel(clientServer);
         closeChannel(adminServer);
         shutdownResources();
         closed = true;
         runtime.closed();
+        if (exception instanceof IOException ioException) {
+          throw ioException;
+        }
         throw new IOException("failed to bind bounded-origin gateway", exception);
       }
       StructuredLog.started(
@@ -164,7 +167,7 @@ public final class BoundedOriginGateway implements AutoCloseable {
             .childOption(ChannelOption.SO_KEEPALIVE, true)
             .childOption(ChannelOption.WRITE_BUFFER_WATER_MARK, waterMark)
             .childOption(
-                ChannelOption.RCVBUF_ALLOCATOR,
+                ChannelOption.RECVBUF_ALLOCATOR,
                 new FixedRecvByteBufAllocator(config.maxChunkSize()))
             .childHandler(
                 new ChannelInitializer<SocketChannel>() {

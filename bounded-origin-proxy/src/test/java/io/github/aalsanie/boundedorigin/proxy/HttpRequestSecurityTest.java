@@ -87,6 +87,8 @@ class HttpRequestSecurityTest {
     headers.set("X-Hop", "remove");
     headers.set("Content-Length", "5");
     headers.set("Set-Cookie", "a=b");
+    headers.set("Authentication-Info", "nextnonce=secret");
+    headers.set("Proxy-Authentication-Info", "nextnonce=secret");
     headers.set("X-Bounded-Origin-Policy", "fake");
     headers.set("Content-Type", "text/plain");
     headers.add("Cache-Control", "private");
@@ -98,6 +100,8 @@ class HttpRequestSecurityTest {
     assertEquals("private, max-age=0", metadata.get("cache-control"));
     assertFalse(metadata.containsKey("content-length"));
     assertFalse(metadata.containsKey("set-cookie"));
+    assertFalse(metadata.containsKey("authentication-info"));
+    assertFalse(metadata.containsKey("proxy-authentication-info"));
     assertFalse(metadata.containsKey("x-hop"));
     assertFalse(metadata.containsKey("x-bounded-origin-policy"));
   }
@@ -106,7 +110,15 @@ class HttpRequestSecurityTest {
   void persistedArtifactMetadataIsValidatedAgainBeforeServing() {
     Map<String, String> safe =
         HttpRequestSecurity.safeArtifactMetadata(
-            Map.of("Content-Type", "text/plain", "Connection", "close", "Set-Cookie", "a=b"));
+            Map.of(
+                "Content-Type",
+                "text/plain",
+                "Connection",
+                "close",
+                "Set-Cookie",
+                "a=b",
+                HttpRequestSecurity.REPRESENTATION_CONTENT_LENGTH,
+                "123"));
     assertEquals(Map.of("content-type", "text/plain"), safe);
 
     assertThrows(

@@ -42,6 +42,7 @@ final class ArtifactResponseWriter {
     Objects.requireNonNull(completion, "completion");
 
     Map<String, String> metadata = HttpRequestSecurity.safeArtifactMetadata(artifact.metadata());
+    Long representationLength = representationLength(artifact.metadata());
     boolean head = HttpMethod.HEAD.name().equals(requestMethod);
     boolean statusWithoutBody =
         artifact.statusCode() == 204
@@ -67,7 +68,20 @@ final class ArtifactResponseWriter {
                         HttpVersion.HTTP_1_1, HttpResponseStatus.valueOf(artifact.statusCode()));
                 metadata.forEach(response.headers()::set);
                 if (head) {
-                  response.headers().set(HttpHeaderNames.CONTENT_LENGTH, artifact.contentLength());
+                  response
+                      .headers()
+                      .set(
+                          HttpHeaderNames.CONTENT_LENGTH,
+                          representationLength == null
+                              ? artifact.contentLength()
+                              : representationLength);
+                } else if (artifact.statusCode() == 304) {
+                  response.headers().remove(HttpHeaderNames.TRANSFER_ENCODING);
+                  if (representationLength != null) {
+                    response.headers().set(HttpHeaderNames.CONTENT_LENGTH, representationLength);
+                  } else {
+                    response.headers().remove(HttpHeaderNames.CONTENT_LENGTH);
+                  }
                 } else if (statusWithoutBody) {
                   response.headers().remove(HttpHeaderNames.CONTENT_LENGTH);
                   response.headers().remove(HttpHeaderNames.TRANSFER_ENCODING);
@@ -90,6 +104,27 @@ final class ArtifactResponseWriter {
               }
               completion.accept(failure);
             });
+  }
+
+  private static Long representationLength(Map<String, String> metadata) {
+    String value = metadata.get(HttpRequestSecurity.REPRESENTATION_CONTENT_LENGTH);
+    if (value == null) {
+      return null;
+    }
+    if (value.isEmpty()) {
+      throw new IllegalArgumentException("artifact representation length is empty");
+    }
+    for (int index = 0; index < value.length(); index++) {
+      char character = value.charAt(index);
+      if (character < '0' || character > '9') {
+        throw new IllegalArgumentException("artifact representation length is invalid");
+      }
+    }
+    try {
+      return Long.parseLong(value);
+    } catch (NumberFormatException exception) {
+      throw new IllegalArgumentException("artifact representation length is invalid", exception);
+    }
   }
 
   private void streamBody(Channel channel, Artifact artifact)

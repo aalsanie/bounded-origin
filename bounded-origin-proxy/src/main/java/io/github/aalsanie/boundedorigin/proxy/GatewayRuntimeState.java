@@ -6,6 +6,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.IdentityHashMap;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 
 final class GatewayRuntimeState {
@@ -77,10 +78,19 @@ final class GatewayRuntimeState {
   }
 
   boolean awaitDrained(Duration timeout) {
-    long remainingNanos = timeout.toNanos();
-    long deadline = System.nanoTime() + remainingNanos;
+    Objects.requireNonNull(timeout, "timeout");
+    long timeoutNanos = timeout.toNanos();
+    if (timeoutNanos < 0) {
+      throw new IllegalArgumentException("timeout must not be negative");
+    }
+    long started = System.nanoTime();
     synchronized (lock) {
-      while (activeRequests != 0 && remainingNanos > 0) {
+      while (activeRequests != 0) {
+        long elapsed = System.nanoTime() - started;
+        long remainingNanos = timeoutNanos - elapsed;
+        if (remainingNanos <= 0) {
+          break;
+        }
         long millis = remainingNanos / 1_000_000;
         int nanos = (int) (remainingNanos % 1_000_000);
         try {
@@ -89,7 +99,6 @@ final class GatewayRuntimeState {
           Thread.currentThread().interrupt();
           return false;
         }
-        remainingNanos = deadline - System.nanoTime();
       }
       return activeRequests == 0;
     }

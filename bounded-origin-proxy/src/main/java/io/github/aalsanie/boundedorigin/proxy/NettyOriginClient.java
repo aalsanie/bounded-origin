@@ -24,6 +24,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.time.Duration;
 import java.util.Arrays;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
@@ -49,6 +50,14 @@ final class NettyOriginClient implements AutoCloseable {
   Artifact execute(OriginRequest request) throws MaterializationException {
     Objects.requireNonNull(request, "request");
     long startedNanos = System.nanoTime();
+    try {
+      return executeTimed(request);
+    } finally {
+      metrics.originDuration(System.nanoTime() - startedNanos);
+    }
+  }
+
+  private Artifact executeTimed(OriginRequest request) throws MaterializationException {
     CompletableFuture<OriginConnectionPool.Lease> acquisition =
         pool.acquire().toCompletableFuture();
     OriginConnectionPool.Lease lease;
@@ -85,8 +94,6 @@ final class NettyOriginClient implements AutoCloseable {
     } catch (RuntimeException exception) {
       exchange.cancel(exception);
       throw new MaterializationException("origin exchange failed", exception);
-    } finally {
-      metrics.originDuration(System.nanoTime() - startedNanos);
     }
   }
 
@@ -190,6 +197,8 @@ final class NettyOriginClient implements AutoCloseable {
     private boolean reusable = true;
     private long declaredLength = -1;
     private boolean bodyForbidden;
+    private boolean informationalResponse;
+    private boolean lastContentReceived;
     private ScheduledFuture<?> timeout;
 
     private OriginExchangeHandler(
@@ -238,7 +247,7 @@ final class NettyOriginClient implements AutoCloseable {
 
     @Override
     public void channelInactive(ChannelHandlerContext context) {
-      if (!finished.get()) {
+      if (!finished.get() && !lastContentReceived) {
         fail(new IOException("origin closed the connection before completing the response"));
       }
       context.fireChannelInactive();
@@ -258,9 +267,16 @@ final class NettyOriginClient implements AutoCloseable {
       if (code < 200) {
         if (code == 101) {
           fail(new IOException("origin protocol upgrades are not supported"));
+        } else if (informationalResponse) {
+          fail(new IOException("origin sent overlapping informational responses"));
         } else {
+          informationalResponse = true;
           context.read();
         }
+        return;
+      }
+      if (informationalResponse) {
+        fail(new IOException("origin final response arrived before informational framing ended"));
         return;
       }
       if (spool != null) {
@@ -271,23 +287,36 @@ final class NettyOriginClient implements AutoCloseable {
         fail(new IOException("origin returned an invalid HTTP status"));
         return;
       }
-      long declaredLength;
+      long headerLength;
       try {
-        declaredLength = HttpUtil.getContentLength(response, -1);
+        headerLength = HttpUtil.getContentLength(response, -1);
       } catch (NumberFormatException exception) {
         fail(new IOException("origin Content-Length is malformed", exception));
         return;
       }
-      if (declaredLength > request.maxResponseBytes()) {
+      bodyForbidden = "HEAD".equals(request.method()) || code == 204 || code == 205 || code == 304;
+      if (!bodyForbidden && headerLength > request.maxResponseBytes()) {
         fail(new StreamingSpool.BodyLimitExceededException(request.maxResponseBytes()));
         return;
       }
-      this.declaredLength = declaredLength;
-      this.bodyForbidden =
-          "HEAD".equals(request.method()) || code == 204 || code == 205 || code == 304;
+      if ((code == 204 || code == 205) && headerLength > 0) {
+        fail(new IOException("origin declared content for a body-forbidden response"));
+        return;
+      }
+      declaredLength = bodyForbidden ? 0 : headerLength;
       statusCode = code;
-      metadata = HttpRequestSecurity.artifactMetadata(response.headers());
-      reusable = HttpUtil.isKeepAlive(response);
+      Map<String, String> safeMetadata = HttpRequestSecurity.artifactMetadata(response.headers());
+      if (("HEAD".equals(request.method()) || code == 304) && headerLength >= 0) {
+        LinkedHashMap<String, String> withRepresentationLength = new LinkedHashMap<>(safeMetadata);
+        withRepresentationLength.put(
+            HttpRequestSecurity.REPRESENTATION_CONTENT_LENGTH, Long.toString(headerLength));
+        metadata = Map.copyOf(withRepresentationLength);
+      } else {
+        metadata = safeMetadata;
+      }
+      boolean selfDelimited =
+          bodyForbidden || headerLength >= 0 || HttpUtil.isTransferEncodingChunked(response);
+      reusable = HttpUtil.isKeepAlive(response) && selfDelimited;
       try {
         spool =
             new StreamingSpool(
@@ -303,12 +332,23 @@ final class NettyOriginClient implements AutoCloseable {
     }
 
     private void handleContent(ChannelHandlerContext context, HttpContent content) {
-      if (spool == null) {
-        fail(new IOException("origin sent content before a final response"));
-        return;
-      }
       if (!content.decoderResult().isSuccess()) {
         fail(new IOException("origin response content decoder rejected the response"));
+        return;
+      }
+      if (informationalResponse) {
+        if (content.content().isReadable()) {
+          fail(new IOException("origin informational response contained a body"));
+          return;
+        }
+        if (content instanceof LastHttpContent) {
+          informationalResponse = false;
+        }
+        context.read();
+        return;
+      }
+      if (spool == null) {
+        fail(new IOException("origin sent content before a final response"));
         return;
       }
       int readableBytes = content.content().readableBytes();
@@ -319,6 +359,9 @@ final class NettyOriginClient implements AutoCloseable {
       byte[] bytes = new byte[readableBytes];
       content.content().getBytes(content.content().readerIndex(), bytes);
       boolean last = content instanceof LastHttpContent;
+      if (last) {
+        lastContentReceived = true;
+      }
       try {
         spool
             .append(bytes)

@@ -42,6 +42,7 @@ final class SpoolQuota {
 
   private synchronized void reserve(Reservation reservation, long count) {
     requireOwned(reservation);
+    requireOpen();
     if (count < 0) {
       throw new IllegalArgumentException("count must be non-negative");
     }

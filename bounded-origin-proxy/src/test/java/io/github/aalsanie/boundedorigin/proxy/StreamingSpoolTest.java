@@ -43,6 +43,27 @@ class StreamingSpoolTest {
   }
 
   @Test
+  void completedSpoolDefersDeletionUntilOpenReadersClose() throws Exception {
+    SpoolQuota quota = new SpoolQuota(100, 1);
+    StreamingSpool spool = new StreamingSpool(tempDirectory, "reader-", 100, quota);
+    spool.append("abcdef".getBytes(StandardCharsets.UTF_8)).toCompletableFuture().join();
+    StreamingSpool.Result result = spool.finish().toCompletableFuture().join();
+    java.io.InputStream input = result.openStream();
+
+    result.close();
+    assertTrue(result.released());
+    assertTrue(Files.exists(result.path()));
+    assertEquals(6, quota.bytes());
+    assertEquals('a', input.read());
+
+    input.close();
+    assertFalse(Files.exists(result.path()));
+    assertEquals(0, quota.bytes());
+    assertEquals(0, quota.files());
+    assertThrows(java.io.IOException.class, result::openStream);
+  }
+
+  @Test
   void perBodyAndGlobalLimitsAreDistinct() throws Exception {
     SpoolQuota quota = new SpoolQuota(4, 2);
     StreamingSpool bodyLimit = new StreamingSpool(tempDirectory, "body-", 2, quota);

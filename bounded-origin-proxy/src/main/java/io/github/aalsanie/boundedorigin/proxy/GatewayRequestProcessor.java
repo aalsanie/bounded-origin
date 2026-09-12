@@ -117,10 +117,11 @@ final class GatewayRequestProcessor {
                       .get(selected.operationKey())
                       .orElseThrow(
                           () ->
-                              new MaterializationException("persisted artifact was not readable"));
+                              new GatewayStoreMaterializationException(
+                                  "persisted artifact was not readable"));
                 } catch (IOException exception) {
                   metrics.storeFailure();
-                  throw new MaterializationException(
+                  throw new GatewayStoreMaterializationException(
                       "failed to persist materialized artifact", exception);
                 } finally {
                   metrics.materializationDuration(System.nanoTime() - materializationStarted);
@@ -188,6 +189,18 @@ final class GatewayRequestProcessor {
     Outcome {
       artifact = Objects.requireNonNull(artifact, "artifact");
       policyId = Objects.requireNonNull(policyId, "policyId");
+    }
+  }
+
+  static final class GatewayStoreMaterializationException extends RuntimeException {
+    private static final long serialVersionUID = 1L;
+
+    GatewayStoreMaterializationException(String message) {
+      super(message);
+    }
+
+    GatewayStoreMaterializationException(String message, Throwable cause) {
+      super(message, cause);
     }
   }
 

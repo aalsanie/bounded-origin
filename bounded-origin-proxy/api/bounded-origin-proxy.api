@@ -1,1 +1,230 @@
 # bounded-origin-proxy public API
+final class io.github.aalsanie.boundedorigin.proxy.AdminHandler extends io.netty.channel.ChannelInboundHandlerAdapter {
+  public void channelRead(io.netty.channel.ChannelHandlerContext, java.lang.Object);
+  public void exceptionCaught(io.netty.channel.ChannelHandlerContext, java.lang.Throwable);
+}
+final class io.github.aalsanie.boundedorigin.proxy.ArtifactResponseWriter {
+}
+public final class io.github.aalsanie.boundedorigin.proxy.BoundedOriginGateway implements java.lang.AutoCloseable {
+  public io.github.aalsanie.boundedorigin.proxy.BoundedOriginGateway(io.github.aalsanie.boundedorigin.proxy.GatewayConfig, io.github.aalsanie.boundedorigin.core.PolicyEngine, io.github.aalsanie.boundedorigin.api.ArtifactStore);
+  public void start() throws java.io.IOException;
+  public java.net.InetSocketAddress listenAddress();
+  public java.net.InetSocketAddress adminAddress();
+  public boolean isReady();
+  public void close();
+}
+class io.github.aalsanie.boundedorigin.proxy.BoundedOriginGateway$1 extends io.netty.channel.ChannelInitializer<io.netty.channel.socket.SocketChannel> {
+}
+class io.github.aalsanie.boundedorigin.proxy.BoundedOriginGateway$2 extends io.netty.channel.ChannelInitializer<io.netty.channel.socket.SocketChannel> {
+}
+final class io.github.aalsanie.boundedorigin.proxy.FlightLeaseRegistry {
+}
+final class io.github.aalsanie.boundedorigin.proxy.FlightLeaseRegistry$Flight {
+}
+final class io.github.aalsanie.boundedorigin.proxy.FlightLeaseRegistry$Lease implements java.lang.AutoCloseable {
+  public void close();
+}
+public final class io.github.aalsanie.boundedorigin.proxy.GatewayConfig {
+  public static io.github.aalsanie.boundedorigin.proxy.GatewayConfig defaults(java.net.InetSocketAddress, java.net.InetSocketAddress, java.net.InetSocketAddress, java.nio.file.Path, io.github.aalsanie.boundedorigin.api.Budget);
+  public static io.github.aalsanie.boundedorigin.proxy.GatewayConfig from(java.util.Map<java.lang.String, java.lang.String>);
+  public static io.github.aalsanie.boundedorigin.proxy.GatewayConfig$Builder builder();
+  public java.net.InetSocketAddress listenAddress();
+  public java.net.InetSocketAddress adminAddress();
+  public java.net.InetSocketAddress originAddress();
+  public java.nio.file.Path temporaryDirectory();
+  public io.github.aalsanie.boundedorigin.api.Budget globalBudget();
+  public java.time.Duration failureCooldown();
+  public int maxCooldownEntries();
+  public int eventLoopThreads();
+  public int originEventLoopThreads();
+  public int maxClientConnections();
+  public int serverBacklog();
+  public int maxInitialLineLength();
+  public int maxHeaderSize();
+  public int maxChunkSize();
+  public long maxRequestBodyBytes();
+  public long maxSpoolBytes();
+  public int maxSpoolFiles();
+  public int originMaxConnections();
+  public int originMaxPendingAcquires();
+  public java.time.Duration originAcquireTimeout();
+  public java.time.Duration requestTimeout();
+  public java.time.Duration originConnectTimeout();
+  public java.time.Duration originResponseTimeout();
+  public java.time.Duration idleTimeout();
+  public java.time.Duration drainTimeout();
+  public int writeBufferLowWaterMark();
+  public int writeBufferHighWaterMark();
+  public int retryAfterSeconds();
+  public io.github.aalsanie.boundedorigin.api.TrustLevel ingressTrustLevel();
+  public boolean trustForwardedHeaders();
+  public long chunkedResponseThresholdBytes();
+}
+public final class io.github.aalsanie.boundedorigin.proxy.GatewayConfig$Builder {
+  public io.github.aalsanie.boundedorigin.proxy.GatewayConfig$Builder listenAddress(java.net.InetSocketAddress);
+  public io.github.aalsanie.boundedorigin.proxy.GatewayConfig$Builder adminAddress(java.net.InetSocketAddress);
+  public io.github.aalsanie.boundedorigin.proxy.GatewayConfig$Builder originAddress(java.net.InetSocketAddress);
+  public io.github.aalsanie.boundedorigin.proxy.GatewayConfig$Builder temporaryDirectory(java.nio.file.Path);
+  public io.github.aalsanie.boundedorigin.proxy.GatewayConfig$Builder globalBudget(io.github.aalsanie.boundedorigin.api.Budget);
+  public io.github.aalsanie.boundedorigin.proxy.GatewayConfig$Builder failureCooldown(java.time.Duration);
+  public io.github.aalsanie.boundedorigin.proxy.GatewayConfig$Builder maxCooldownEntries(int);
+  public io.github.aalsanie.boundedorigin.proxy.GatewayConfig$Builder eventLoopThreads(int);
+  public io.github.aalsanie.boundedorigin.proxy.GatewayConfig$Builder originEventLoopThreads(int);
+  public io.github.aalsanie.boundedorigin.proxy.GatewayConfig$Builder maxClientConnections(int);
+  public io.github.aalsanie.boundedorigin.proxy.GatewayConfig$Builder serverBacklog(int);
+  public io.github.aalsanie.boundedorigin.proxy.GatewayConfig$Builder maxInitialLineLength(int);
+  public io.github.aalsanie.boundedorigin.proxy.GatewayConfig$Builder maxHeaderSize(int);
+  public io.github.aalsanie.boundedorigin.proxy.GatewayConfig$Builder maxChunkSize(int);
+  public io.github.aalsanie.boundedorigin.proxy.GatewayConfig$Builder maxRequestBodyBytes(long);
+  public io.github.aalsanie.boundedorigin.proxy.GatewayConfig$Builder maxSpoolBytes(long);
+  public io.github.aalsanie.boundedorigin.proxy.GatewayConfig$Builder maxSpoolFiles(int);
+  public io.github.aalsanie.boundedorigin.proxy.GatewayConfig$Builder originMaxConnections(int);
+  public io.github.aalsanie.boundedorigin.proxy.GatewayConfig$Builder originMaxPendingAcquires(int);
+  public io.github.aalsanie.boundedorigin.proxy.GatewayConfig$Builder originAcquireTimeout(java.time.Duration);
+  public io.github.aalsanie.boundedorigin.proxy.GatewayConfig$Builder requestTimeout(java.time.Duration);
+  public io.github.aalsanie.boundedorigin.proxy.GatewayConfig$Builder originConnectTimeout(java.time.Duration);
+  public io.github.aalsanie.boundedorigin.proxy.GatewayConfig$Builder originResponseTimeout(java.time.Duration);
+  public io.github.aalsanie.boundedorigin.proxy.GatewayConfig$Builder idleTimeout(java.time.Duration);
+  public io.github.aalsanie.boundedorigin.proxy.GatewayConfig$Builder drainTimeout(java.time.Duration);
+  public io.github.aalsanie.boundedorigin.proxy.GatewayConfig$Builder writeBufferLowWaterMark(int);
+  public io.github.aalsanie.boundedorigin.proxy.GatewayConfig$Builder writeBufferHighWaterMark(int);
+  public io.github.aalsanie.boundedorigin.proxy.GatewayConfig$Builder retryAfterSeconds(int);
+  public io.github.aalsanie.boundedorigin.proxy.GatewayConfig$Builder ingressTrustLevel(io.github.aalsanie.boundedorigin.api.TrustLevel);
+  public io.github.aalsanie.boundedorigin.proxy.GatewayConfig$Builder trustForwardedHeaders(boolean);
+  public io.github.aalsanie.boundedorigin.proxy.GatewayConfig$Builder chunkedResponseThresholdBytes(long);
+  public io.github.aalsanie.boundedorigin.proxy.GatewayConfig build();
+}
+final class io.github.aalsanie.boundedorigin.proxy.GatewayMetrics {
+}
+final class io.github.aalsanie.boundedorigin.proxy.GatewayMetrics$Snapshot extends java.lang.Record {
+  public final java.lang.String toString();
+  public final int hashCode();
+  public final boolean equals(java.lang.Object);
+  public long requests();
+  public long artifactHits();
+  public long artifactMisses();
+  public long originExecutions();
+  public long singleFlightJoins();
+  public long rejections();
+  public long bytesServed();
+  public long bytesStored();
+  public long clientComputeDecisions();
+  public long malformedRequests();
+  public long storeFailures();
+  public long originPoolRejections();
+}
+final class io.github.aalsanie.boundedorigin.proxy.GatewayRequest extends java.lang.Record {
+  public java.util.Map<java.lang.String, java.util.List<java.lang.String>> originHeaders();
+  public final java.lang.String toString();
+  public final int hashCode();
+  public final boolean equals(java.lang.Object);
+  public io.github.aalsanie.boundedorigin.proxy.HttpRequestSecurity$ValidatedRequest validated();
+  public io.github.aalsanie.boundedorigin.proxy.StreamingSpool$Result body();
+}
+final class io.github.aalsanie.boundedorigin.proxy.GatewayRequestHandler extends io.netty.channel.ChannelInboundHandlerAdapter {
+  public void channelActive(io.netty.channel.ChannelHandlerContext);
+  public void channelRead(io.netty.channel.ChannelHandlerContext, java.lang.Object);
+  public void channelInactive(io.netty.channel.ChannelHandlerContext);
+  public void userEventTriggered(io.netty.channel.ChannelHandlerContext, java.lang.Object);
+  public void exceptionCaught(io.netty.channel.ChannelHandlerContext, java.lang.Throwable);
+}
+class io.github.aalsanie.boundedorigin.proxy.GatewayRequestHandler$1 {
+}
+final class io.github.aalsanie.boundedorigin.proxy.GatewayRequestHandler$RequestState {
+}
+final class io.github.aalsanie.boundedorigin.proxy.GatewayRequestProcessor {
+}
+class io.github.aalsanie.boundedorigin.proxy.GatewayRequestProcessor$1 {
+}
+final class io.github.aalsanie.boundedorigin.proxy.GatewayRequestProcessor$GatewayStoreException extends java.lang.RuntimeException {
+}
+final class io.github.aalsanie.boundedorigin.proxy.GatewayRequestProcessor$GatewayStoreMaterializationException extends io.github.aalsanie.boundedorigin.api.MaterializationException {
+}
+final class io.github.aalsanie.boundedorigin.proxy.GatewayRequestProcessor$Outcome extends java.lang.Record {
+  public final java.lang.String toString();
+  public final int hashCode();
+  public final boolean equals(java.lang.Object);
+  public java.util.concurrent.CompletionStage<io.github.aalsanie.boundedorigin.api.Artifact> artifact();
+  public io.github.aalsanie.boundedorigin.proxy.FlightLeaseRegistry$Lease flightLease();
+  public java.lang.String policyId();
+}
+final class io.github.aalsanie.boundedorigin.proxy.GatewayRuntimeState {
+}
+final class io.github.aalsanie.boundedorigin.proxy.HttpRequestSecurity {
+}
+final class io.github.aalsanie.boundedorigin.proxy.HttpRequestSecurity$HttpContractException extends java.lang.RuntimeException {
+}
+final class io.github.aalsanie.boundedorigin.proxy.HttpRequestSecurity$ValidatedRequest extends java.lang.Record {
+  public final java.lang.String toString();
+  public final int hashCode();
+  public final boolean equals(java.lang.Object);
+  public java.lang.String method();
+  public java.lang.String target();
+  public java.lang.String path();
+  public java.lang.String query();
+  public java.lang.String host();
+  public long declaredContentLength();
+  public boolean chunked();
+}
+final class io.github.aalsanie.boundedorigin.proxy.NettyOriginClient implements java.lang.AutoCloseable {
+  public void close();
+}
+final class io.github.aalsanie.boundedorigin.proxy.NettyOriginClient$OriginExchangeHandler extends io.netty.channel.ChannelInboundHandlerAdapter {
+  public void channelRead(io.netty.channel.ChannelHandlerContext, java.lang.Object);
+  public void channelInactive(io.netty.channel.ChannelHandlerContext);
+  public void exceptionCaught(io.netty.channel.ChannelHandlerContext, java.lang.Throwable);
+}
+final class io.github.aalsanie.boundedorigin.proxy.OriginConnectionPool implements java.lang.AutoCloseable {
+  public void close();
+}
+class io.github.aalsanie.boundedorigin.proxy.OriginConnectionPool$1 extends io.netty.channel.ChannelInitializer<io.netty.channel.socket.SocketChannel> {
+}
+final class io.github.aalsanie.boundedorigin.proxy.OriginConnectionPool$IdleCloseHandler extends io.netty.channel.ChannelInboundHandlerAdapter {
+  public void userEventTriggered(io.netty.channel.ChannelHandlerContext, java.lang.Object);
+}
+final class io.github.aalsanie.boundedorigin.proxy.OriginConnectionPool$Lease implements java.lang.AutoCloseable {
+  public void close();
+}
+final class io.github.aalsanie.boundedorigin.proxy.OriginConnectionPool$OriginConnectException extends java.lang.RuntimeException {
+}
+final class io.github.aalsanie.boundedorigin.proxy.OriginConnectionPool$PoolClosedException extends java.lang.RuntimeException {
+}
+final class io.github.aalsanie.boundedorigin.proxy.OriginConnectionPool$PoolExhaustedException extends java.lang.RuntimeException {
+}
+final class io.github.aalsanie.boundedorigin.proxy.OriginRequest extends java.lang.Record {
+  public java.util.Map<java.lang.String, java.util.List<java.lang.String>> headers();
+  public final java.lang.String toString();
+  public final int hashCode();
+  public final boolean equals(java.lang.Object);
+  public java.lang.String method();
+  public java.lang.String target();
+  public io.github.aalsanie.boundedorigin.proxy.StreamingSpool$Result body();
+  public long maxResponseBytes();
+}
+final class io.github.aalsanie.boundedorigin.proxy.ResponseArtifacts {
+}
+final class io.github.aalsanie.boundedorigin.proxy.SpoolQuota {
+}
+final class io.github.aalsanie.boundedorigin.proxy.SpoolQuota$Reservation implements java.lang.AutoCloseable {
+  public void close();
+}
+final class io.github.aalsanie.boundedorigin.proxy.SpoolQuota$SpoolLimitExceededException extends java.lang.RuntimeException {
+}
+final class io.github.aalsanie.boundedorigin.proxy.StreamingSpool implements java.lang.AutoCloseable {
+  public synchronized void close();
+}
+final class io.github.aalsanie.boundedorigin.proxy.StreamingSpool$BodyLimitExceededException extends java.lang.RuntimeException {
+}
+final class io.github.aalsanie.boundedorigin.proxy.StreamingSpool$Result implements java.lang.AutoCloseable {
+  public void close();
+}
+final class io.github.aalsanie.boundedorigin.proxy.StreamingSpool$Result$TrackedInputStream extends java.io.FilterInputStream {
+  public void close() throws java.io.IOException;
+}
+final class io.github.aalsanie.boundedorigin.proxy.StreamingSpool$SpoolCapacityExceededException extends java.lang.RuntimeException {
+}
+final class io.github.aalsanie.boundedorigin.proxy.StructuredLog {
+}
+final class io.github.aalsanie.boundedorigin.proxy.TemporaryArtifactBody implements io.github.aalsanie.boundedorigin.api.ArtifactBody {
+  public java.io.InputStream openStream() throws java.io.IOException;
+}

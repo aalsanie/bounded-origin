@@ -33,3 +33,17 @@ tasks.named("pitest") {
 tasks.named("check") {
     dependsOn("pitest")
 }
+
+tasks.register<Sync>("prepareDockerSmoke") {
+    dependsOn(tasks.named("testClasses"))
+    into(layout.buildDirectory.dir("docker-smoke/app"))
+    from(sourceSets.main.get().output) {
+        into("classes")
+    }
+    from(sourceSets.test.get().output) {
+        into("test-classes")
+    }
+    from(configurations.testRuntimeClasspath) {
+        into("lib")
+    }
+}

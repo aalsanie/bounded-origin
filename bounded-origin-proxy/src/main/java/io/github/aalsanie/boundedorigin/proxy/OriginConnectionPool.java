@@ -68,15 +68,18 @@ final class OriginConnectionPool implements AutoCloseable {
                 ChannelOption.CONNECT_TIMEOUT_MILLIS, durationMillis(config.originConnectTimeout()))
             .option(ChannelOption.WRITE_BUFFER_WATER_MARK, waterMark)
             .option(
-                ChannelOption.RCVBUF_ALLOCATOR,
+                ChannelOption.RECVBUF_ALLOCATOR,
                 new FixedRecvByteBufAllocator(config.maxChunkSize()))
             .handler(
                 new ChannelInitializer<SocketChannel>() {
                   @Override
                   protected void initChannel(SocketChannel channel) {
+                    HttpClientCodec clientCodec =
+                        new HttpClientCodec(decoderConfig.clone(), false, true);
+                    clientCodec.setSingleDecode(true);
                     channel
                         .pipeline()
-                        .addLast(new HttpClientCodec(decoderConfig.clone(), false, true))
+                        .addLast(clientCodec)
                         .addLast(
                             new IdleStateHandler(
                                 0, 0, config.idleTimeout().toNanos(), TimeUnit.NANOSECONDS))
@@ -222,22 +225,22 @@ final class OriginConnectionPool implements AutoCloseable {
   }
 
   private void release(Channel channel, boolean reusable) {
-    CompletableFuture<Lease> waiter = null;
-    boolean closeChannel = false;
-    synchronized (lock) {
-      if (closed || !reusable || !channel.isActive()) {
-        closeChannel = true;
-      } else {
+    while (true) {
+      CompletableFuture<Lease> waiter;
+      synchronized (lock) {
+        if (closed || !reusable || !channel.isActive()) {
+          channel.close();
+          return;
+        }
         waiter = pollPendingLocked();
         if (waiter == null) {
           idle.addLast(channel);
+          return;
         }
       }
-    }
-    if (closeChannel) {
-      channel.close();
-    } else if (waiter != null) {
-      waiter.complete(new Lease(this, channel));
+      if (waiter.complete(new Lease(this, channel))) {
+        return;
+      }
     }
   }
 

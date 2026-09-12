@@ -54,7 +54,7 @@ final class StructuredLog {
             + "\"}");
   }
 
-  private static String escape(String value) {
+  static String escape(String value) {
     StringBuilder escaped = new StringBuilder(value.length() + 16);
     for (int index = 0; index < value.length(); index++) {
       char character = value.charAt(index);

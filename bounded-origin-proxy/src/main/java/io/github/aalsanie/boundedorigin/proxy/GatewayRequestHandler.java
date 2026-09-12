@@ -6,6 +6,7 @@ import io.github.aalsanie.boundedorigin.core.OriginExecutionFailure;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
+import io.netty.channel.ConnectTimeoutException;
 import io.netty.handler.codec.http.DefaultFullHttpResponse;
 import io.netty.handler.codec.http.HttpContent;
 import io.netty.handler.codec.http.HttpRequest;
@@ -164,7 +165,6 @@ final class GatewayRequestHandler extends ChannelInboundHandlerAdapter {
           RequestState.failed(
               requestId, validated.method(), validated.path(), System.nanoTime(), runtime);
       current = failed;
-      metrics.rejection();
       respondError(context, failed, 503, "temporary capacity unavailable\n", true, true);
       return;
     } catch (IOException exception) {
@@ -203,8 +203,16 @@ final class GatewayRequestHandler extends ChannelInboundHandlerAdapter {
           .writeAndFlush(
               new DefaultFullHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.CONTINUE))
           .addListener(
-              ignored -> {
-                if (!state.terminal.get() && context.channel().isActive()) {
+              future -> {
+                if (!future.isSuccess()) {
+                  Throwable cause = future.cause();
+                  StructuredLog.failure(
+                      state.requestId,
+                      "continue_response_failure",
+                      cause == null ? new IOException("100 Continue write failed") : cause);
+                  context.close();
+                  terminate(state);
+                } else if (!state.terminal.get() && context.channel().isActive()) {
                   context.read();
                 }
               });
@@ -270,7 +278,6 @@ final class GatewayRequestHandler extends ChannelInboundHandlerAdapter {
                                     false);
                               } else if (cause
                                   instanceof StreamingSpool.SpoolCapacityExceededException) {
-                                metrics.rejection();
                                 respondError(
                                     context,
                                     state,
@@ -293,7 +300,6 @@ final class GatewayRequestHandler extends ChannelInboundHandlerAdapter {
     } catch (StreamingSpool.BodyLimitExceededException exception) {
       respondError(context, state, 413, "request body exceeds configured limit\n", true, false);
     } catch (StreamingSpool.SpoolCapacityExceededException exception) {
-      metrics.rejection();
       respondError(context, state, 503, "temporary capacity unavailable\n", true, true);
     } catch (RuntimeException exception) {
       StructuredLog.failure(state.requestId, "request_spool_failure", exception);
@@ -340,20 +346,26 @@ final class GatewayRequestHandler extends ChannelInboundHandlerAdapter {
   }
 
   private void dispatch(ChannelHandlerContext context, RequestState state) {
-    Thread.ofVirtual()
-        .name("bounded-origin-dispatch-", 0)
-        .start(
-            () -> {
-              try {
-                Map<String, List<String>> headers =
-                    withActualContentLength(state.originHeaders, state.body.length());
-                GatewayRequestProcessor.Outcome outcome =
-                    processor.process(new GatewayRequest(state.validated, headers, state.body));
-                context.executor().execute(() -> attachOutcome(context, state, outcome));
-              } catch (Throwable throwable) {
-                context.executor().execute(() -> processingFailed(context, state, throwable));
-              }
-            });
+    try {
+      Thread.ofVirtual()
+          .name("bounded-origin-dispatch-", 0)
+          .start(
+              () -> {
+                try {
+                  Map<String, List<String>> headers =
+                      withActualContentLength(state.originHeaders, state.body.length());
+                  GatewayRequestProcessor.Outcome outcome =
+                      processor.process(new GatewayRequest(state.validated, headers, state.body));
+                  context.executor().execute(() -> attachOutcome(context, state, outcome));
+                } catch (Throwable throwable) {
+                  context.executor().execute(() -> processingFailed(context, state, throwable));
+                }
+              });
+    } catch (RuntimeException | Error failure) {
+      deleteBody(state.body);
+      state.body = null;
+      processingFailed(context, state, failure);
+    }
   }
 
   private void attachOutcome(
@@ -402,8 +414,15 @@ final class GatewayRequestHandler extends ChannelInboundHandlerAdapter {
             respondError(
                 context, state, 502, "origin response exceeds configured limit\n", false, false);
         case MATERIALIZATION_FAILED -> {
-          if (containsCause(execution, java.util.concurrent.TimeoutException.class)) {
+          if (containsCause(
+              execution, GatewayRequestProcessor.GatewayStoreMaterializationException.class)) {
+            respondError(context, state, 500, "artifact store unavailable\n", false, false);
+          } else if (containsCause(execution, java.util.concurrent.TimeoutException.class)
+              || containsCause(execution, ConnectTimeoutException.class)) {
             respondError(context, state, 504, "origin timed out\n", false, false);
+          } else if (containsCause(execution, StreamingSpool.BodyLimitExceededException.class)) {
+            respondError(
+                context, state, 502, "origin response exceeds configured limit\n", false, false);
           } else if (containsCause(execution, OriginConnectionPool.PoolExhaustedException.class)
               || containsCause(execution, OriginConnectionPool.PoolClosedException.class)
               || containsCause(execution, StreamingSpool.SpoolCapacityExceededException.class)
@@ -625,7 +644,6 @@ final class GatewayRequestHandler extends ChannelInboundHandlerAdapter {
     private final StreamingSpool spool;
     private final long startedNanos;
     private final GatewayRuntimeState runtime;
-    private final SpoolQuota spoolQuota;
     private final AtomicBoolean terminal = new AtomicBoolean();
     private final AtomicBoolean runtimeFinished = new AtomicBoolean();
 

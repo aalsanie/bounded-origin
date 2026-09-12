@@ -56,8 +56,7 @@ final class AdminHandler extends ChannelInboundHandlerAdapter {
         return;
       }
       if (request.headers().getAll(HttpHeaderNames.HOST).size() != 1
-          || request.headers().contains(HttpHeaderNames.TRANSFER_ENCODING)
-          || HttpUtil.getContentLength(request, 0) != 0) {
+          || invalidBodyFraming(request)) {
         respond(
             context, HttpResponseStatus.BAD_REQUEST, "text/plain; charset=utf-8", "bad request\n");
         return;
@@ -101,6 +100,20 @@ final class AdminHandler extends ChannelInboundHandlerAdapter {
           "admin endpoint failed\n");
     } finally {
       ReferenceCountUtil.release(message);
+    }
+  }
+
+  private static boolean invalidBodyFraming(HttpRequest request) {
+    if (request.headers().contains(HttpHeaderNames.TRANSFER_ENCODING)) {
+      return true;
+    }
+    if (request.headers().getAll(HttpHeaderNames.CONTENT_LENGTH).size() > 1) {
+      return true;
+    }
+    try {
+      return HttpUtil.getContentLength(request, 0) != 0;
+    } catch (NumberFormatException exception) {
+      return true;
     }
   }
 

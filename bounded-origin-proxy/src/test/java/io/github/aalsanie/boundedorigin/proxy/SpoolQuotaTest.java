@@ -33,11 +33,15 @@ class SpoolQuotaTest {
     assertThrows(IllegalArgumentException.class, () -> new SpoolQuota(0, 1));
     assertThrows(IllegalArgumentException.class, () -> new SpoolQuota(1, 0));
 
-    SpoolQuota quota = new SpoolQuota(1, 1);
+    SpoolQuota quota = new SpoolQuota(2, 1);
     SpoolQuota.Reservation reservation = quota.openFile();
     assertThrows(IllegalArgumentException.class, () -> reservation.reserve(-1));
-    reservation.close();
+    reservation.reserve(1);
     quota.close();
     assertThrows(IllegalStateException.class, quota::openFile);
+    assertThrows(IllegalStateException.class, () -> reservation.reserve(1));
+    reservation.close();
+    assertEquals(0, quota.bytes());
+    assertEquals(0, quota.files());
   }
 }
