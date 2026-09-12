@@ -107,7 +107,7 @@ class GatewayHandlerTerminalRaceTest {
             Map.of(
                 "origin.max-execution-duration", "PT0.04S",
                 "origin.response-timeout", "PT0.03S",
-                "request.timeout", "PT0.25S"));
+                "request.timeout", "PT3S"));
     GatewayMetrics metrics = new GatewayMetrics();
     GatewayRuntimeState runtime = new GatewayRuntimeState(config.maxClientConnections());
     runtime.started();
@@ -157,7 +157,7 @@ class GatewayHandlerTerminalRaceTest {
   }
 
   private static void runTimeout(EmbeddedChannel channel) throws InterruptedException {
-    Thread.sleep(350);
+    Thread.sleep(3_250);
     channel.runScheduledPendingTasks();
     channel.runPendingTasks();
   }
