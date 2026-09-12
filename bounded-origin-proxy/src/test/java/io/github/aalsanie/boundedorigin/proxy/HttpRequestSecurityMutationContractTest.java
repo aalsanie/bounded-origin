@@ -51,8 +51,7 @@ class HttpRequestSecurityMutationContractTest {
       assertEquals(host, HttpRequestSecurity.validate(request("/", host), 0).host());
     }
 
-    assertEquals(
-        "[::1]:1", HttpRequestSecurity.validate(request("/", "[::1]:1"), 0).host());
+    assertEquals("[::1]:1", HttpRequestSecurity.validate(request("/", "[::1]:1"), 0).host());
     assertEquals(
         "[::1]:65535", HttpRequestSecurity.validate(request("/", "[::1]:65535"), 0).host());
 
@@ -62,10 +61,7 @@ class HttpRequestSecurityMutationContractTest {
     assertContract(
         400, "Host header port is outside the valid range", request("/", "example.test:0"), 0);
     assertContract(
-        400,
-        "Host header port is outside the valid range",
-        request("/", "example.test:65536"),
-        0);
+        400, "Host header port is outside the valid range", request("/", "example.test:65536"), 0);
     assertContract(400, "Host header port is outside the valid range", request("/", "[::1]:0"), 0);
     assertContract(
         400, "Host header port is outside the valid range", request("/", "[::1]:65536"), 0);

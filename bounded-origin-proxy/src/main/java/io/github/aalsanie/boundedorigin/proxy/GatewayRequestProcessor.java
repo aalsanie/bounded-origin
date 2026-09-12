@@ -98,40 +98,34 @@ final class GatewayRequestProcessor {
     }
     metrics.artifactMiss();
 
-    CompletionStage<Artifact> stage;
-    try {
-      stage =
-          executor.execute(
-              selected,
-              ignored -> {
-                metrics.originExecution();
-                Artifact generated = executeOrigin(request, selected);
-                if (!persist) {
-                  return generated;
-                }
-                long materializationStarted = System.nanoTime();
-                try {
-                  artifactStore.put(selected.operationKey(), generated);
-                  metrics.bytesStored(generated.contentLength());
-                  return artifactStore
-                      .get(selected.operationKey())
-                      .orElseThrow(
-                          () ->
-                              new GatewayStoreMaterializationException(
-                                  "persisted artifact was not readable"));
-                } catch (IOException exception) {
-                  metrics.storeFailure();
-                  throw new GatewayStoreMaterializationException(
-                      "failed to persist materialized artifact", exception);
-                } finally {
-                  metrics.materializationDuration(System.nanoTime() - materializationStarted);
-                  deleteTemporaryArtifact(generated);
-                }
-              });
-    } catch (RuntimeException exception) {
-      deleteRequestBody(request.body());
-      throw exception;
-    }
+    CompletionStage<Artifact> stage =
+        executor.execute(
+            selected,
+            ignored -> {
+              metrics.originExecution();
+              Artifact generated = executeOrigin(request, selected);
+              if (!persist) {
+                return generated;
+              }
+              long materializationStarted = System.nanoTime();
+              try {
+                artifactStore.put(selected.operationKey(), generated);
+                metrics.bytesStored(generated.contentLength());
+                return artifactStore
+                    .get(selected.operationKey())
+                    .orElseThrow(
+                        () ->
+                            new GatewayStoreMaterializationException(
+                                "persisted artifact was not readable"));
+              } catch (IOException exception) {
+                metrics.storeFailure();
+                throw new GatewayStoreMaterializationException(
+                    "failed to persist materialized artifact", exception);
+              } finally {
+                metrics.materializationDuration(System.nanoTime() - materializationStarted);
+                deleteTemporaryArtifact(generated);
+              }
+            });
 
     FlightLeaseRegistry.Lease lease = flights.acquire(stage);
     stage.whenComplete((artifact, failure) -> deleteRequestBody(request.body()));

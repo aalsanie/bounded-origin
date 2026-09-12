@@ -93,8 +93,7 @@ class NettyOriginClientMutationContractTest {
         try {
           MaterializationException failure =
               assertThrows(
-                  MaterializationException.class,
-                  () -> client.execute(request("/closed", body)));
+                  MaterializationException.class, () -> client.execute(request("/closed", body)));
           assertTrue(failure.getMessage().contains("origin connection acquisition failed"));
         } finally {
           body.close();

@@ -125,7 +125,7 @@ final class ArtifactResponseWriter {
     if (head) {
       response
           .headers()
-          .set(
+          .setLong(
               HttpHeaderNames.CONTENT_LENGTH,
               representationLength == null ? artifact.contentLength() : representationLength);
     } else if (artifact.statusCode() == 304) {

@@ -88,7 +88,6 @@ class GatewayMetricsMutationContractTest {
         output);
 
     assertEquals(
-        new GatewayMetrics.Snapshot(1, 1, 1, 1, 1, 1, 11, 12, 1, 1, 1, 1),
-        metrics.snapshot());
+        new GatewayMetrics.Snapshot(1, 1, 1, 1, 1, 1, 11, 12, 1, 1, 1, 1), metrics.snapshot());
   }
 }

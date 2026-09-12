@@ -1,3 +1,4 @@
+import com.github.spotbugs.snom.SpotBugsTask
 import info.solidsoft.gradle.pitest.PitestPluginExtension
 
 plugins {
@@ -24,6 +25,14 @@ extensions.configure<PitestPluginExtension> {
     threads.set(1)
     outputFormats.set(setOf("XML", "HTML"))
     timestampedReports.set(false)
+}
+
+tasks.named<SpotBugsTask>("spotbugsMain") {
+    excludeFilter.set(layout.projectDirectory.file("config/spotbugs/exclude-main.xml"))
+}
+
+tasks.named<SpotBugsTask>("spotbugsTest") {
+    excludeFilter.set(layout.projectDirectory.file("config/spotbugs/exclude-test.xml"))
 }
 
 tasks.named("pitest") {

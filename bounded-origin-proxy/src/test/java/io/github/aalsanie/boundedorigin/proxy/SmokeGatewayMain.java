@@ -42,7 +42,7 @@ final class SmokeGatewayMain {
             new InetSocketAddress("0.0.0.0", 8080),
             new InetSocketAddress("0.0.0.0", 8081),
             new InetSocketAddress("origin", 9000),
-            Path.of("/tmp/bounded-origin"),
+            Path.of(System.getProperty("java.io.tmpdir"), "bounded-origin"),
             budget);
 
     BoundedOriginGateway gateway =

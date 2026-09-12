@@ -134,7 +134,9 @@ class OriginConnectionPoolRaceTest {
             () -> {
               entered.countDown();
               try {
-                release.await(5, TimeUnit.SECONDS);
+                if (!release.await(5, TimeUnit.SECONDS)) {
+                  return;
+                }
               } catch (InterruptedException exception) {
                 Thread.currentThread().interrupt();
               }
