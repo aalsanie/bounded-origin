@@ -301,9 +301,6 @@ final class HttpRequestSecurity {
   }
 
   private static void validatePath(String path) {
-    if (path.isEmpty() || path.charAt(0) != '/') {
-      throw badRequest("path must use origin-form");
-    }
     for (String segment : path.split("/", -1)) {
       String dots = decodeEncodedDots(segment);
       if (".".equals(dots) || "..".equals(dots)) {

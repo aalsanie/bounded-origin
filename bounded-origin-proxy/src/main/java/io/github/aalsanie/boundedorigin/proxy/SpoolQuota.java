@@ -41,7 +41,6 @@ final class SpoolQuota {
   }
 
   private synchronized void reserve(Reservation reservation, long count) {
-    requireOwned(reservation);
     requireOpen();
     if (count < 0) {
       throw new IllegalArgumentException("count must be non-negative");
@@ -54,7 +53,6 @@ final class SpoolQuota {
   }
 
   private synchronized void release(Reservation reservation) {
-    requireOwned(reservation);
     if (reservation.released) {
       return;
     }
@@ -69,12 +67,6 @@ final class SpoolQuota {
   private void requireOpen() {
     if (closed) {
       throw new IllegalStateException("temporary spool quota is closed");
-    }
-  }
-
-  private void requireOwned(Reservation reservation) {
-    if (reservation.owner != this) {
-      throw new IllegalArgumentException("reservation belongs to a different quota");
     }
   }
 

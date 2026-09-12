@@ -471,18 +471,12 @@ public final class GatewayConfig {
   }
 
   private static InetSocketAddress requireListenAddress(InetSocketAddress value, String label) {
-    Objects.requireNonNull(value, label);
-    int port = value.getPort();
-    if (port < 0 || port > 65_535) {
-      throw new IllegalArgumentException(label + " has an invalid port");
-    }
-    return value;
+    return Objects.requireNonNull(value, label);
   }
 
   private static InetSocketAddress requireOriginAddress(InetSocketAddress value) {
     Objects.requireNonNull(value, "originAddress");
-    int port = value.getPort();
-    if (port <= 0 || port > 65_535) {
+    if (value.getPort() == 0) {
       throw new IllegalArgumentException("originAddress must use a positive port");
     }
     return value;
