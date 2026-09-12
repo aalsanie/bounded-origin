@@ -20,8 +20,8 @@ class GatewayHandlerMutationContractTest {
         GatewayTestFixtures.config(GatewayTestFixtures.unusedPort(), temporaryDirectory);
 
     try (BoundedOriginGateway gateway =
-            GatewayTestFixtures.start(
-                config, GatewayTestFixtures.engine(GatewayTestFixtures.artifactOnlyPolicy()), store);
+        GatewayTestFixtures.start(
+            config, GatewayTestFixtures.engine(GatewayTestFixtures.artifactOnlyPolicy()), store);
         RawHttpClient client = new RawHttpClient(gateway.listenAddress())) {
       RawHttpClient.Response first =
           client.request(
@@ -51,10 +51,10 @@ class GatewayHandlerMutationContractTest {
         GatewayTestFixtures.config(GatewayTestFixtures.unusedPort(), temporaryDirectory);
 
     try (BoundedOriginGateway gateway =
-            GatewayTestFixtures.start(
-                config,
-                GatewayTestFixtures.engine(GatewayTestFixtures.artifactOnlyPolicy()),
-                new GatewayTestFixtures.MemoryArtifactStore());
+        GatewayTestFixtures.start(
+            config,
+            GatewayTestFixtures.engine(GatewayTestFixtures.artifactOnlyPolicy()),
+            new GatewayTestFixtures.MemoryArtifactStore());
         RawHttpClient client = new RawHttpClient(gateway.listenAddress())) {
       RawHttpClient.Response response =
           client.request(
@@ -78,10 +78,10 @@ class GatewayHandlerMutationContractTest {
         GatewayTestFixtures.config(GatewayTestFixtures.unusedPort(), temporaryDirectory);
 
     try (BoundedOriginGateway gateway =
-            GatewayTestFixtures.start(
-                config,
-                GatewayTestFixtures.engine(GatewayTestFixtures.artifactOnlyPolicy()),
-                new GatewayTestFixtures.MemoryArtifactStore());
+        GatewayTestFixtures.start(
+            config,
+            GatewayTestFixtures.engine(GatewayTestFixtures.artifactOnlyPolicy()),
+            new GatewayTestFixtures.MemoryArtifactStore());
         RawHttpClient client = new RawHttpClient(gateway.listenAddress())) {
       RawHttpClient.Response response =
           client.request(

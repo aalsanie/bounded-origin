@@ -18,8 +18,7 @@ class GatewayLifecycleResourceMutationTest {
   void adminBindFailureReleasesTheAlreadyBoundClientListener() throws Exception {
     int listenPort = GatewayTestFixtures.unusedPort();
     int originPort = GatewayTestFixtures.unusedPort();
-    try (ServerSocket occupiedAdmin =
-        new ServerSocket(0, 1, InetAddress.getLoopbackAddress())) {
+    try (ServerSocket occupiedAdmin = new ServerSocket(0, 1, InetAddress.getLoopbackAddress())) {
       GatewayConfig config =
           GatewayTestFixtures.config(
               originPort,

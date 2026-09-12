@@ -16,12 +16,27 @@ import org.junit.jupiter.api.Test;
 class HttpRequestSecurityMutationContractTest {
   @Test
   void requestTargetBoundariesPreserveTheIntendedFailureReason() {
-    assertContract(400, "request target contains an ambiguous path character", request("#", "example.test"), 0);
-    assertContract(400, "request target contains an ambiguous path character", request("\\", "example.test"), 0);
-    assertContract(400, "request target contains invalid characters", request("/\u0020", "example.test"), 0);
-    assertContract(400, "request target contains invalid characters", request("/\u007f", "example.test"), 0);
-    assertContract(400, "request target contains malformed percent encoding", request("/%0", "example.test"), 0);
-    assertContract(400, "encoded path separators and NUL are forbidden", request("/%00", "example.test"), 0);
+    assertContract(
+        400,
+        "request target contains an ambiguous path character",
+        request("#", "example.test"),
+        0);
+    assertContract(
+        400,
+        "request target contains an ambiguous path character",
+        request("\\", "example.test"),
+        0);
+    assertContract(
+        400, "request target contains invalid characters", request("/\u0020", "example.test"), 0);
+    assertContract(
+        400, "request target contains invalid characters", request("/\u007f", "example.test"), 0);
+    assertContract(
+        400,
+        "request target contains malformed percent encoding",
+        request("/%0", "example.test"),
+        0);
+    assertContract(
+        400, "encoded path separators and NUL are forbidden", request("/%00", "example.test"), 0);
     assertContract(400, "dot path segments are forbidden", request("/%2e", "example.test"), 0);
 
     assertEquals("/!", HttpRequestSecurity.validate(request("/!", "example.test"), 0).path());
@@ -44,13 +59,18 @@ class HttpRequestSecurityMutationContractTest {
     assertContract(400, "Host header is malformed", request("/", "@example.test"), 0);
     assertContract(400, "Host header is malformed", request("/", ",example.test"), 0);
     assertContract(400, "IPv6 Host literals must use brackets", request("/", "a:b:c"), 0);
-    assertContract(400, "Host header port is outside the valid range", request("/", "example.test:0"), 0);
+    assertContract(
+        400,
+        "Host header port is outside the valid range",
+        request("/", "example.test:0"),
+        0);
     assertContract(
         400,
         "Host header port is outside the valid range",
         request("/", "example.test:65536"),
         0);
-    assertContract(400, "Host header port is outside the valid range", request("/", "[::1]:0"), 0);
+    assertContract(
+        400, "Host header port is outside the valid range", request("/", "[::1]:0"), 0);
     assertContract(
         400, "Host header port is outside the valid range", request("/", "[::1]:65536"), 0);
   }

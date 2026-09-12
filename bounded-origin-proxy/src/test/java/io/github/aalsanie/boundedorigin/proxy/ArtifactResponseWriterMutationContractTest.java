@@ -83,7 +83,8 @@ class ArtifactResponseWriterMutationContractTest {
         assertNull(write(config, metrics, channel, artifact, "HEAD").failure());
         Object outbound = channel.readOutbound();
         try {
-          assertEquals(value, ((HttpResponse) outbound).headers().get(HttpHeaderNames.CONTENT_LENGTH));
+          assertEquals(
+              value, ((HttpResponse) outbound).headers().get(HttpHeaderNames.CONTENT_LENGTH));
         } finally {
           ReferenceCountUtil.release(outbound);
         }

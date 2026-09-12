@@ -92,7 +92,8 @@ class NettyOriginClientMutationContractTest {
         StreamingSpool.Result body = body(new byte[0]);
         try {
           MaterializationException failure =
-              assertThrows(MaterializationException.class, () -> client.execute(request("/closed", body)));
+              assertThrows(
+                  MaterializationException.class, () -> client.execute(request("/closed", body)));
           assertTrue(failure.getMessage().contains("origin connection acquisition failed"));
         } finally {
           body.close();

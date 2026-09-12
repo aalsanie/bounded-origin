@@ -58,8 +58,7 @@ class OriginResponseMutationBoundaryTest {
             return true;
           });
 
-      try (BoundedOriginGateway gateway =
-          gateway(origin, Map.of("origin.max-result-bytes", "2"))) {
+      try (BoundedOriginGateway gateway = gateway(origin, Map.of("origin.max-result-bytes", "2"))) {
         RawHttpClient.Response exact = request(gateway, "/exact");
         assertEquals(200, exact.status());
         assertEquals("ok", exact.bodyText());

@@ -17,8 +17,7 @@ class GatewayConfigMutationContractTest {
   void directBuilderBoundaryFailuresPreserveTheirSpecificInvariant() {
     GatewayConfig base = base();
 
-    assertFailure(
-        "maxSpoolBytes must be positive", () -> copyOf(base).maxSpoolBytes(0).build());
+    assertFailure("maxSpoolBytes must be positive", () -> copyOf(base).maxSpoolBytes(0).build());
     assertFailure(
         "originMaxPendingAcquires must be non-negative",
         () -> copyOf(base).originMaxPendingAcquires(-1).build());
@@ -30,10 +29,7 @@ class GatewayConfigMutationContractTest {
         () -> copyOf(base).chunkedResponseThresholdBytes(-1).build());
     assertFailure(
         "writeBufferHighWaterMark must exceed writeBufferLowWaterMark",
-        () ->
-            copyOf(base)
-                .writeBufferHighWaterMark(base.writeBufferLowWaterMark())
-                .build());
+        () -> copyOf(base).writeBufferHighWaterMark(base.writeBufferLowWaterMark()).build());
   }
 
   @Test
@@ -77,9 +73,7 @@ class GatewayConfigMutationContractTest {
     assertParsedFailure("listen.port", "65536", "listen.port must be between 0 and 65535");
     assertParsedFailure("origin.max-active", "0", "origin.max-active must be positive");
     assertParsedFailure(
-        "http.max-request-body-bytes",
-        "-1",
-        "http.max-request-body-bytes must be non-negative");
+        "http.max-request-body-bytes", "-1", "http.max-request-body-bytes must be non-negative");
     assertParsedFailure("spool.max-bytes", "0", "spool.max-bytes must be positive");
   }
 

@@ -26,7 +26,8 @@ class GatewayMetricsMutationContractTest {
     metrics.storeFailure();
     metrics.originPoolRejection();
 
-    String output = metrics.prometheus(new OriginExecutorStats(1, 2, 3, 4), 5, 6, 7, 8, 9, 10);
+    String output =
+        metrics.prometheus(new OriginExecutorStats(1, 2, 3, 4), 5, 6, 7, 8, 9, 10);
 
     assertEquals(
         """
