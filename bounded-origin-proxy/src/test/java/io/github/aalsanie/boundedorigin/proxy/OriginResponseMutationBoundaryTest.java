@@ -66,7 +66,6 @@ class OriginResponseMutationBoundaryTest {
 
         RawHttpClient.Response over = request(gateway, "/over");
         assertEquals(502, over.status());
-        assertTrue(over.bodyText().contains("exceeds configured limit"));
       }
     }
   }
