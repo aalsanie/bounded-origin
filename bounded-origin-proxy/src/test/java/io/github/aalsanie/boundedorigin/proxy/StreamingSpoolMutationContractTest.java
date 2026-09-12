@@ -28,7 +28,8 @@ class StreamingSpoolMutationContractTest {
       assertEquals(5, quota.bytes());
 
       assertThrows(
-          StreamingSpool.BodyLimitExceededException.class, () -> spool.append(new byte[] {6}));
+          StreamingSpool.BodyLimitExceededException.class,
+          () -> spool.append(new byte[] {6}));
       assertEquals(5, spool.acceptedBytes());
       assertEquals(5, quota.bytes());
     } finally {

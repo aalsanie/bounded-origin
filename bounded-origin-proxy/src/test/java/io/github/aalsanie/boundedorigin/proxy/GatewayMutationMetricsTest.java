@@ -57,7 +57,8 @@ class GatewayMutationMetricsTest {
 
     GatewayConfig deniedConfig =
         GatewayTestFixtures.config(
-            GatewayTestFixtures.unusedPort(), temporaryDirectory.resolve("deny"));
+            GatewayTestFixtures.unusedPort(),
+            temporaryDirectory.resolve("deny"));
     try (BoundedOriginGateway gateway =
         GatewayTestFixtures.start(
             deniedConfig,

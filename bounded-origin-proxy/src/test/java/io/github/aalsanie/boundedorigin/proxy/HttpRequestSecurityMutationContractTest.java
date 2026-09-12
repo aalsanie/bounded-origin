@@ -60,17 +60,13 @@ class HttpRequestSecurityMutationContractTest {
     assertContract(400, "Host header is malformed", request("/", ",example.test"), 0);
     assertContract(400, "IPv6 Host literals must use brackets", request("/", "a:b:c"), 0);
     assertContract(
-        400,
-        "Host header port is outside the valid range",
-        request("/", "example.test:0"),
-        0);
+        400, "Host header port is outside the valid range", request("/", "example.test:0"), 0);
     assertContract(
         400,
         "Host header port is outside the valid range",
         request("/", "example.test:65536"),
         0);
-    assertContract(
-        400, "Host header port is outside the valid range", request("/", "[::1]:0"), 0);
+    assertContract(400, "Host header port is outside the valid range", request("/", "[::1]:0"), 0);
     assertContract(
         400, "Host header port is outside the valid range", request("/", "[::1]:65536"), 0);
   }

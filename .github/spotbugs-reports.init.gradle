@@ -1,0 +1,16 @@
+gradle.beforeProject { project ->
+    project.pluginManager.withPlugin("com.github.spotbugs") {
+        project.tasks.matching { task -> task.name.startsWith("spotbugs") }.configureEach { task ->
+            def reportTaskName = task.name
+            def xml = task.reports.findByName("xml") ?: task.reports.create("xml")
+            xml.required.set(true)
+            xml.outputLocation.set(
+                project.layout.buildDirectory.file("reports/spotbugs/${reportTaskName}.xml"))
+
+            def html = task.reports.findByName("html") ?: task.reports.create("html")
+            html.required.set(true)
+            html.outputLocation.set(
+                project.layout.buildDirectory.file("reports/spotbugs/${reportTaskName}.html"))
+        }
+    }
+}

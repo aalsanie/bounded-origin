@@ -502,7 +502,7 @@ class GatewayNetworkTest {
   }
 
   @Test
-  void originFailuresAreContainedAndInformationalResponsesRemainValid() throws Exception {
+  void originFailuresAreContainedAndCooldownIsEnforced() throws Exception {
     try (TestOriginServer origin = new TestOriginServer()) {
       origin.respond(
           "/partial",
@@ -528,23 +528,6 @@ class GatewayNetworkTest {
           "/reset",
           (request, socket) -> {
             socket.setSoLinger(true, 0);
-            return false;
-          });
-      origin.respond(
-          "/hints",
-          (request, socket) -> {
-            TestOriginServer.write(
-                socket,
-                "HTTP/1.1 103 Early Hints\r\nLink: </style.css>; rel=preload\r\n\r\n"
-                    + "HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: keep-alive\r\n\r\nok");
-            return true;
-          });
-      origin.respond(
-          "/close-delimited",
-          (request, socket) -> {
-            TestOriginServer.write(
-                socket,
-                "HTTP/1.1 200 OK\r\nConnection: close\r\nContent-Type: text/plain\r\n\r\nclose");
             return false;
           });
 
@@ -573,7 +556,37 @@ class GatewayNetworkTest {
         assertEquals(502, oversized.status());
         assertTrue(oversized.bodyText().contains("exceeds configured limit"));
         assertEquals(502, request(gateway, "GET", "/reset").status());
+      }
+    }
+  }
 
+  @Test
+  void informationalAndCloseDelimitedOriginResponsesRemainValid() throws Exception {
+    try (TestOriginServer origin = new TestOriginServer()) {
+      origin.respond(
+          "/hints",
+          (request, socket) -> {
+            TestOriginServer.write(
+                socket,
+                "HTTP/1.1 103 Early Hints\r\nLink: </style.css>; rel=preload\r\n\r\n"
+                    + "HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: keep-alive\r\n\r\nok");
+            return true;
+          });
+      origin.respond(
+          "/close-delimited",
+          (request, socket) -> {
+            TestOriginServer.write(
+                socket,
+                "HTTP/1.1 200 OK\r\nConnection: close\r\nContent-Type: text/plain\r\n\r\nclose");
+            return false;
+          });
+
+      GatewayConfig config = GatewayTestFixtures.config(origin.port(), temporaryDirectory);
+      try (BoundedOriginGateway gateway =
+          GatewayTestFixtures.start(
+              config,
+              GatewayTestFixtures.engine(GatewayTestFixtures.boundedPolicy(config.globalBudget())),
+              new GatewayTestFixtures.MemoryArtifactStore())) {
         RawHttpClient.Response hints = request(gateway, "GET", "/hints");
         assertEquals(200, hints.status());
         assertEquals("ok", hints.bodyText());
