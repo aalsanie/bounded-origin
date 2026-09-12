@@ -67,7 +67,8 @@ class GatewayLifecycleResourceMutationTest {
   }
 
   private static void assertBindable(int port) throws IOException {
-    try (ServerSocket ignored = new ServerSocket(port, 1, InetAddress.getLoopbackAddress())) {
+    try (ServerSocket socket = new ServerSocket(port, 1, InetAddress.getLoopbackAddress())) {
+      assertFalse(socket.isClosed());
     }
   }
 }
