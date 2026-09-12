@@ -125,9 +125,11 @@ final class ArtifactResponseWriter {
     if (head) {
       response
           .headers()
-          .setLong(
+          .set(
               HttpHeaderNames.CONTENT_LENGTH,
-              representationLength == null ? artifact.contentLength() : representationLength);
+              representationLength == null
+                  ? Long.toString(artifact.contentLength())
+                  : representationLength.toString());
     } else if (artifact.statusCode() == 304) {
       response.headers().remove(HttpHeaderNames.TRANSFER_ENCODING);
       if (representationLength != null) {
