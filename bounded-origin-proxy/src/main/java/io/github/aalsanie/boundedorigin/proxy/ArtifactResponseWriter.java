@@ -4,20 +4,23 @@ import io.github.aalsanie.boundedorigin.api.Artifact;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
+import io.netty.channel.ChannelPromise;
+import io.netty.handler.codec.http.DefaultFullHttpResponse;
 import io.netty.handler.codec.http.DefaultHttpContent;
 import io.netty.handler.codec.http.DefaultHttpResponse;
+import io.netty.handler.codec.http.DefaultLastHttpContent;
 import io.netty.handler.codec.http.HttpHeaderNames;
 import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpResponse;
 import io.netty.handler.codec.http.HttpResponseStatus;
 import io.netty.handler.codec.http.HttpUtil;
 import io.netty.handler.codec.http.HttpVersion;
-import io.netty.handler.codec.http.LastHttpContent;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Arrays;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 
 final class ArtifactResponseWriter {
@@ -56,54 +59,91 @@ final class ArtifactResponseWriter {
         !head
             && !statusWithoutBody
             && artifact.contentLength() > config.chunkedResponseThresholdBytes();
+    AtomicBoolean completed = new AtomicBoolean();
+    Consumer<Throwable> complete =
+        failure -> {
+          if (completed.compareAndSet(false, true)) {
+            completion.accept(failure);
+          }
+        };
 
     Thread.ofVirtual()
         .name("bounded-origin-response-", 0)
         .start(
             () -> {
-              Throwable failure = null;
               try {
+                if (head || statusWithoutBody || artifact.contentLength() == 0) {
+                  HttpResponse response =
+                      new DefaultFullHttpResponse(
+                          HttpVersion.HTTP_1_1,
+                          HttpResponseStatus.valueOf(artifact.statusCode()),
+                          Unpooled.EMPTY_BUFFER);
+                  prepareHeaders(
+                      response,
+                      artifact,
+                      metadata,
+                      representationLength,
+                      head,
+                      statusWithoutBody,
+                      false,
+                      keepAlive);
+                  writeFinal(channel, response, complete);
+                  return;
+                }
+
                 HttpResponse response =
                     new DefaultHttpResponse(
                         HttpVersion.HTTP_1_1, HttpResponseStatus.valueOf(artifact.statusCode()));
-                metadata.forEach(response.headers()::set);
-                if (head) {
-                  response
-                      .headers()
-                      .set(
-                          HttpHeaderNames.CONTENT_LENGTH,
-                          representationLength == null
-                              ? artifact.contentLength()
-                              : representationLength);
-                } else if (artifact.statusCode() == 304) {
-                  response.headers().remove(HttpHeaderNames.TRANSFER_ENCODING);
-                  if (representationLength != null) {
-                    response.headers().set(HttpHeaderNames.CONTENT_LENGTH, representationLength);
-                  } else {
-                    response.headers().remove(HttpHeaderNames.CONTENT_LENGTH);
-                  }
-                } else if (statusWithoutBody) {
-                  response.headers().remove(HttpHeaderNames.CONTENT_LENGTH);
-                  response.headers().remove(HttpHeaderNames.TRANSFER_ENCODING);
-                } else if (chunked) {
-                  HttpUtil.setTransferEncodingChunked(response, true);
-                } else {
-                  response.headers().set(HttpHeaderNames.CONTENT_LENGTH, artifact.contentLength());
-                }
-                HttpUtil.setKeepAlive(response, keepAlive);
+                prepareHeaders(
+                    response,
+                    artifact,
+                    metadata,
+                    representationLength,
+                    false,
+                    false,
+                    chunked,
+                    keepAlive);
                 sync(channel.writeAndFlush(response));
-
-                if (!head && !statusWithoutBody) {
-                  streamBody(channel, artifact);
-                  metrics.bytesServed(artifact.contentLength());
-                }
-                sync(channel.writeAndFlush(LastHttpContent.EMPTY_LAST_CONTENT));
+                streamBody(channel, artifact, complete);
               } catch (Throwable throwable) {
-                failure = throwable;
                 channel.close();
+                complete.accept(throwable);
               }
-              completion.accept(failure);
             });
+  }
+
+  private static void prepareHeaders(
+      HttpResponse response,
+      Artifact artifact,
+      Map<String, String> metadata,
+      Long representationLength,
+      boolean head,
+      boolean statusWithoutBody,
+      boolean chunked,
+      boolean keepAlive) {
+    metadata.forEach(response.headers()::set);
+    if (head) {
+      response
+          .headers()
+          .set(
+              HttpHeaderNames.CONTENT_LENGTH,
+              representationLength == null ? artifact.contentLength() : representationLength);
+    } else if (artifact.statusCode() == 304) {
+      response.headers().remove(HttpHeaderNames.TRANSFER_ENCODING);
+      if (representationLength != null) {
+        response.headers().set(HttpHeaderNames.CONTENT_LENGTH, representationLength);
+      } else {
+        response.headers().remove(HttpHeaderNames.CONTENT_LENGTH);
+      }
+    } else if (statusWithoutBody) {
+      response.headers().remove(HttpHeaderNames.CONTENT_LENGTH);
+      response.headers().remove(HttpHeaderNames.TRANSFER_ENCODING);
+    } else if (chunked) {
+      HttpUtil.setTransferEncodingChunked(response, true);
+    } else {
+      response.headers().set(HttpHeaderNames.CONTENT_LENGTH, artifact.contentLength());
+    }
+    HttpUtil.setKeepAlive(response, keepAlive);
   }
 
   private static Long representationLength(Map<String, String> metadata) {
@@ -127,25 +167,45 @@ final class ArtifactResponseWriter {
     }
   }
 
-  private void streamBody(Channel channel, Artifact artifact)
+  private void streamBody(
+      Channel channel, Artifact artifact, Consumer<Throwable> completion)
       throws IOException, InterruptedException {
     byte[] buffer = new byte[config.maxChunkSize()];
-    long read = 0;
+    long remaining = artifact.contentLength();
     try (InputStream input = artifact.body().openStream()) {
-      while (read < artifact.contentLength()) {
-        int maximum = (int) Math.min(buffer.length, artifact.contentLength() - read);
+      while (remaining > 0) {
+        int maximum = (int) Math.min(buffer.length, remaining);
         int count = input.read(buffer, 0, maximum);
         if (count < 0) {
           throw new IOException("artifact body ended before its declared length");
         }
-        read += count;
+        if (count == 0) {
+          continue;
+        }
+        remaining -= count;
         byte[] chunk = count == buffer.length ? buffer.clone() : Arrays.copyOf(buffer, count);
+        if (remaining == 0) {
+          if (input.read() >= 0) {
+            throw new IOException("artifact body exceeds its declared length");
+          }
+          metrics.bytesServed(artifact.contentLength());
+          writeFinal(
+              channel,
+              new DefaultLastHttpContent(Unpooled.wrappedBuffer(chunk)),
+              completion);
+          return;
+        }
         sync(channel.writeAndFlush(new DefaultHttpContent(Unpooled.wrappedBuffer(chunk))));
       }
-      if (input.read() >= 0) {
-        throw new IOException("artifact body exceeds its declared length");
-      }
     }
+    throw new IOException("artifact body did not produce a final content chunk");
+  }
+
+  private static void writeFinal(
+      Channel channel, Object message, Consumer<Throwable> completion) {
+    ChannelPromise promise = channel.newPromise();
+    promise.addListener(future -> completion.accept(future.isSuccess() ? null : future.cause()));
+    channel.writeAndFlush(message, promise);
   }
 
   private static void sync(ChannelFuture future) throws IOException, InterruptedException {

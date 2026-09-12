@@ -74,12 +74,9 @@ final class OriginConnectionPool implements AutoCloseable {
                 new ChannelInitializer<SocketChannel>() {
                   @Override
                   protected void initChannel(SocketChannel channel) {
-                    HttpClientCodec clientCodec =
-                        new HttpClientCodec(decoderConfig.clone(), false, true);
-                    clientCodec.setSingleDecode(true);
                     channel
                         .pipeline()
-                        .addLast(clientCodec)
+                        .addLast(new HttpClientCodec(decoderConfig.clone(), false, true))
                         .addLast(
                             new IdleStateHandler(
                                 0, 0, config.idleTimeout().toNanos(), TimeUnit.NANOSECONDS))

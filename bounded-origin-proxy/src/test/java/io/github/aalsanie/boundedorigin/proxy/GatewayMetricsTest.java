@@ -7,7 +7,7 @@ import org.junit.jupiter.api.Test;
 
 class GatewayMetricsTest {
   @Test
-  void prometheusOutputContainsRequiredP05Metrics() {
+  void prometheusOutputContainsGatewayMetrics() {
     GatewayMetrics metrics = new GatewayMetrics();
     metrics.request();
     metrics.artifactHit();

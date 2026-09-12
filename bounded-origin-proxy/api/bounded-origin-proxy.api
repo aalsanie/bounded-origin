@@ -124,6 +124,7 @@ final class io.github.aalsanie.boundedorigin.proxy.GatewayRequest extends java.l
 final class io.github.aalsanie.boundedorigin.proxy.GatewayRequestHandler extends io.netty.channel.ChannelInboundHandlerAdapter {
   public void channelActive(io.netty.channel.ChannelHandlerContext);
   public void channelRead(io.netty.channel.ChannelHandlerContext, java.lang.Object);
+  public void channelReadComplete(io.netty.channel.ChannelHandlerContext);
   public void channelInactive(io.netty.channel.ChannelHandlerContext);
   public void userEventTriggered(io.netty.channel.ChannelHandlerContext, java.lang.Object);
   public void exceptionCaught(io.netty.channel.ChannelHandlerContext, java.lang.Throwable);
@@ -138,7 +139,7 @@ class io.github.aalsanie.boundedorigin.proxy.GatewayRequestProcessor$1 {
 }
 final class io.github.aalsanie.boundedorigin.proxy.GatewayRequestProcessor$GatewayStoreException extends java.lang.RuntimeException {
 }
-final class io.github.aalsanie.boundedorigin.proxy.GatewayRequestProcessor$GatewayStoreMaterializationException extends io.github.aalsanie.boundedorigin.api.MaterializationException {
+final class io.github.aalsanie.boundedorigin.proxy.GatewayRequestProcessor$GatewayStoreMaterializationException extends java.lang.RuntimeException {
 }
 final class io.github.aalsanie.boundedorigin.proxy.GatewayRequestProcessor$Outcome extends java.lang.Record {
   public final java.lang.String toString();

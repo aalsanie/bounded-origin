@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.github.aalsanie.boundedorigin.api.RequestDescriptor;
 import io.github.aalsanie.boundedorigin.api.TrustLevel;
+import io.netty.handler.codec.http.DefaultHttpHeadersFactory;
 import io.netty.handler.codec.http.DefaultHttpRequest;
 import io.netty.handler.codec.http.HttpHeaderNames;
 import io.netty.handler.codec.http.HttpMethod;
@@ -180,7 +181,13 @@ class HttpRequestSecurityTest {
   }
 
   private static HttpRequest request(HttpMethod method, String target, String host) {
-    HttpRequest request = new DefaultHttpRequest(HttpVersion.HTTP_1_1, method, target);
+    HttpRequest request =
+        new DefaultHttpRequest(
+            HttpVersion.HTTP_1_1,
+            method,
+            target,
+            DefaultHttpHeadersFactory.headersFactory().withValidation(false).newHeaders(),
+            false);
     request.headers().set(HttpHeaderNames.HOST, host);
     return request;
   }

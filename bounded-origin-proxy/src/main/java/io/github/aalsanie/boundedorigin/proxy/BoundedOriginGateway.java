@@ -2,6 +2,7 @@ package io.github.aalsanie.boundedorigin.proxy;
 
 import io.github.aalsanie.boundedorigin.api.ArtifactStore;
 import io.github.aalsanie.boundedorigin.core.BoundedOriginExecutor;
+import io.github.aalsanie.boundedorigin.core.OriginExecutorMetrics;
 import io.github.aalsanie.boundedorigin.core.PolicyEngine;
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.channel.Channel;
@@ -21,10 +22,14 @@ import io.netty.handler.timeout.IdleStateHandler;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.file.Files;
+import java.time.Duration;
 import java.util.Objects;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.LockSupport;
 
 public final class BoundedOriginGateway implements AutoCloseable {
+  private static final long DRAIN_POLL_NANOS = TimeUnit.MILLISECONDS.toNanos(10);
+
   private final Object lifecycleLock = new Object();
   private final GatewayConfig config;
   private final BoundedOriginExecutor executor;
@@ -127,12 +132,12 @@ public final class BoundedOriginGateway implements AutoCloseable {
       closeChannel(clientServer);
     }
 
-    boolean drained = runtime.awaitDrained(config.drainTimeout());
+    boolean drained = awaitDrained(config.drainTimeout());
     if (!drained) {
       for (Channel channel : runtime.clients()) {
         channel.close();
       }
-      runtime.awaitDrained(java.time.Duration.ofMillis(250));
+      runtime.awaitDrained(Duration.ofMillis(250));
     }
     for (Channel channel : runtime.clients()) {
       channel.close();
@@ -150,6 +155,32 @@ public final class BoundedOriginGateway implements AutoCloseable {
 
   int trackedFlights() {
     return flights.trackedFlights();
+  }
+
+  private boolean awaitDrained(Duration timeout) {
+    long timeoutNanos = timeout.toNanos();
+    long startedNanos = System.nanoTime();
+    if (!runtime.awaitDrained(timeout)) {
+      return false;
+    }
+
+    while (true) {
+      var executorStats = OriginExecutorMetrics.snapshot(executor);
+      if (executorStats.inFlightJobs() == 0 && flights.trackedFlights() == 0) {
+        return true;
+      }
+
+      long elapsedNanos = System.nanoTime() - startedNanos;
+      long remainingNanos = timeoutNanos - elapsedNanos;
+      if (remainingNanos <= 0) {
+        return false;
+      }
+
+      LockSupport.parkNanos(Math.min(remainingNanos, DRAIN_POLL_NANOS));
+      if (Thread.currentThread().isInterrupted()) {
+        return false;
+      }
+    }
   }
 
   private Channel bindClient() {

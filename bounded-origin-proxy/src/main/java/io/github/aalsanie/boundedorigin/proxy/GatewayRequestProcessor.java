@@ -70,7 +70,7 @@ final class GatewayRequestProcessor {
         case DENY ->
             throw new IllegalStateException("PolicyEngine returned a selected DENY policy");
       };
-    } catch (RuntimeException exception) {
+    } catch (RuntimeException | Error exception) {
       deleteRequestBody(request.body());
       throw exception;
     }

@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -26,9 +27,10 @@ class StreamingSpoolTest {
 
     assertEquals(6, result.length());
     assertEquals(
-        "bef57ec7f53a6d40beb640a780a639c83bc29ac8a9816f1c5c6dcd93c4721f33", result.sha256());
-    assertArrayEquals(
-        "abcdef".getBytes(StandardCharsets.UTF_8), result.openStream().readAllBytes());
+        "bef57ec7f53a6d40beb640a780a639c83bc29ac8a9816f1fc6c5c6dcd93c4721", result.sha256());
+    try (InputStream input = result.openStream()) {
+      assertArrayEquals("abcdef".getBytes(StandardCharsets.UTF_8), input.readAllBytes());
+    }
     assertEquals(6, quota.bytes());
     assertEquals(1, quota.files());
     assertFalse(result.released());
@@ -48,7 +50,7 @@ class StreamingSpoolTest {
     StreamingSpool spool = new StreamingSpool(tempDirectory, "reader-", 100, quota);
     spool.append("abcdef".getBytes(StandardCharsets.UTF_8)).toCompletableFuture().join();
     StreamingSpool.Result result = spool.finish().toCompletableFuture().join();
-    java.io.InputStream input = result.openStream();
+    InputStream input = result.openStream();
 
     result.close();
     assertTrue(result.released());

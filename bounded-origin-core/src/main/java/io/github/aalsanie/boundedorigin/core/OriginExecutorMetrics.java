@@ -7,10 +7,6 @@ public final class OriginExecutorMetrics {
 
   public static OriginExecutorStats snapshot(BoundedOriginExecutor executor) {
     Objects.requireNonNull(executor, "executor");
-    return new OriginExecutorStats(
-        executor.activeJobs(),
-        executor.queuedJobs(),
-        executor.inFlightJobs(),
-        executor.cooldownEntries());
+    return executor.snapshotStats();
   }
 }

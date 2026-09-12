@@ -3,6 +3,7 @@ package io.github.aalsanie.boundedorigin.proxy;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -41,15 +42,17 @@ class ArtifactResponseWriterTest {
                   "123"),
               () -> new ByteArrayInputStream(new byte[0]));
       Result result = write(channel, "HEAD", true, false, artifact);
-      assertEquals(null, result.failure());
+      assertNull(result.failure());
 
-      HttpResponse response = channel.readOutbound();
+      Object outbound = channel.readOutbound();
+      assertTrue(outbound instanceof HttpResponse);
+      assertTrue(outbound instanceof LastHttpContent);
+      HttpResponse response = (HttpResponse) outbound;
       assertEquals("123", response.headers().get(HttpHeaderNames.CONTENT_LENGTH));
-      assertEquals("keep-alive", response.headers().get(HttpHeaderNames.CONNECTION));
+      assertFalse(response.headers().contains(HttpHeaderNames.CONNECTION));
       assertEquals("text/plain", response.headers().get(HttpHeaderNames.CONTENT_TYPE));
-      assertTrue(channel.readOutbound() instanceof LastHttpContent);
-      assertEquals(null, channel.readOutbound());
-      ReferenceCountUtil.release(response);
+      assertNull(channel.readOutbound());
+      ReferenceCountUtil.release(outbound);
     } finally {
       channel.finishAndReleaseAll();
     }
@@ -66,16 +69,17 @@ class ArtifactResponseWriterTest {
               Map.of(HttpRequestSecurity.REPRESENTATION_CONTENT_LENGTH, "456"),
               () -> new ByteArrayInputStream(new byte[0]));
       Result result = write(channel, "GET", false, false, artifact);
-      assertEquals(null, result.failure());
+      assertNull(result.failure());
 
-      HttpResponse response = channel.readOutbound();
+      Object outbound = channel.readOutbound();
+      assertTrue(outbound instanceof HttpResponse);
+      assertTrue(outbound instanceof LastHttpContent);
+      HttpResponse response = (HttpResponse) outbound;
       assertEquals("456", response.headers().get(HttpHeaderNames.CONTENT_LENGTH));
       assertEquals("close", response.headers().get(HttpHeaderNames.CONNECTION));
       assertFalse(response.headers().contains(HttpHeaderNames.TRANSFER_ENCODING));
-      ReferenceCountUtil.release(response);
-      Object last = channel.readOutbound();
-      assertTrue(last instanceof LastHttpContent);
-      ReferenceCountUtil.release(last);
+      assertNull(channel.readOutbound());
+      ReferenceCountUtil.release(outbound);
     } finally {
       channel.finishAndReleaseAll();
     }
@@ -93,7 +97,7 @@ class ArtifactResponseWriterTest {
               Map.of("content-type", "application/octet-stream"),
               () -> new ByteArrayInputStream(body));
       Result result = write(channel, "GET", true, false, artifact);
-      assertEquals(null, result.failure());
+      assertNull(result.failure());
 
       HttpResponse response = channel.readOutbound();
       assertEquals("chunked", response.headers().get(HttpHeaderNames.TRANSFER_ENCODING));

@@ -39,6 +39,7 @@ final class GatewayRequestHandler extends ChannelInboundHandlerAdapter {
 
   private RequestState current;
   private boolean registered;
+  private boolean readPending;
 
   GatewayRequestHandler(
       GatewayConfig config,
@@ -63,7 +64,7 @@ final class GatewayRequestHandler extends ChannelInboundHandlerAdapter {
       context.close();
       return;
     }
-    context.read();
+    requestRead(context);
   }
 
   @Override
@@ -81,7 +82,23 @@ final class GatewayRequestHandler extends ChannelInboundHandlerAdapter {
   }
 
   @Override
+  public void channelReadComplete(ChannelHandlerContext context) {
+    readPending = false;
+    RequestState state = current;
+    if (state != null && !state.terminal.get()) {
+      state.readCycleComplete = true;
+      if (state.bodyOwnershipTransferred) {
+        requestRead(context);
+      } else {
+        advanceInput(context, state);
+      }
+    }
+    context.fireChannelReadComplete();
+  }
+
+  @Override
   public void channelInactive(ChannelHandlerContext context) {
+    readPending = false;
     RequestState state = current;
     if (state != null) {
       terminate(state);
@@ -96,7 +113,9 @@ final class GatewayRequestHandler extends ChannelInboundHandlerAdapter {
   @Override
   public void userEventTriggered(ChannelHandlerContext context, Object event) {
     if (event instanceof IdleStateEvent) {
-      context.close();
+      if (current == null) {
+        context.close();
+      }
     } else {
       context.fireUserEventTriggered(event);
     }
@@ -115,6 +134,7 @@ final class GatewayRequestHandler extends ChannelInboundHandlerAdapter {
   private void onRequest(ChannelHandlerContext context, HttpRequest request) {
     if (current != null) {
       metrics.malformedRequest();
+      terminate(current);
       context.close();
       return;
     }
@@ -198,7 +218,9 @@ final class GatewayRequestHandler extends ChannelInboundHandlerAdapter {
                 config.requestTimeout().toNanos(),
                 TimeUnit.NANOSECONDS);
 
-    if (HttpUtil.is100ContinueExpected(request)) {
+    boolean expectContinue = HttpUtil.is100ContinueExpected(request);
+    state.bodyReadAllowed = !expectContinue;
+    if (expectContinue) {
       context
           .writeAndFlush(
               new DefaultFullHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.CONTINUE))
@@ -212,19 +234,21 @@ final class GatewayRequestHandler extends ChannelInboundHandlerAdapter {
                       cause == null ? new IOException("100 Continue write failed") : cause);
                   context.close();
                   terminate(state);
-                } else if (!state.terminal.get() && context.channel().isActive()) {
-                  context.read();
+                } else if (!state.terminal.get()) {
+                  state.bodyReadAllowed = true;
+                  advanceInput(context, state);
                 }
               });
-    } else {
-      context.read();
     }
   }
 
   private void onContent(ChannelHandlerContext context, HttpContent content) {
     RequestState state = current;
-    if (state == null || state.validated == null || state.terminal.get()) {
+    if (state == null || state.terminal.get()) {
       context.close();
+      return;
+    }
+    if (state.validated == null || state.responseStarted) {
       return;
     }
     if (!content.decoderResult().isSuccess()) {
@@ -251,8 +275,11 @@ final class GatewayRequestHandler extends ChannelInboundHandlerAdapter {
     state.receivedBytes = nextLength;
     byte[] bytes = new byte[readable];
     buffer.getBytes(buffer.readerIndex(), bytes);
-    boolean last = content instanceof LastHttpContent;
+    if (content instanceof LastHttpContent) {
+      state.lastContentReceived = true;
+    }
 
+    state.pendingSpoolWrites++;
     try {
       state
           .spool
@@ -261,50 +288,72 @@ final class GatewayRequestHandler extends ChannelInboundHandlerAdapter {
               (ignored, failure) ->
                   context
                       .executor()
-                      .execute(
-                          () -> {
-                            if (state.terminal.get()) {
-                              return;
-                            }
-                            if (failure != null) {
-                              Throwable cause = unwrap(failure);
-                              if (cause instanceof StreamingSpool.BodyLimitExceededException) {
-                                respondError(
-                                    context,
-                                    state,
-                                    413,
-                                    "request body exceeds configured limit\n",
-                                    true,
-                                    false);
-                              } else if (cause
-                                  instanceof StreamingSpool.SpoolCapacityExceededException) {
-                                respondError(
-                                    context,
-                                    state,
-                                    503,
-                                    "temporary capacity unavailable\n",
-                                    true,
-                                    true);
-                              } else {
-                                StructuredLog.failure(
-                                    state.requestId, "request_spool_failure", cause);
-                                respondError(
-                                    context, state, 500, "request buffering failed\n", true, false);
-                              }
-                            } else if (last) {
-                              finishRequestBody(context, state);
-                            } else {
-                              context.read();
-                            }
-                          }));
+                      .execute(() -> spoolWriteFinished(context, state, failure)));
     } catch (StreamingSpool.BodyLimitExceededException exception) {
+      state.pendingSpoolWrites--;
       respondError(context, state, 413, "request body exceeds configured limit\n", true, false);
     } catch (StreamingSpool.SpoolCapacityExceededException exception) {
+      state.pendingSpoolWrites--;
       respondError(context, state, 503, "temporary capacity unavailable\n", true, true);
     } catch (RuntimeException exception) {
+      state.pendingSpoolWrites--;
       StructuredLog.failure(state.requestId, "request_spool_failure", exception);
       respondError(context, state, 500, "request buffering failed\n", true, false);
     }
+  }
+
+  private void spoolWriteFinished(
+      ChannelHandlerContext context, RequestState state, Throwable failure) {
+    if (state.pendingSpoolWrites <= 0) {
+      throw new IllegalStateException("request spool write accounting underflow");
+    }
+    state.pendingSpoolWrites--;
+    if (state.terminal.get() || state.responseStarted) {
+      return;
+    }
+    if (failure != null) {
+      Throwable cause = unwrap(failure);
+      if (cause instanceof StreamingSpool.BodyLimitExceededException) {
+        respondError(
+            context, state, 413, "request body exceeds configured limit\n", true, false);
+      } else if (cause instanceof StreamingSpool.SpoolCapacityExceededException) {
+        respondError(context, state, 503, "temporary capacity unavailable\n", true, true);
+      } else {
+        StructuredLog.failure(state.requestId, "request_spool_failure", cause);
+        respondError(context, state, 500, "request buffering failed\n", true, false);
+      }
+      return;
+    }
+    advanceInput(context, state);
+  }
+
+  private void advanceInput(ChannelHandlerContext context, RequestState state) {
+    if (current != state
+        || state.terminal.get()
+        || state.responseStarted
+        || !state.bodyReadAllowed
+        || state.pendingSpoolWrites != 0
+        || !state.readCycleComplete
+        || !context.channel().isActive()) {
+      return;
+    }
+    if (state.lastContentReceived) {
+      if (!state.bodyFinalizationStarted) {
+        state.bodyFinalizationStarted = true;
+        finishRequestBody(context, state);
+      }
+      return;
+    }
+    state.readCycleComplete = false;
+    requestRead(context);
+  }
+
+  private void requestRead(ChannelHandlerContext context) {
+    if (readPending || !context.channel().isActive()) {
+      return;
+    }
+    readPending = true;
+    context.read();
   }
 
   private void finishRequestBody(ChannelHandlerContext context, RequestState state) {
@@ -341,6 +390,7 @@ final class GatewayRequestHandler extends ChannelInboundHandlerAdapter {
                           metrics.requestBodyBytes(body.length());
                           state.body = body;
                           state.bodyOwnershipTransferred = true;
+                          requestRead(context);
                           dispatch(context, state);
                         }));
   }
@@ -452,10 +502,7 @@ final class GatewayRequestHandler extends ChannelInboundHandlerAdapter {
           state.keepAlive,
           runtime.draining(),
           artifact,
-          failure ->
-              context
-                  .executor()
-                  .execute(() -> responseFinished(context, state, artifact.statusCode(), failure)));
+          failure -> responseCompleted(context, state, artifact.statusCode(), failure));
     } catch (RuntimeException exception) {
       responseFinished(context, state, 500, exception);
     }
@@ -493,8 +540,7 @@ final class GatewayRequestHandler extends ChannelInboundHandlerAdapter {
           state.keepAlive && !state.forceClose,
           runtime.draining(),
           artifact,
-          failure ->
-              context.executor().execute(() -> responseFinished(context, state, status, failure)));
+          failure -> responseCompleted(context, state, status, failure));
     } catch (RuntimeException exception) {
       responseFinished(context, state, status, exception);
     }
@@ -512,6 +558,15 @@ final class GatewayRequestHandler extends ChannelInboundHandlerAdapter {
           ignored -> context.executor().execute(context::close));
     } catch (RuntimeException exception) {
       context.close();
+    }
+  }
+
+  private void responseCompleted(
+      ChannelHandlerContext context, RequestState state, int status, Throwable failure) {
+    if (context.executor().inEventLoop()) {
+      responseFinished(context, state, status, failure);
+    } else {
+      context.executor().execute(() -> responseFinished(context, state, status, failure));
     }
   }
 
@@ -543,7 +598,7 @@ final class GatewayRequestHandler extends ChannelInboundHandlerAdapter {
     } else if (state.forceClose || !state.keepAlive || runtime.draining()) {
       context.close();
     } else if (context.channel().isActive()) {
-      context.read();
+      requestRead(context);
     }
   }
 
@@ -648,6 +703,11 @@ final class GatewayRequestHandler extends ChannelInboundHandlerAdapter {
     private final AtomicBoolean runtimeFinished = new AtomicBoolean();
 
     private long receivedBytes;
+    private int pendingSpoolWrites;
+    private boolean readCycleComplete;
+    private boolean bodyReadAllowed;
+    private boolean lastContentReceived;
+    private boolean bodyFinalizationStarted;
     private boolean responseStarted;
     private boolean forceClose;
     private boolean bodyOwnershipTransferred;
