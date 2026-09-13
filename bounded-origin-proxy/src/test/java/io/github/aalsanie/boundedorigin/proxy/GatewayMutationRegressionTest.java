@@ -273,7 +273,8 @@ class GatewayMutationRegressionTest {
             quota);
     EmbeddedChannel channel =
         outbound == null ? new EmbeddedChannel(handler) : new EmbeddedChannel(outbound, handler);
-    return new Fixture(channel, outbound, runtime, metrics, quota, executor, originClient, originGroup);
+    return new Fixture(
+        channel, outbound, runtime, metrics, quota, executor, originClient, originGroup);
   }
 
   private static DefaultHttpRequest request(HttpMethod method, String target) {
