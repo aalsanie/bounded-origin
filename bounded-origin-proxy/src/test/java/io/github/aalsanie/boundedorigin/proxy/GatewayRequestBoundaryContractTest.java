@@ -118,31 +118,34 @@ class GatewayRequestBoundaryContractTest {
                 config,
                 GatewayTestFixtures.engine(GatewayTestFixtures.artifactOnlyPolicy()),
                 store);
-        RawHttpClient holder = new RawHttpClient(gateway.listenAddress());
         RawHttpClient client = new RawHttpClient(gateway.listenAddress())) {
-      holder.write(
-          "POST /holder HTTP/1.1\r\n"
-              + "Host: example.test\r\n"
-              + "Connection: keep-alive\r\n"
-              + "Content-Length: 16\r\n\r\n"
-              + "123456789012345");
-      assertMetric(gateway, "bounded_origin_spool_bytes", 15);
-      assertMetric(gateway, "bounded_origin_spool_files", 1);
+      RawHttpClient holder = new RawHttpClient(gateway.listenAddress());
+      try {
+        holder.write(
+            "POST /holder HTTP/1.1\r\n"
+                + "Host: example.test\r\n"
+                + "Connection: keep-alive\r\n"
+                + "Content-Length: 16\r\n\r\n"
+                + "123456789012345");
+        assertMetric(gateway, "bounded_origin_spool_bytes", 15);
+        assertMetric(gateway, "bounded_origin_spool_files", 1);
 
-      client.write(
-          "POST /capacity HTTP/1.1\r\n"
-              + "Host: example.test\r\n"
-              + "Connection: keep-alive\r\n"
-              + "Transfer-Encoding: chunked\r\n\r\n"
-              + "2\r\nab\r\n0\r\n\r\n");
-      RawHttpClient.Response response = client.readResponse("POST");
+        client.write(
+            "POST /capacity HTTP/1.1\r\n"
+                + "Host: example.test\r\n"
+                + "Connection: keep-alive\r\n"
+                + "Transfer-Encoding: chunked\r\n\r\n"
+                + "2\r\nab\r\n0\r\n\r\n");
+        RawHttpClient.Response response = client.readResponse("POST");
 
-      assertEquals(503, response.status());
-      assertEquals("1", response.header("retry-after"));
-      assertTrue(client.awaitClosed(Duration.ofSeconds(1)));
-      assertMetric(gateway, "bounded_origin_rejections_total", 1);
+        assertEquals(503, response.status());
+        assertEquals("1", response.header("retry-after"));
+        assertTrue(client.awaitClosed(Duration.ofSeconds(1)));
+        assertMetric(gateway, "bounded_origin_rejections_total", 1);
+      } finally {
+        holder.close();
+      }
 
-      holder.close();
       assertMetric(gateway, "bounded_origin_active_requests", 0);
       assertMetric(gateway, "bounded_origin_spool_bytes", 0);
       assertMetric(gateway, "bounded_origin_spool_files", 0);
