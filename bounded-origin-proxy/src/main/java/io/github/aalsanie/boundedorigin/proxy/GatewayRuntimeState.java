@@ -46,7 +46,6 @@ final class GatewayRuntimeState {
   void unregister(Channel channel) {
     synchronized (lock) {
       clients.remove(channel);
-      lock.notifyAll();
     }
   }
 
@@ -73,7 +72,6 @@ final class GatewayRuntimeState {
   void beginDrain() {
     synchronized (lock) {
       accepting = false;
-      lock.notifyAll();
     }
   }
 
@@ -144,7 +142,6 @@ final class GatewayRuntimeState {
     synchronized (lock) {
       accepting = false;
       closed = true;
-      lock.notifyAll();
     }
   }
 }
