@@ -94,6 +94,7 @@ class GatewayHandlerTerminalRaceTest {
       completeGet(fixture.channel(), "/failed-response");
       assertTrue(outbound.awaitIntercept(fixture.channel()));
       awaitInactive(fixture.channel());
+      awaitNoActiveRequests(fixture.channel(), fixture.runtime());
 
       assertEquals(0, fixture.runtime().activeRequests());
     }
