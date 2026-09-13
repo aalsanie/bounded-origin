@@ -33,8 +33,7 @@ class GatewayDrainOrderMutationTest {
             originEntered.countDown();
             assertTrue(TestOriginServer.await(releaseOrigin, Duration.ofSeconds(3)));
             TestOriginServer.write(
-                socket,
-                "HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: keep-alive\r\n\r\nok");
+                socket, "HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: keep-alive\r\n\r\nok");
             return true;
           });
       GatewayConfig config =
