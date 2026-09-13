@@ -216,6 +216,13 @@ public final class BoundedOriginExecutor implements AutoCloseable {
     }
   }
 
+  OriginExecutorStats snapshotStats() {
+    synchronized (stateLock) {
+      pruneExpiredCooldownsLocked();
+      return new OriginExecutorStats(activeJobs, queuedJobs, inFlight.size(), cooldowns.size());
+    }
+  }
+
   int activeJobs(String policyId) {
     Objects.requireNonNull(policyId, "policyId");
     synchronized (stateLock) {

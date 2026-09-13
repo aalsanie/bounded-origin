@@ -372,6 +372,19 @@ subprojects {
     }
 }
 
+val everyCleanTask =
+    allprojects.map { project ->
+        project.tasks.named("clean")
+    }
+
+allprojects {
+    tasks
+        .matching { it.name.startsWith("spotless") }
+        .configureEach {
+            mustRunAfter(everyCleanTask)
+        }
+}
+
 project(":bounded-origin-core") {
     apply(plugin = "info.solidsoft.pitest")
     extensions.configure<PitestPluginExtension> {
