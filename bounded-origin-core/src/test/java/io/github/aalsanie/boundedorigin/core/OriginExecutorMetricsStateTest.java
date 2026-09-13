@@ -16,7 +16,7 @@ import org.junit.jupiter.api.Test;
 
 class OriginExecutorMetricsStateTest {
   @Test
-  void snapshotCapturesActiveQueuedAndInFlightStateAtomically() throws Exception {
+  void snapshotCapturesActiveQueuedAndInFlightStateAtomically() throws InterruptedException {
     Budget budget = new Budget(1, 1, Duration.ofSeconds(10), 1_024);
     var selectedFirst = decision(policy("p", budget), "first");
     var selectedSecond = decision(policy("p", budget), "second");
