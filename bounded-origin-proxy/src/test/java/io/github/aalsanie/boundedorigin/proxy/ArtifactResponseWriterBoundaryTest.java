@@ -184,6 +184,20 @@ class ArtifactResponseWriterBoundaryTest {
   }
 
   @Test
+  void zeroValuedExtraByteStillCountsAsArtifactOverflow() throws Exception {
+    EmbeddedChannel channel = new EmbeddedChannel();
+    try {
+      Artifact artifact =
+          new Artifact(200, 1, Map.of(), () -> new ByteArrayInputStream(new byte[] {1, 0}));
+      Result result = write(channel, "GET", true, false, artifact);
+      assertNotNull(result.failure());
+      assertFalse(channel.isActive());
+    } finally {
+      channel.finishAndReleaseAll();
+    }
+  }
+
+  @Test
   void zeroLengthBulkReadIsRetriedInsteadOfEndingTheBody() throws Exception {
     EmbeddedChannel channel = new EmbeddedChannel();
     try {
