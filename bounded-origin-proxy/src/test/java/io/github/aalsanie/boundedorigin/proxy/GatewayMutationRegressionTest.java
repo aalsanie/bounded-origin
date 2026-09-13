@@ -117,10 +117,9 @@ class GatewayMutationRegressionTest {
 
       advancePastRequestTimeout(fixture.channel());
       assertStatus(fixture.channel(), 408);
-      fixture.channel().runPendingTasks();
+      awaitNoActiveRequests(fixture);
 
       assertEquals(1, fixture.metrics().snapshot().rejections());
-      assertEquals(0, fixture.runtime().activeRequests());
       assertEquals(0, fixture.quota().files());
       assertEquals(0, fixture.quota().bytes());
       assertFalse(fixture.channel().isActive());
@@ -202,8 +201,8 @@ class GatewayMutationRegressionTest {
       completeGet(fixture.channel(), "/failed-final");
       assertTrue(outbound.awaitIntercept(fixture.channel()));
       awaitInactive(fixture.channel());
+      awaitNoActiveRequests(fixture);
 
-      assertEquals(0, fixture.runtime().activeRequests());
       assertEquals(0, fixture.quota().files());
       assertEquals(0, fixture.quota().bytes());
       assertEquals(0, fixture.metrics().snapshot().rejections());
