@@ -268,6 +268,9 @@ class GatewayHandlerTerminalRaceTest {
             message instanceof HttpResponse response && response.status().code() == 100;
         case FAIL_FINAL ->
             message instanceof HttpResponse response && response.status().code() != 100;
+        // ArtifactResponseWriter waits synchronously for response headers before streaming the
+        // body.
+        // Deferring the header promise makes this lifecycle test scheduler-dependent under PIT/CI.
         case DEFER_FINAL -> message instanceof LastHttpContent;
       };
     }

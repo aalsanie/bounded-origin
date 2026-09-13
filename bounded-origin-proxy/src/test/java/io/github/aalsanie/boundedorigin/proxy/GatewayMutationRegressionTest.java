@@ -2,6 +2,7 @@ package io.github.aalsanie.boundedorigin.proxy;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.github.aalsanie.boundedorigin.core.BoundedOriginExecutor;
@@ -14,6 +15,7 @@ import io.netty.channel.MultiThreadIoEventLoopGroup;
 import io.netty.channel.embedded.EmbeddedChannel;
 import io.netty.channel.nio.NioIoHandler;
 import io.netty.handler.codec.DecoderResult;
+import io.netty.handler.codec.http.DefaultHttpContent;
 import io.netty.handler.codec.http.DefaultHttpRequest;
 import io.netty.handler.codec.http.DefaultLastHttpContent;
 import io.netty.handler.codec.http.HttpHeaderNames;
@@ -24,10 +26,14 @@ import io.netty.handler.codec.http.HttpVersion;
 import io.netty.util.ReferenceCountUtil;
 import java.io.IOException;
 import java.lang.reflect.Field;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
+import java.lang.reflect.Proxy;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -152,6 +158,189 @@ class GatewayMutationRegressionTest {
   }
 
   @Test
+  void zeroDeclaredLengthRejectsBodyBeforeSpooling() throws Exception {
+    try (Fixture fixture = fixture(false, null)) {
+      DefaultHttpRequest request = request(HttpMethod.POST, "/zero-length-overflow");
+      request.headers().set(HttpHeaderNames.CONTENT_LENGTH, "0");
+      fixture.channel().writeInbound(request);
+
+      fixture
+          .channel()
+          .writeInbound(new DefaultHttpContent(Unpooled.wrappedBuffer(new byte[] {1})));
+
+      assertEquals(1, fixture.metrics().snapshot().malformedRequests());
+    }
+  }
+
+  @Test
+  void finalizationChecksZeroDeclaredLengthBoundary() throws Exception {
+    try (Fixture fixture = fixture(false, null)) {
+      DefaultHttpRequest request = request(HttpMethod.POST, "/zero-length-finalization");
+      request.headers().set(HttpHeaderNames.CONTENT_LENGTH, "0");
+      fixture.channel().writeInbound(request);
+
+      Object state = currentState(fixture);
+      setLongField(state, "receivedBytes", 1L);
+      handlerMethod("finishRequestBody", ChannelHandlerContext.class, state.getClass())
+          .invoke(fixture.handler(), fixture.handlerContext(), state);
+
+      assertEquals(1, fixture.metrics().snapshot().malformedRequests());
+    }
+  }
+
+  @Test
+  void spoolWriteAccountingRejectsZeroPendingCount() throws Exception {
+    try (Fixture fixture = fixture(false, null)) {
+      DefaultHttpRequest request = request(HttpMethod.POST, "/spool-accounting");
+      request.headers().set(HttpHeaderNames.CONTENT_LENGTH, "1");
+      fixture.channel().writeInbound(request);
+
+      Object state = currentState(fixture);
+      Method spoolWriteFinished =
+          handlerMethod(
+              "spoolWriteFinished", ChannelHandlerContext.class, state.getClass(), Throwable.class);
+
+      InvocationTargetException thrown =
+          assertThrows(
+              InvocationTargetException.class,
+              () ->
+                  spoolWriteFinished.invoke(
+                      fixture.handler(), fixture.handlerContext(), state, null));
+
+      assertTrue(thrown.getCause() instanceof IllegalStateException);
+    }
+  }
+
+  @Test
+  void completedBodyOwnershipRequestsAnotherReadCycle() throws Exception {
+    try (Fixture fixture = fixture(false, null)) {
+      DefaultHttpRequest request = request(HttpMethod.POST, "/transferred-body");
+      request.headers().set(HttpHeaderNames.CONTENT_LENGTH, "1");
+      fixture.channel().writeInbound(request);
+
+      Object state = currentState(fixture);
+      setBooleanField(state, "bodyOwnershipTransferred", true);
+      setBooleanField(state, "lastContentReceived", true);
+      setBooleanField(state, "bodyFinalizationStarted", true);
+      setBooleanField(fixture.handler(), "readPending", false);
+
+      try {
+        fixture.handler().channelReadComplete(fixture.handlerContext());
+        assertTrue(booleanField(fixture.handler(), "readPending"));
+      } finally {
+        setBooleanField(state, "bodyOwnershipTransferred", false);
+        setBooleanField(state, "lastContentReceived", false);
+        setBooleanField(state, "bodyFinalizationStarted", false);
+      }
+    }
+  }
+
+  @Test
+  void responseCompletionFromForeignThreadReturnsToEventLoop() throws Exception {
+    try (Fixture fixture = fixture(false, null)) {
+      DefaultHttpRequest request = request(HttpMethod.POST, "/foreign-completion");
+      request.headers().set(HttpHeaderNames.CONTENT_LENGTH, "1");
+      fixture.channel().writeInbound(request);
+
+      Object state = currentState(fixture);
+      Method responseCompleted =
+          handlerMethod(
+              "responseCompleted",
+              ChannelHandlerContext.class,
+              state.getClass(),
+              int.class,
+              Throwable.class);
+
+      AtomicReference<Runnable> scheduled = new AtomicReference<>();
+
+      io.netty.util.concurrent.EventExecutor executor =
+          (io.netty.util.concurrent.EventExecutor)
+              Proxy.newProxyInstance(
+                  GatewayMutationRegressionTest.class.getClassLoader(),
+                  new Class<?>[] {io.netty.util.concurrent.EventExecutor.class},
+                  (proxy, method, arguments) ->
+                      switch (method.getName()) {
+                        case "inEventLoop" -> false;
+                        case "execute" -> {
+                          scheduled.set((Runnable) arguments[0]);
+                          yield null;
+                        }
+                        case "toString" -> "capturing-event-executor";
+                        case "hashCode" -> System.identityHashCode(proxy);
+                        case "equals" -> proxy == arguments[0];
+                        default ->
+                            throw new AssertionError(
+                                "unexpected executor method: " + method.getName());
+                      });
+
+      ChannelHandlerContext context =
+          (ChannelHandlerContext)
+              Proxy.newProxyInstance(
+                  GatewayMutationRegressionTest.class.getClassLoader(),
+                  new Class<?>[] {ChannelHandlerContext.class},
+                  (proxy, method, arguments) ->
+                      switch (method.getName()) {
+                        case "executor" -> executor;
+                        case "close" -> fixture.channel().newSucceededFuture();
+                        case "toString" -> "capturing-handler-context";
+                        case "hashCode" -> System.identityHashCode(proxy);
+                        case "equals" -> proxy == arguments[0];
+                        default ->
+                            throw new AssertionError(
+                                "unexpected context method: " + method.getName());
+                      });
+
+      responseCompleted.invoke(
+          fixture.handler(), context, state, 500, new IOException("controlled response failure"));
+
+      assertTrue(scheduled.get() != null);
+      assertEquals(1, fixture.runtime().activeRequests());
+
+      scheduled.get().run();
+
+      awaitNoActiveRequests(fixture);
+      assertEquals(0, fixture.quota().files());
+      assertEquals(0, fixture.quota().bytes());
+    }
+  }
+
+  @Test
+  void responseStartedTimeoutTerminatesWithoutInactiveCallbackFallback() throws Exception {
+    try (Fixture fixture = fixture(false, null)) {
+      DefaultHttpRequest request = request(HttpMethod.POST, "/direct-timeout");
+      request.headers().set(HttpHeaderNames.CONTENT_LENGTH, "1");
+      fixture.channel().writeInbound(request);
+
+      Object state = currentState(fixture);
+      setBooleanField(state, "responseStarted", true);
+      handlerMethod("requestTimedOut", ChannelHandlerContext.class, state.getClass())
+          .invoke(fixture.handler(), closeOnlyContext(fixture), state);
+
+      assertEquals(1, fixture.metrics().snapshot().rejections());
+      assertEquals(0, fixture.runtime().activeRequests());
+      assertEquals(0, fixture.quota().files());
+      assertEquals(0, fixture.quota().bytes());
+    }
+  }
+
+  @Test
+  void clientExceptionTerminatesWithoutCloseCallbackFallback() throws Exception {
+    try (Fixture fixture = fixture(false, null)) {
+      DefaultHttpRequest request = request(HttpMethod.POST, "/direct-exception");
+      request.headers().set(HttpHeaderNames.CONTENT_LENGTH, "1");
+      fixture.channel().writeInbound(request);
+
+      fixture
+          .handler()
+          .exceptionCaught(closeOnlyContext(fixture), new IOException("controlled client failure"));
+
+      assertEquals(0, fixture.runtime().activeRequests());
+      assertEquals(0, fixture.quota().files());
+      assertEquals(0, fixture.quota().bytes());
+    }
+  }
+
+  @Test
   void successfulContinueCompletionAfterTimeoutCannotReviveRequest() throws Exception {
     ControlledOutbound outbound = new ControlledOutbound(Mode.DEFER_CONTINUE);
     try (Fixture fixture = fixture(false, outbound)) {
@@ -272,8 +461,21 @@ class GatewayMutationRegressionTest {
             quota);
     EmbeddedChannel channel =
         outbound == null ? new EmbeddedChannel(handler) : new EmbeddedChannel(outbound, handler);
+    ChannelHandlerContext handlerContext = channel.pipeline().context(handler);
+    if (handlerContext == null) {
+      throw new AssertionError("gateway handler context was not installed");
+    }
     return new Fixture(
-        channel, outbound, runtime, metrics, quota, executor, originClient, originGroup);
+        channel,
+        outbound,
+        handler,
+        handlerContext,
+        runtime,
+        metrics,
+        quota,
+        executor,
+        originClient,
+        originGroup);
   }
 
   private static DefaultHttpRequest request(HttpMethod method, String target) {
@@ -358,6 +560,61 @@ class GatewayMutationRegressionTest {
     responseStartedField.setBoolean(state, true);
   }
 
+  private static Object currentState(Fixture fixture) throws ReflectiveOperationException {
+    Field current = GatewayRequestHandler.class.getDeclaredField("current");
+    current.setAccessible(true);
+    Object state = current.get(fixture.handler());
+    if (state == null) {
+      throw new AssertionError("request state was not created");
+    }
+    return state;
+  }
+
+  private static Method handlerMethod(String name, Class<?>... parameterTypes)
+      throws NoSuchMethodException {
+    Method method = GatewayRequestHandler.class.getDeclaredMethod(name, parameterTypes);
+    method.setAccessible(true);
+    return method;
+  }
+
+  private static void setBooleanField(Object target, String name, boolean value)
+      throws ReflectiveOperationException {
+    Field field = target.getClass().getDeclaredField(name);
+    field.setAccessible(true);
+    field.setBoolean(target, value);
+  }
+
+  private static boolean booleanField(Object target, String name)
+      throws ReflectiveOperationException {
+    Field field = target.getClass().getDeclaredField(name);
+    field.setAccessible(true);
+    return field.getBoolean(target);
+  }
+
+  private static void setLongField(Object target, String name, long value)
+      throws ReflectiveOperationException {
+    Field field = target.getClass().getDeclaredField(name);
+    field.setAccessible(true);
+    field.setLong(target, value);
+  }
+
+  private static ChannelHandlerContext closeOnlyContext(Fixture fixture) {
+    return (ChannelHandlerContext)
+        Proxy.newProxyInstance(
+            GatewayMutationRegressionTest.class.getClassLoader(),
+            new Class<?>[] {ChannelHandlerContext.class},
+            (proxy, method, arguments) -> {
+              return switch (method.getName()) {
+                case "close" -> fixture.channel().newSucceededFuture();
+                case "toString" -> "close-only-context";
+                case "hashCode" -> System.identityHashCode(proxy);
+                case "equals" -> proxy == arguments[0];
+                default ->
+                    throw new AssertionError("unexpected context method: " + method.getName());
+              };
+            });
+  }
+
   private enum Mode {
     FAIL_CONTINUE,
     DEFER_CONTINUE,
@@ -429,6 +686,8 @@ class GatewayMutationRegressionTest {
   private record Fixture(
       EmbeddedChannel channel,
       ControlledOutbound outbound,
+      GatewayRequestHandler handler,
+      ChannelHandlerContext handlerContext,
       GatewayRuntimeState runtime,
       GatewayMetrics metrics,
       SpoolQuota quota,
