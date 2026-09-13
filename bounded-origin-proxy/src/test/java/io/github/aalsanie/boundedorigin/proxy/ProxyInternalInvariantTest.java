@@ -44,61 +44,37 @@ class ProxyInternalInvariantTest {
     assertTrue(
         (boolean)
             invokeStatic(
-                HttpRequestSecurity.class,
-                "isIpv6Literal",
-                new Class<?>[] {String.class},
-                "::1"));
+                HttpRequestSecurity.class, "isIpv6Literal", new Class<?>[] {String.class}, "::1"));
     assertFalse(
         (boolean)
             invokeStatic(
-                HttpRequestSecurity.class,
-                "isIpv6Literal",
-                new Class<?>[] {String.class},
-                "a:b"));
+                HttpRequestSecurity.class, "isIpv6Literal", new Class<?>[] {String.class}, "a:b"));
 
     assertTrue(
         (boolean)
             invokeStatic(
-                HttpRequestSecurity.class,
-                "isHeaderName",
-                new Class<?>[] {String.class},
-                "a"));
+                HttpRequestSecurity.class, "isHeaderName", new Class<?>[] {String.class}, "a"));
     assertTrue(
         (boolean)
             invokeStatic(
-                HttpRequestSecurity.class,
-                "isHeaderName",
-                new Class<?>[] {String.class},
-                "z"));
+                HttpRequestSecurity.class, "isHeaderName", new Class<?>[] {String.class}, "z"));
     assertFalse(
         (boolean)
             invokeStatic(
-                HttpRequestSecurity.class,
-                "isHeaderName",
-                new Class<?>[] {String.class},
-                "{"));
+                HttpRequestSecurity.class, "isHeaderName", new Class<?>[] {String.class}, "{"));
 
     assertTrue(
         (boolean)
             invokeStatic(
-                HttpRequestSecurity.class,
-                "isDecimal",
-                new Class<?>[] {String.class},
-                "0"));
+                HttpRequestSecurity.class, "isDecimal", new Class<?>[] {String.class}, "0"));
     assertTrue(
         (boolean)
             invokeStatic(
-                HttpRequestSecurity.class,
-                "isDecimal",
-                new Class<?>[] {String.class},
-                "9"));
+                HttpRequestSecurity.class, "isDecimal", new Class<?>[] {String.class}, "9"));
     assertFalse(
         (boolean)
             invokeStatic(
-                HttpRequestSecurity.class,
-                "isDecimal",
-                new Class<?>[] {String.class},
-                ":"));
+                HttpRequestSecurity.class, "isDecimal", new Class<?>[] {String.class}, ":"));
 
     assertEquals(
         1,
@@ -148,26 +124,20 @@ class ProxyInternalInvariantTest {
     assertEquals(
         "/path",
         invokeStatic(
-            GatewayRequestHandler.class,
-            "safePath",
-            new Class<?>[] {String.class},
-            "/path?query"));
+            GatewayRequestHandler.class, "safePath", new Class<?>[] {String.class}, "/path?query"));
 
     IllegalStateException root = new IllegalStateException("root");
     Throwable wrapped = new CompletionException(new ExecutionException(root));
     assertSame(
         root,
-        invokeStatic(
-            NettyOriginClient.class, "unwrap", new Class<?>[] {Throwable.class}, wrapped));
+        invokeStatic(NettyOriginClient.class, "unwrap", new Class<?>[] {Throwable.class}, wrapped));
     assertSame(
         root,
-        invokeStatic(
-            NettyOriginClient.class, "unwrap", new Class<?>[] {Throwable.class}, root));
+        invokeStatic(NettyOriginClient.class, "unwrap", new Class<?>[] {Throwable.class}, root));
 
     assertEquals(" ", StructuredLog.escape(" "));
     assertEquals(
-        " ",
-        invokeStatic(ResponseArtifacts.class, "json", new Class<?>[] {String.class}, " "));
+        " ", invokeStatic(ResponseArtifacts.class, "json", new Class<?>[] {String.class}, " "));
   }
 
   @Test
@@ -295,7 +265,8 @@ class ProxyInternalInvariantTest {
   }
 
   private static Object invokeStatic(
-      Class<?> owner, String name, Class<?>[] parameterTypes, Object... arguments) throws Exception {
+      Class<?> owner, String name, Class<?>[] parameterTypes, Object... arguments)
+      throws Exception {
     Method method = owner.getDeclaredMethod(name, parameterTypes);
     method.setAccessible(true);
     return method.invoke(null, arguments);

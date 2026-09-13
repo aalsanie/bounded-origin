@@ -25,7 +25,8 @@ class OriginTransportLifecycleMutationTest {
   @TempDir Path temporaryDirectory;
 
   @Test
-  void originResponseTimeoutInvalidatesLeaseAndReleasesCapacityBeforeClientClose() throws Exception {
+  void originResponseTimeoutInvalidatesLeaseAndReleasesCapacityBeforeClientClose()
+      throws Exception {
     CountDownLatch entered = new CountDownLatch(1);
     CountDownLatch release = new CountDownLatch(1);
     try (TestOriginServer origin = new TestOriginServer()) {
@@ -213,8 +214,7 @@ class OriginTransportLifecycleMutationTest {
           "/keep-alive",
           (request, socket) -> {
             TestOriginServer.write(
-                socket,
-                "HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: keep-alive\r\n\r\nok");
+                socket, "HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: keep-alive\r\n\r\nok");
             return true;
           });
       GatewayConfig config = GatewayTestFixtures.config(origin.port(), temporaryDirectory);
@@ -261,8 +261,8 @@ class OriginTransportLifecycleMutationTest {
     return new StreamingSpool.Result(path, declaredLength, "digest", reservation);
   }
 
-  private static void awaitConnections(
-      NettyOriginClient client, int expected, Duration timeout) throws InterruptedException {
+  private static void awaitConnections(NettyOriginClient client, int expected, Duration timeout)
+      throws InterruptedException {
     long deadline = System.nanoTime() + timeout.toNanos();
     while (client.openConnections() != expected && System.nanoTime() - deadline < 0) {
       Thread.sleep(5);
