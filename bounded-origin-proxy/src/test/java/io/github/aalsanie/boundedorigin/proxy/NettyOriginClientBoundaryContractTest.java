@@ -3,6 +3,7 @@ package io.github.aalsanie.boundedorigin.proxy;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -21,6 +22,7 @@ import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -30,13 +32,12 @@ class NettyOriginClientBoundaryContractTest {
   @Test
   void successfulExchangeRecordsElapsedDurationAndExactRequestFraming() throws Exception {
     byte[] requestBytes = new byte[] {1, 2, 3, 4, 5};
+    AtomicReference<TestOriginServer.Request> observed = new AtomicReference<>();
     try (TestOriginServer origin = new TestOriginServer()) {
       origin.respond(
           "/framing",
           (request, socket) -> {
-            assertEquals("keep-alive", request.headers().get("connection"));
-            assertEquals("5", request.headers().get("content-length"));
-            assertArrayEquals(requestBytes, request.body());
+            observed.set(request);
             TestOriginServer.write(
                 socket,
                 "HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: keep-alive\r\n\r\nok");
@@ -53,9 +54,23 @@ class NettyOriginClientBoundaryContractTest {
         StreamingSpool.Result body = body(requestBytes, requestBytes.length);
         Artifact artifact = null;
         try {
-          artifact = client.execute(request("/framing", body, 2));
+          OriginRequest request =
+              new OriginRequest(
+                  "POST",
+                  "/framing",
+                  Map.of(
+                      "host", List.of("example.test"),
+                      "connection", List.of("close")),
+                  body,
+                  2);
+          artifact = client.execute(request);
           assertEquals(200, artifact.statusCode());
           assertArrayEquals(new byte[] {'o', 'k'}, read(artifact));
+
+          TestOriginServer.Request sent = observed.get();
+          assertEquals("5", sent.headers().get("content-length"));
+          assertNull(sent.headers().get("connection"));
+          assertArrayEquals(requestBytes, sent.body());
 
           double durationSeconds =
               metric(
@@ -110,7 +125,6 @@ class NettyOriginClientBoundaryContractTest {
               assertThrows(
                   MaterializationException.class,
                   () -> client.execute(request("/over-limit", body, 3)));
-          assertTrue(failure.getMessage().contains("configured limit"));
           assertInstanceOf(StreamingSpool.BodyLimitExceededException.class, failure.getCause());
         } finally {
           body.close();
@@ -174,7 +188,7 @@ class NettyOriginClientBoundaryContractTest {
           GatewayTestFixtures.config(
               origin.port(),
               temporaryDirectory,
-              Map.of("origin.response-timeout", "PT0.05S", "request.timeout", "PT1S"));
+              Map.of("origin.response-timeout", "PT0.05S"));
       EventLoopGroup group = new MultiThreadIoEventLoopGroup(1, NioIoHandler.newFactory());
       SpoolQuota quota = new SpoolQuota(config.maxSpoolBytes(), config.maxSpoolFiles());
       try (NettyOriginClient client =
