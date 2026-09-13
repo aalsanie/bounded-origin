@@ -561,7 +561,7 @@ class GatewayNetworkTest {
   }
 
   @Test
-  void informationalAndCloseDelimitedOriginResponsesRemainValid() throws Exception {
+  void informationalOriginResponseRemainsValid() throws Exception {
     try (TestOriginServer origin = new TestOriginServer()) {
       origin.respond(
           "/hints",
@@ -572,6 +572,25 @@ class GatewayNetworkTest {
                     + "HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: keep-alive\r\n\r\nok");
             return true;
           });
+
+      GatewayConfig config = GatewayTestFixtures.config(origin.port(), temporaryDirectory);
+      try (BoundedOriginGateway gateway =
+          GatewayTestFixtures.start(
+              config,
+              GatewayTestFixtures.engine(GatewayTestFixtures.boundedPolicy(config.globalBudget())),
+              new GatewayTestFixtures.MemoryArtifactStore())) {
+        RawHttpClient.Response hints = request(gateway, "GET", "/hints");
+        assertEquals(200, hints.status());
+        assertEquals("ok", hints.bodyText());
+      }
+
+      assertEquals(1, origin.requests());
+    }
+  }
+
+  @Test
+  void closeDelimitedOriginResponseRemainsValid() throws Exception {
+    try (TestOriginServer origin = new TestOriginServer()) {
       origin.respond(
           "/close-delimited",
           (request, socket) -> {
@@ -587,14 +606,12 @@ class GatewayNetworkTest {
               config,
               GatewayTestFixtures.engine(GatewayTestFixtures.boundedPolicy(config.globalBudget())),
               new GatewayTestFixtures.MemoryArtifactStore())) {
-        RawHttpClient.Response hints = request(gateway, "GET", "/hints");
-        assertEquals(200, hints.status());
-        assertEquals("ok", hints.bodyText());
-
         RawHttpClient.Response closeDelimited = request(gateway, "GET", "/close-delimited");
         assertEquals(200, closeDelimited.status());
         assertEquals("close", closeDelimited.bodyText());
       }
+
+      assertEquals(1, origin.requests());
     }
   }
 

@@ -6,7 +6,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.github.aalsanie.boundedorigin.core.BoundedOriginExecutor;
 import io.netty.buffer.Unpooled;
+import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
+import io.netty.channel.ChannelOutboundHandlerAdapter;
+import io.netty.channel.ChannelPromise;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.MultiThreadIoEventLoopGroup;
 import io.netty.channel.embedded.EmbeddedChannel;
@@ -19,11 +22,12 @@ import io.netty.handler.codec.http.HttpHeaderValues;
 import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpResponse;
 import io.netty.handler.codec.http.HttpVersion;
+import io.netty.handler.codec.http.LastHttpContent;
 import io.netty.handler.timeout.IdleStateEvent;
-import io.netty.util.ReferenceCountUtil;
 import java.io.IOException;
 import java.nio.file.Path;
-import java.time.Duration;
+import java.util.Queue;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.Test;
@@ -123,7 +127,7 @@ class GatewayHandlerLifecycleTest {
           new DefaultLastHttpContent(Unpooled.wrappedBuffer(new byte[] {1}));
       content.setDecoderResult(DecoderResult.failure(new IOException("bad content")));
       fixture.channel().writeInbound(content);
-      assertStatus(fixture.channel(), 400);
+      assertStatus(fixture, 400);
     }
   }
 
@@ -137,7 +141,7 @@ class GatewayHandlerLifecycleTest {
           .channel()
           .writeInbound(new DefaultLastHttpContent(Unpooled.wrappedBuffer(new byte[] {1, 2})));
 
-      assertStatus(fixture.channel(), 400);
+      assertStatus(fixture, 400);
     }
   }
 
@@ -151,7 +155,7 @@ class GatewayHandlerLifecycleTest {
           .channel()
           .writeInbound(new DefaultLastHttpContent(Unpooled.wrappedBuffer(new byte[] {1})));
 
-      assertStatus(fixture.channel(), 400);
+      assertStatus(fixture, 400);
     }
   }
 
@@ -161,7 +165,7 @@ class GatewayHandlerLifecycleTest {
       fixture.runtime().beginDrain();
       fixture.channel().writeInbound(request(HttpMethod.GET, "/draining"));
 
-      assertStatus(fixture.channel(), 503);
+      assertStatus(fixture, 503);
     }
   }
 
@@ -170,7 +174,7 @@ class GatewayHandlerLifecycleTest {
     try (Fixture fixture = fixture()) {
       fixture.channel().writeInbound(request(HttpMethod.CONNECT, "/tunnel"));
 
-      assertStatus(fixture.channel(), 405);
+      assertStatus(fixture, 405);
     }
   }
 
@@ -182,7 +186,7 @@ class GatewayHandlerLifecycleTest {
       request.headers().set(HttpHeaderNames.EXPECT, HttpHeaderValues.CONTINUE);
       fixture.channel().writeInbound(request);
 
-      assertStatus(fixture.channel(), 100);
+      assertStatus(fixture, 100);
       assertTrue(fixture.channel().isActive());
       assertEquals(1, fixture.runtime().activeRequests());
     }
@@ -230,13 +234,15 @@ class GatewayHandlerLifecycleTest {
             metrics,
             runtime,
             quota);
+    ResponseCapture responses = new ResponseCapture();
     io.netty.channel.ChannelHandler[] handlers =
-        new io.netty.channel.ChannelHandler[trailing.length + 1];
-    handlers[0] = handler;
-    System.arraycopy(trailing, 0, handlers, 1, trailing.length);
+        new io.netty.channel.ChannelHandler[trailing.length + 2];
+    handlers[0] = responses;
+    handlers[1] = handler;
+    System.arraycopy(trailing, 0, handlers, 2, trailing.length);
 
     EmbeddedChannel channel = new EmbeddedChannel(handlers);
-    return new Fixture(channel, runtime, quota, executor, originClient, originGroup);
+    return new Fixture(channel, responses, runtime, quota, executor, originClient, originGroup);
   }
 
   private static DefaultHttpRequest request(HttpMethod method, String target) {
@@ -245,32 +251,52 @@ class GatewayHandlerLifecycleTest {
     return request;
   }
 
-  private static void assertStatus(EmbeddedChannel channel, int expected) throws Exception {
-    awaitOutbound(channel);
-    Object outbound = channel.readOutbound();
-    try {
-      assertTrue(outbound instanceof HttpResponse);
-      assertEquals(expected, ((HttpResponse) outbound).status().code());
-    } finally {
-      ReferenceCountUtil.release(outbound);
-    }
+  private static void assertStatus(Fixture fixture, int expected) throws Exception {
+    int actual = fixture.responses().awaitStatus(fixture.channel());
+    assertEquals(expected, actual);
   }
 
-  private static void awaitOutbound(EmbeddedChannel channel) throws InterruptedException {
-    long deadline = System.nanoTime() + Duration.ofSeconds(2).toNanos();
-    while (System.nanoTime() - deadline < 0) {
-      channel.runPendingTasks();
-      channel.runScheduledPendingTasks();
-      if (channel.outboundMessages().size() != 0) {
-        return;
+  private static final class ResponseCapture extends ChannelOutboundHandlerAdapter {
+    private final Queue<Integer> completedStatuses = new ConcurrentLinkedQueue<>();
+    private volatile int currentStatus = -1;
+
+    @Override
+    public void write(ChannelHandlerContext context, Object message, ChannelPromise promise) {
+      if (message instanceof HttpResponse response) {
+        currentStatus = response.status().code();
       }
-      Thread.sleep(1);
+      int status = currentStatus;
+      if (message instanceof LastHttpContent && status >= 0) {
+        promise.addListener(
+            future -> {
+              if (future.isSuccess()) {
+                if (!completedStatuses.offer(status)) {
+                  throw new IllegalStateException("response status capture rejected");
+                }
+              }
+            });
+      }
+      context.write(message, promise);
     }
-    throw new AssertionError("response was not written");
+
+    private int awaitStatus(EmbeddedChannel channel) throws InterruptedException {
+      long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(2);
+      while (System.nanoTime() - deadline < 0) {
+        channel.runPendingTasks();
+        channel.runScheduledPendingTasks();
+        Integer status = completedStatuses.poll();
+        if (status != null) {
+          return status;
+        }
+        Thread.sleep(1);
+      }
+      throw new AssertionError("response was not completed");
+    }
   }
 
   private record Fixture(
       EmbeddedChannel channel,
+      ResponseCapture responses,
       GatewayRuntimeState runtime,
       SpoolQuota quota,
       BoundedOriginExecutor executor,

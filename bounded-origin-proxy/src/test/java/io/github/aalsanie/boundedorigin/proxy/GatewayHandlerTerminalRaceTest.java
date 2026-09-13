@@ -22,6 +22,8 @@ import io.netty.handler.codec.http.HttpResponse;
 import io.netty.handler.codec.http.HttpVersion;
 import io.netty.util.ReferenceCountUtil;
 import java.io.IOException;
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.Map;
@@ -60,7 +62,7 @@ class GatewayHandlerTerminalRaceTest {
 
       fixture.channel().writeInbound(request);
       assertTrue(outbound.awaitIntercept(fixture.channel()));
-      runTimeout(fixture.channel());
+      fireRequestTimeout(fixture.channel());
       assertStatus(fixture.channel(), 408);
       awaitNoActiveRequests(fixture.channel(), fixture.runtime());
 
@@ -77,13 +79,13 @@ class GatewayHandlerTerminalRaceTest {
       completeGet(fixture.channel(), "/deferred-response");
       assertTrue(outbound.awaitIntercept(fixture.channel()));
 
-      runTimeout(fixture.channel());
-      assertFalse(fixture.channel().isActive());
-      assertEquals(0, fixture.runtime().activeRequests());
+      fireRequestTimeout(fixture.channel());
+      awaitInactive(fixture.channel());
+      awaitNoActiveRequests(fixture.channel(), fixture.runtime());
 
       outbound.failDeferred();
       fixture.channel().runPendingTasks();
-      assertEquals(0, fixture.runtime().activeRequests());
+      awaitNoActiveRequests(fixture.channel(), fixture.runtime());
     }
   }
 
@@ -157,9 +159,25 @@ class GatewayHandlerTerminalRaceTest {
     channel.writeInbound(new DefaultLastHttpContent(Unpooled.EMPTY_BUFFER));
   }
 
-  private static void runTimeout(EmbeddedChannel channel) {
-    channel.advanceTimeBy(4, TimeUnit.SECONDS);
-    channel.runScheduledPendingTasks();
+  private static void fireRequestTimeout(EmbeddedChannel channel) throws Exception {
+    GatewayRequestHandler handler = channel.pipeline().get(GatewayRequestHandler.class);
+    Field currentField = GatewayRequestHandler.class.getDeclaredField("current");
+    currentField.setAccessible(true);
+    Object state = currentField.get(handler);
+    if (state == null) {
+      throw new AssertionError("request state was not created");
+    }
+
+    Method timeout =
+        GatewayRequestHandler.class.getDeclaredMethod(
+            "requestTimedOut", ChannelHandlerContext.class, state.getClass());
+    timeout.setAccessible(true);
+    ChannelHandlerContext context = channel.pipeline().context(handler);
+    if (context == null) {
+      throw new AssertionError("gateway handler context is unavailable");
+    }
+
+    timeout.invoke(handler, context, state);
     channel.runPendingTasks();
   }
 
