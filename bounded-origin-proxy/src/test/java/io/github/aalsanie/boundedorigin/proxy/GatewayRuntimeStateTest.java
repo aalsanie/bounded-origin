@@ -68,6 +68,41 @@ class GatewayRuntimeStateTest {
   }
 
   @Test
+  void admissionResultsAreExactAcrossLifecycleAndCapacityBoundaries() {
+    GatewayRuntimeState runtime = new GatewayRuntimeState(1);
+    EmbeddedChannel first = new EmbeddedChannel();
+    EmbeddedChannel second = new EmbeddedChannel();
+    try {
+      assertFalse(runtime.register(first));
+      assertFalse(runtime.beginRequest());
+      assertEquals(0, runtime.activeRequests());
+
+      runtime.started();
+      assertTrue(runtime.register(first));
+      assertFalse(runtime.register(first));
+      assertFalse(runtime.register(second));
+
+      assertTrue(runtime.beginRequest());
+      assertEquals(1, runtime.activeRequests());
+      assertFalse(runtime.awaitDrained(Duration.ZERO));
+
+      runtime.beginDrain();
+      assertFalse(runtime.beginRequest());
+      assertEquals(1, runtime.activeRequests());
+
+      runtime.finishRequest();
+      assertEquals(0, runtime.activeRequests());
+      assertTrue(runtime.awaitDrained(Duration.ZERO));
+
+      runtime.unregister(first);
+      runtime.closed();
+    } finally {
+      first.finishAndReleaseAll();
+      second.finishAndReleaseAll();
+    }
+  }
+
+  @Test
   void constructorAndNullTimeoutAreRejected() {
     assertThrows(IllegalArgumentException.class, () -> new GatewayRuntimeState(0));
     GatewayRuntimeState runtime = new GatewayRuntimeState(1);
