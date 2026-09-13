@@ -113,22 +113,27 @@ class NettyOriginClientBoundaryContractTest {
       GatewayMetrics metrics = new GatewayMetrics();
       EventLoopGroup group = new MultiThreadIoEventLoopGroup(1, NioIoHandler.newFactory());
       SpoolQuota quota = new SpoolQuota(config.maxSpoolBytes(), config.maxSpoolFiles());
-      try (NettyOriginClient client = new NettyOriginClient(group, config, metrics, quota)) {
-        StreamingSpool.Result body = body(new byte[0], 0);
+      try {
+        StreamingSpool.Result exactBody = body(new byte[0], 0);
         Artifact exact = null;
-        try {
-          exact = client.execute(request("/exact-limit", body, 3));
+        try (NettyOriginClient client = new NettyOriginClient(group, config, metrics, quota)) {
+          exact = client.execute(request("/exact-limit", exactBody, 3));
           assertEquals(3, exact.contentLength());
           assertArrayEquals(new byte[] {'h', 'e', 'y'}, read(exact));
+        } finally {
+          exactBody.close();
+          deleteTemporary(exact);
+        }
 
+        StreamingSpool.Result overBody = body(new byte[0], 0);
+        try (NettyOriginClient client = new NettyOriginClient(group, config, metrics, quota)) {
           MaterializationException failure =
               assertThrows(
                   MaterializationException.class,
-                  () -> client.execute(request("/over-limit", body, 3)));
+                  () -> client.execute(request("/over-limit", overBody, 3)));
           assertInstanceOf(StreamingSpool.BodyLimitExceededException.class, failure.getCause());
         } finally {
-          body.close();
-          deleteTemporary(exact);
+          overBody.close();
         }
       } finally {
         quota.close();
@@ -186,9 +191,7 @@ class NettyOriginClientBoundaryContractTest {
 
       GatewayConfig config =
           GatewayTestFixtures.config(
-              origin.port(),
-              temporaryDirectory,
-              Map.of("origin.response-timeout", "PT0.05S"));
+              origin.port(), temporaryDirectory, Map.of("origin.response-timeout", "PT0.05S"));
       EventLoopGroup group = new MultiThreadIoEventLoopGroup(1, NioIoHandler.newFactory());
       SpoolQuota quota = new SpoolQuota(config.maxSpoolBytes(), config.maxSpoolFiles());
       try (NettyOriginClient client =
