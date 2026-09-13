@@ -8,6 +8,10 @@
     <Bug pattern="EI_EXPOSE_REP2" />
   </Match>
   <Match>
+    <Class name="io.github.aalsanie.boundedorigin.proxy.GatewayMutationRegressionTest$ControlledOutbound" />
+    <Bug pattern="EI_EXPOSE_REP2" />
+  </Match>
+  <Match>
     <Class name="io.github.aalsanie.boundedorigin.proxy.TestOriginServer" />
     <Method name="handle" />
     <Bug pattern="REC_CATCH_EXCEPTION" />
