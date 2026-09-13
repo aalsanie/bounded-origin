@@ -108,14 +108,27 @@ class GatewayRequestBoundaryContractTest {
         GatewayTestFixtures.config(
             GatewayTestFixtures.unusedPort(),
             temporaryDirectory,
-            Map.of("spool.max-bytes", "1", "http.max-request-body-bytes", "16"));
+            Map.of(
+                "http.max-request-body-bytes", "16",
+                "origin.max-result-bytes", "16",
+                "spool.max-bytes", "16"));
 
     try (BoundedOriginGateway gateway =
             GatewayTestFixtures.start(
                 config,
                 GatewayTestFixtures.engine(GatewayTestFixtures.artifactOnlyPolicy()),
                 store);
+        RawHttpClient holder = new RawHttpClient(gateway.listenAddress());
         RawHttpClient client = new RawHttpClient(gateway.listenAddress())) {
+      holder.write(
+          "POST /holder HTTP/1.1\r\n"
+              + "Host: example.test\r\n"
+              + "Connection: keep-alive\r\n"
+              + "Content-Length: 16\r\n\r\n"
+              + "123456789012345");
+      assertMetric(gateway, "bounded_origin_spool_bytes", 15);
+      assertMetric(gateway, "bounded_origin_spool_files", 1);
+
       client.write(
           "POST /capacity HTTP/1.1\r\n"
               + "Host: example.test\r\n"
@@ -128,6 +141,8 @@ class GatewayRequestBoundaryContractTest {
       assertEquals("1", response.header("retry-after"));
       assertTrue(client.awaitClosed(Duration.ofSeconds(1)));
       assertMetric(gateway, "bounded_origin_rejections_total", 1);
+
+      holder.close();
       assertMetric(gateway, "bounded_origin_active_requests", 0);
       assertMetric(gateway, "bounded_origin_spool_bytes", 0);
       assertMetric(gateway, "bounded_origin_spool_files", 0);
