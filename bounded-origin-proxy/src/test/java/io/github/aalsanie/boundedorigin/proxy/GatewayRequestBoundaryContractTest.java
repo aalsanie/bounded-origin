@@ -29,13 +29,7 @@ class GatewayRequestBoundaryContractTest {
           client.request(
               "POST",
               "/exact",
-              Map.of(
-                  "Host",
-                  "example.test",
-                  "Connection",
-                  "keep-alive",
-                  "Content-Length",
-                  "1"),
+              Map.of("Host", "example.test", "Connection", "keep-alive", "Content-Length", "1"),
               new byte[] {7});
       RawHttpClient.Response second =
           client.request(
@@ -66,9 +60,7 @@ class GatewayRequestBoundaryContractTest {
 
     try (BoundedOriginGateway gateway =
         GatewayTestFixtures.start(
-            config,
-            GatewayTestFixtures.engine(GatewayTestFixtures.artifactOnlyPolicy()),
-            store)) {
+            config, GatewayTestFixtures.engine(GatewayTestFixtures.artifactOnlyPolicy()), store)) {
       try (RawHttpClient exact = new RawHttpClient(gateway.listenAddress())) {
         exact.write(
             "POST /exact-chunk HTTP/1.1\r\n"
