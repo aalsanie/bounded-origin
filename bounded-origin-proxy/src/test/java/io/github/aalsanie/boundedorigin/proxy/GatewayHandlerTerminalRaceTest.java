@@ -156,8 +156,8 @@ class GatewayHandlerTerminalRaceTest {
     channel.writeInbound(new DefaultLastHttpContent(Unpooled.EMPTY_BUFFER));
   }
 
-  private static void runTimeout(EmbeddedChannel channel) throws InterruptedException {
-    Thread.sleep(3_250);
+  private static void runTimeout(EmbeddedChannel channel) {
+    channel.advanceTimeBy(4, TimeUnit.SECONDS);
     channel.runScheduledPendingTasks();
     channel.runPendingTasks();
   }
