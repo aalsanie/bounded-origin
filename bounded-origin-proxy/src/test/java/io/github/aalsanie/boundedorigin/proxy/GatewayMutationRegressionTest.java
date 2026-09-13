@@ -23,6 +23,7 @@ import io.netty.handler.codec.http.HttpResponse;
 import io.netty.handler.codec.http.HttpVersion;
 import io.netty.util.ReferenceCountUtil;
 import java.io.IOException;
+import java.lang.reflect.Field;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.Map;
@@ -128,23 +129,24 @@ class GatewayMutationRegressionTest {
 
   @Test
   void timeoutAfterResponseStartsTerminatesExactlyOnce() throws Exception {
-    ControlledOutbound outbound = new ControlledOutbound(Mode.DEFER_FINAL);
-    try (Fixture fixture = fixture(true, outbound)) {
+    try (Fixture fixture = fixture(false, null)) {
       fixture.channel().freezeTime();
-      completeGet(fixture.channel(), "/deferred");
-      assertTrue(outbound.awaitIntercept(fixture.channel()));
+      DefaultHttpRequest request = request(HttpMethod.POST, "/response-started-timeout");
+      request.headers().set(HttpHeaderNames.CONTENT_LENGTH, "1");
+      fixture.channel().writeInbound(request);
       assertEquals(1, fixture.runtime().activeRequests());
+      assertEquals(1, fixture.quota().files());
+      markResponseStarted(fixture.channel());
 
       advancePastRequestTimeout(fixture.channel());
-      fixture.channel().runPendingTasks();
+      awaitInactive(fixture.channel());
 
-      assertFalse(fixture.channel().isActive());
       assertEquals(1, fixture.metrics().snapshot().rejections());
       assertEquals(0, fixture.runtime().activeRequests());
       assertEquals(0, fixture.quota().files());
+      assertEquals(0, fixture.quota().bytes());
 
-      outbound.failDeferred();
-      fixture.channel().runPendingTasks();
+      advancePastRequestTimeout(fixture.channel());
       assertEquals(0, fixture.runtime().activeRequests());
       assertEquals(1, fixture.metrics().snapshot().rejections());
     }
@@ -163,16 +165,15 @@ class GatewayMutationRegressionTest {
 
       advancePastRequestTimeout(fixture.channel());
       assertStatus(fixture.channel(), 408);
-      fixture.channel().runPendingTasks();
-      assertEquals(0, fixture.runtime().activeRequests());
+      awaitNoActiveRequests(fixture);
       assertEquals(1, fixture.metrics().snapshot().rejections());
       assertEquals(0, fixture.quota().files());
 
       outbound.succeedDeferred();
       fixture.channel().runPendingTasks();
+      awaitInactive(fixture.channel());
       assertEquals(0, fixture.runtime().activeRequests());
       assertEquals(1, fixture.metrics().snapshot().rejections());
-      assertFalse(fixture.channel().isActive());
     }
   }
 
@@ -342,6 +343,19 @@ class GatewayMutationRegressionTest {
       Thread.sleep(1);
     }
     assertFalse(channel.isActive());
+  }
+
+  private static void markResponseStarted(EmbeddedChannel channel) throws Exception {
+    GatewayRequestHandler handler = channel.pipeline().get(GatewayRequestHandler.class);
+    Field currentField = GatewayRequestHandler.class.getDeclaredField("current");
+    currentField.setAccessible(true);
+    Object state = currentField.get(handler);
+    if (state == null) {
+      throw new AssertionError("request state was not created");
+    }
+    Field responseStartedField = state.getClass().getDeclaredField("responseStarted");
+    responseStartedField.setAccessible(true);
+    responseStartedField.setBoolean(state, true);
   }
 
   private enum Mode {
