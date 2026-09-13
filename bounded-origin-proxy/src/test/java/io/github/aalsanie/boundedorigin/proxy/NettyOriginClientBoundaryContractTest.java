@@ -39,8 +39,7 @@ class NettyOriginClientBoundaryContractTest {
           (request, socket) -> {
             observed.set(request);
             TestOriginServer.write(
-                socket,
-                "HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: keep-alive\r\n\r\nok");
+                socket, "HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: keep-alive\r\n\r\nok");
             return true;
           });
 
@@ -249,8 +248,8 @@ class NettyOriginClientBoundaryContractTest {
     throw new AssertionError("missing metric " + name);
   }
 
-  private static void awaitConnections(
-      NettyOriginClient client, int expected, Duration timeout) throws InterruptedException {
+  private static void awaitConnections(NettyOriginClient client, int expected, Duration timeout)
+      throws InterruptedException {
     long deadline = System.nanoTime() + timeout.toNanos();
     while (System.nanoTime() - deadline < 0) {
       if (client.openConnections() == expected) {
