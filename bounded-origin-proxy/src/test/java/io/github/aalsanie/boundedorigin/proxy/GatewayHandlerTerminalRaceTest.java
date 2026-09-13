@@ -20,6 +20,7 @@ import io.netty.handler.codec.http.HttpHeaderValues;
 import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpResponse;
 import io.netty.handler.codec.http.HttpVersion;
+import io.netty.handler.codec.http.LastHttpContent;
 import io.netty.util.ReferenceCountUtil;
 import java.io.IOException;
 import java.lang.reflect.Field;
@@ -248,7 +249,7 @@ class GatewayHandlerTerminalRaceTest {
 
     @Override
     public void write(ChannelHandlerContext context, Object message, ChannelPromise promise) {
-      if (message instanceof HttpResponse response && shouldIntercept(response.status().code())) {
+      if (shouldIntercept(message)) {
         ReferenceCountUtil.release(message);
         intercepted.countDown();
         if (mode == Mode.FAIL_CONTINUE || mode == Mode.FAIL_FINAL) {
@@ -261,10 +262,13 @@ class GatewayHandlerTerminalRaceTest {
       context.write(message, promise);
     }
 
-    private boolean shouldIntercept(int status) {
+    private boolean shouldIntercept(Object message) {
       return switch (mode) {
-        case FAIL_CONTINUE, DEFER_CONTINUE -> status == 100;
-        case FAIL_FINAL, DEFER_FINAL -> status != 100;
+        case FAIL_CONTINUE, DEFER_CONTINUE ->
+            message instanceof HttpResponse response && response.status().code() == 100;
+        case FAIL_FINAL ->
+            message instanceof HttpResponse response && response.status().code() != 100;
+        case DEFER_FINAL -> message instanceof LastHttpContent;
       };
     }
 
