@@ -128,7 +128,7 @@ class GatewayMutationRegressionTest {
       assertEquals(1, fixture.metrics().snapshot().rejections());
       assertEquals(0, fixture.quota().files());
       assertEquals(0, fixture.quota().bytes());
-      assertFalse(fixture.channel().isActive());
+      awaitInactive(fixture.channel());
     }
   }
 
