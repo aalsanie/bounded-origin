@@ -62,7 +62,7 @@ class GatewayHandlerTerminalRaceTest {
 
       fixture.channel().writeInbound(request);
       assertTrue(outbound.awaitIntercept(fixture.channel()));
-      fireRequestTimeout(fixture.channel());
+      fireRequestTimeout(fixture);
       assertStatus(fixture.channel(), 408);
       awaitNoActiveRequests(fixture.channel(), fixture.runtime());
 
@@ -79,7 +79,7 @@ class GatewayHandlerTerminalRaceTest {
       completeGet(fixture.channel(), "/deferred-response");
       assertTrue(outbound.awaitIntercept(fixture.channel()));
 
-      fireRequestTimeout(fixture.channel());
+      fireRequestTimeout(fixture);
       awaitInactive(fixture.channel());
       awaitNoActiveRequests(fixture.channel(), fixture.runtime());
 
@@ -143,7 +143,20 @@ class GatewayHandlerTerminalRaceTest {
             runtime,
             quota);
     EmbeddedChannel channel = new EmbeddedChannel(outbound, handler);
-    return new Fixture(channel, outbound, runtime, quota, executor, originClient, originGroup);
+    ChannelHandlerContext handlerContext = channel.pipeline().context(handler);
+    if (handlerContext == null) {
+      throw new AssertionError("gateway handler context was not installed");
+    }
+    return new Fixture(
+        channel,
+        outbound,
+        handler,
+        handlerContext,
+        runtime,
+        quota,
+        executor,
+        originClient,
+        originGroup);
   }
 
   private static DefaultHttpRequest request(HttpMethod method, String target) {
@@ -159,11 +172,10 @@ class GatewayHandlerTerminalRaceTest {
     channel.writeInbound(new DefaultLastHttpContent(Unpooled.EMPTY_BUFFER));
   }
 
-  private static void fireRequestTimeout(EmbeddedChannel channel) throws Exception {
-    GatewayRequestHandler handler = channel.pipeline().get(GatewayRequestHandler.class);
+  private static void fireRequestTimeout(Fixture fixture) throws Exception {
     Field currentField = GatewayRequestHandler.class.getDeclaredField("current");
     currentField.setAccessible(true);
-    Object state = currentField.get(handler);
+    Object state = currentField.get(fixture.handler());
     if (state == null) {
       throw new AssertionError("request state was not created");
     }
@@ -172,13 +184,9 @@ class GatewayHandlerTerminalRaceTest {
         GatewayRequestHandler.class.getDeclaredMethod(
             "requestTimedOut", ChannelHandlerContext.class, state.getClass());
     timeout.setAccessible(true);
-    ChannelHandlerContext context = channel.pipeline().context(handler);
-    if (context == null) {
-      throw new AssertionError("gateway handler context is unavailable");
-    }
 
-    timeout.invoke(handler, context, state);
-    channel.runPendingTasks();
+    timeout.invoke(fixture.handler(), fixture.handlerContext(), state);
+    fixture.channel().runPendingTasks();
   }
 
   private static void assertStatus(EmbeddedChannel channel, int expected) throws Exception {
@@ -264,7 +272,6 @@ class GatewayHandlerTerminalRaceTest {
       long deadline = System.nanoTime() + Duration.ofSeconds(2).toNanos();
       while (System.nanoTime() - deadline < 0) {
         channel.runPendingTasks();
-        channel.runScheduledPendingTasks();
         if (intercepted.await(1, TimeUnit.MILLISECONDS)) {
           return true;
         }
@@ -292,6 +299,8 @@ class GatewayHandlerTerminalRaceTest {
   private record Fixture(
       EmbeddedChannel channel,
       ControlledOutbound outbound,
+      GatewayRequestHandler handler,
+      ChannelHandlerContext handlerContext,
       GatewayRuntimeState runtime,
       SpoolQuota quota,
       BoundedOriginExecutor executor,
