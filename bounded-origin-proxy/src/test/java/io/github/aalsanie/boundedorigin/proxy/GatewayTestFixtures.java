@@ -60,13 +60,13 @@ final class GatewayTestFixtures {
     values.put("origin.acquire-timeout", "PT0.5S");
     values.put("origin.max-active", "4");
     values.put("origin.max-queued", "8");
-    values.put("origin.max-execution-duration", "PT5S");
+    values.put("origin.max-execution-duration", "PT2S");
     values.put("origin.max-result-bytes", "1048576");
     values.put("origin.connect-timeout", "PT0.5S");
-    values.put("origin.response-timeout", "PT4S");
+    values.put("origin.response-timeout", "PT2S");
     values.put("origin.failure-cooldown", "PT0.2S");
     values.put("origin.max-cooldown-entries", "128");
-    values.put("request.timeout", "PT6S");
+    values.put("request.timeout", "PT3S");
     values.put("idle.timeout", "PT3S");
     values.put("drain.timeout", "PT2S");
     values.put("overload.retry-after-seconds", "1");
