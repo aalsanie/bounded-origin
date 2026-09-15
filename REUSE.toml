@@ -1,0 +1,36 @@
+# SPDX-FileCopyrightText: 2026 aalsanie
+# SPDX-License-Identifier: AGPL-3.0-only
+
+version = 1
+
+[[annotations]]
+path = "bounded-origin-api/**"
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2026 aalsanie"
+SPDX-License-Identifier = "Apache-2.0"
+
+[[annotations]]
+path = [
+    ".editorconfig",
+    ".gitattributes",
+    ".github/**",
+    ".gitignore",
+    "CHANGELOG.md",
+    "LICENSING.md",
+    "REUSE.toml",
+    "build.gradle.kts",
+    "settings.gradle.kts",
+    "gradle.properties",
+    "gradle/libs.versions.toml",
+    "gradle/verification-metadata.xml",
+    "scripts/**",
+    "test-infra/**",
+    "bounded-origin-benchmarks/**",
+    "bounded-origin-cli/**",
+    "bounded-origin-core/**",
+    "bounded-origin-proxy/**",
+    "bounded-origin-store-fs/**",
+]
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2026 aalsanie"
+SPDX-License-Identifier = "AGPL-3.0-only"
