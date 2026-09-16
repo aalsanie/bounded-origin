@@ -160,14 +160,7 @@ class ConfigurationBoundaryTest {
     withoutOrder.renderQuery().remove("order-independent");
     var second = ConfigurationDecoder.decode(withoutOrder.root());
     assertFalse(
-        second
-            .routes()
-            .getFirst()
-            .key()
-            .orElseThrow()
-            .query()
-            .orElseThrow()
-            .orderIndependent());
+        second.routes().getFirst().key().orElseThrow().query().orElseThrow().orderIndependent());
   }
 
   @Test
