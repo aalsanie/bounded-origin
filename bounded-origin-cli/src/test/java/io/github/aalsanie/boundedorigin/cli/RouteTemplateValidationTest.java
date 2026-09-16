@@ -47,7 +47,8 @@ class RouteTemplateValidationTest {
     for (String path : malformed) {
       assertThrows(
           ConfigurationException.class,
-          () -> RouteTemplateCompiler.compile(List.of(RouteTemplateTestSupport.route("x", 1, path))),
+          () ->
+              RouteTemplateCompiler.compile(List.of(RouteTemplateTestSupport.route("x", 1, path))),
           path);
     }
   }
