@@ -3,6 +3,7 @@ package io.github.aalsanie.boundedorigin.cli;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -97,6 +98,16 @@ final class CompiledPathTemplate {
       }
     }
     return Optional.of(captures == null ? Map.of() : Map.copyOf(captures));
+  }
+
+  Set<String> captureNames() {
+    Set<String> result = new LinkedHashSet<>();
+    for (Segment segment : segments) {
+      if (segment.captureName != null) {
+        result.add(segment.captureName);
+      }
+    }
+    return Set.copyOf(result);
   }
 
   boolean overlaps(CompiledPathTemplate other) {
