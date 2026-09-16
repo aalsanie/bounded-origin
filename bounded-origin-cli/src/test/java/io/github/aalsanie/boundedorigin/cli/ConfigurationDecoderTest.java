@@ -10,7 +10,7 @@ import org.junit.jupiter.api.Test;
 
 class ConfigurationDecoderTest {
   @Test
-  void decodesStructuredConfiguration() throws Exception {
+  void decodesStructuredConfiguration() throws ConfigurationException {
     var fixture = ConfigurationTestSupport.objectFixture();
 
     var configuration = ConfigurationDecoder.decode(fixture.root());
@@ -176,7 +176,7 @@ class ConfigurationDecoderTest {
   }
 
   @Test
-  void acceptsSignedPrecedenceBounds() throws Exception {
+  void acceptsSignedPrecedenceBounds() throws ConfigurationException {
     var fixture = ConfigurationTestSupport.objectFixture();
     fixture.render().put("precedence", Integer.MAX_VALUE);
     fixture.fallback().put("precedence", Integer.MIN_VALUE);
