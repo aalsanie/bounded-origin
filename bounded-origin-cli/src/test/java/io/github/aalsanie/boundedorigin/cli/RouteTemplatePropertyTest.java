@@ -6,17 +6,15 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.Random;
 import org.junit.jupiter.api.Test;
 
 class RouteTemplatePropertyTest {
   @Test
   void generatedSingleSegmentCapturesRoundTripRawValues() throws ConfigurationException {
-    Random random = new Random(0xB0A1DEDL);
     for (int index = 0; index < 200; index++) {
-      String prefix = "p" + random.nextInt(10_000);
-      String suffix = "s" + random.nextInt(10_000);
-      String value = "v" + random.nextInt(10_000);
+      String prefix = "p" + ((index * 37) % 10_000);
+      String suffix = "s" + ((index * 101) % 10_000);
+      String value = "v" + ((index * 211) % 10_000);
       String template = "/" + prefix + "/{value}/" + suffix;
       String path = "/" + prefix + "/" + value + "/" + suffix;
       CompiledRouteTable table =
@@ -50,7 +48,10 @@ class RouteTemplatePropertyTest {
 
     for (int seed = 0; seed < 20; seed++) {
       List<ConfigurationModel.RouteConfiguration> shuffled = new ArrayList<>(routes);
-      Collections.shuffle(shuffled, new Random(seed));
+      Collections.rotate(shuffled, seed);
+      if ((seed & 1) != 0) {
+        Collections.reverse(shuffled);
+      }
       CompiledRouteTable table = RouteTemplateCompiler.compile(shuffled);
       for (int index = 0; index < routes.size(); index++) {
         assertEquals(
