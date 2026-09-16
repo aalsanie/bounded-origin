@@ -26,8 +26,7 @@ class ConfigurationValuesTest {
 
     Map<Object, Object> nonString = new LinkedHashMap<>();
     nonString.put(1, "x");
-    assertMessage(
-        () -> ConfigurationValues.mapping(nonString, "root"), "non-string or blank key");
+    assertMessage(() -> ConfigurationValues.mapping(nonString, "root"), "non-string or blank key");
 
     Map<Object, Object> blank = new LinkedHashMap<>();
     blank.put(" ", "x");
@@ -42,8 +41,7 @@ class ConfigurationValuesTest {
 
     assertEquals("x", ConfigurationValues.required(values, "present", "root"));
     assertMessage(() -> ConfigurationValues.required(values, "missing", "root"), "is required");
-    assertMessage(
-        () -> ConfigurationValues.required(values, "null", "root"), "must not be null");
+    assertMessage(() -> ConfigurationValues.required(values, "null", "root"), "must not be null");
     ConfigurationValues.rejectUnknown(Map.of("a", 1), Set.of("a"), "root");
     assertMessage(
         () -> ConfigurationValues.rejectUnknown(Map.of("b", 1), Set.of("a"), "root"),
@@ -71,10 +69,8 @@ class ConfigurationValuesTest {
   void validatesIntegralRanges() throws ConfigurationException {
     assertEquals(Long.MIN_VALUE, ConfigurationValues.longValue(Long.MIN_VALUE, "value"));
     assertEquals(Long.MAX_VALUE, ConfigurationValues.longValue(Long.MAX_VALUE, "value"));
-    assertEquals(
-        Integer.MIN_VALUE, ConfigurationValues.integerValue(Integer.MIN_VALUE, "value"));
-    assertEquals(
-        Integer.MAX_VALUE, ConfigurationValues.integerValue(Integer.MAX_VALUE, "value"));
+    assertEquals(Integer.MIN_VALUE, ConfigurationValues.integerValue(Integer.MIN_VALUE, "value"));
+    assertEquals(Integer.MAX_VALUE, ConfigurationValues.integerValue(Integer.MAX_VALUE, "value"));
     assertEquals(0L, ConfigurationValues.nonNegativeLong(0L, "value"));
     assertEquals(1L, ConfigurationValues.positiveLong(1L, "value"));
     assertEquals(0, ConfigurationValues.nonNegativeInt(0, "value"));
@@ -85,8 +81,7 @@ class ConfigurationValuesTest {
     assertMessage(
         () -> ConfigurationValues.longValue(BigInteger.ONE.shiftLeft(63), "value"),
         "outside the signed 64-bit range");
-    assertMessage(
-        () -> ConfigurationValues.nonNegativeLong(-1L, "value"), "must be non-negative");
+    assertMessage(() -> ConfigurationValues.nonNegativeLong(-1L, "value"), "must be non-negative");
     assertMessage(() -> ConfigurationValues.positiveLong(0L, "value"), "must be positive");
     assertMessage(
         () -> ConfigurationValues.integerValue((long) Integer.MAX_VALUE + 1L, "value"),
@@ -94,28 +89,23 @@ class ConfigurationValuesTest {
     assertMessage(
         () -> ConfigurationValues.integerValue((long) Integer.MIN_VALUE - 1L, "value"),
         "outside the signed 32-bit range");
-    assertMessage(
-        () -> ConfigurationValues.nonNegativeInt(-1, "value"), "must be non-negative");
+    assertMessage(() -> ConfigurationValues.nonNegativeInt(-1, "value"), "must be non-negative");
     assertMessage(() -> ConfigurationValues.positiveInt(0, "value"), "must be positive");
   }
 
   @Test
   void validatesDurations() throws ConfigurationException {
-    assertEquals(
-        Duration.ofSeconds(1), ConfigurationValues.positiveDuration("PT1S", "value"));
-    assertMessage(
-        () -> ConfigurationValues.positiveDuration("PT0S", "value"), "positive duration");
+    assertEquals(Duration.ofSeconds(1), ConfigurationValues.positiveDuration("PT1S", "value"));
+    assertMessage(() -> ConfigurationValues.positiveDuration("PT0S", "value"), "positive duration");
     assertMessage(
         () -> ConfigurationValues.positiveDuration("-PT1S", "value"), "positive duration");
-    assertMessage(
-        () -> ConfigurationValues.positiveDuration("bad", "value"), "ISO-8601 duration");
+    assertMessage(() -> ConfigurationValues.positiveDuration("bad", "value"), "ISO-8601 duration");
   }
 
   @Test
   void validatesUniqueListsAndStringMaps() throws ConfigurationException {
     assertEquals(
-        List.of("a", "b"),
-        ConfigurationValues.uniqueStringList(List.of("a", "b"), "list", 2));
+        List.of("a", "b"), ConfigurationValues.uniqueStringList(List.of("a", "b"), "list", 2));
     assertMessage(
         () -> ConfigurationValues.uniqueStringList(List.of("a", "a"), "list", 2),
         "duplicate value a");
@@ -123,14 +113,12 @@ class ConfigurationValuesTest {
         () -> ConfigurationValues.uniqueStringList(List.of("a", 1), "list", 2),
         "list[1] must be a string");
 
-    assertEquals(
-        Map.of("a", "b"), ConfigurationValues.stringMap(Map.of("a", "b"), "map", 1));
+    assertEquals(Map.of("a", "b"), ConfigurationValues.stringMap(Map.of("a", "b"), "map", 1));
     assertMessage(
         () -> ConfigurationValues.stringMap(Map.of("a", "b", "c", "d"), "map", 1),
         "maximum entries 1");
     assertMessage(
-        () -> ConfigurationValues.stringMap(Map.of("a", 1), "map", 1),
-        "map.a must be a string");
+        () -> ConfigurationValues.stringMap(Map.of("a", 1), "map", 1), "map.a must be a string");
   }
 
   @Test
@@ -141,8 +129,7 @@ class ConfigurationValuesTest {
     assertEquals("-42", ConfigurationValues.scalarText(-42, "value"));
     assertMessage(() -> ConfigurationValues.scalarText(" ", "value"), "must not be blank");
     assertMessage(
-        () -> ConfigurationValues.scalarText(1.5d, "value"),
-        "string, boolean, or integer scalar");
+        () -> ConfigurationValues.scalarText(1.5d, "value"), "string, boolean, or integer scalar");
     assertMessage(
         () -> ConfigurationValues.scalarText(List.of(), "value"),
         "string, boolean, or integer scalar");

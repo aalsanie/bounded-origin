@@ -1,1 +1,115 @@
 # bounded-origin-cli public API
+final class io.github.aalsanie.boundedorigin.cli.ConfigurationDecoder {
+}
+final class io.github.aalsanie.boundedorigin.cli.ConfigurationException extends java.lang.Exception {
+}
+final class io.github.aalsanie.boundedorigin.cli.ConfigurationLimits {
+}
+final class io.github.aalsanie.boundedorigin.cli.ConfigurationModel {
+}
+final class io.github.aalsanie.boundedorigin.cli.ConfigurationModel$BudgetConfiguration extends java.lang.Record {
+  public final java.lang.String toString();
+  public final int hashCode();
+  public final boolean equals(java.lang.Object);
+  public int maxActive();
+  public int maxQueued();
+  public java.time.Duration maxExecutionDuration();
+  public long maxResultBytes();
+}
+final class io.github.aalsanie.boundedorigin.cli.ConfigurationModel$ClientComputationConfiguration extends java.lang.Record {
+  public final java.lang.String toString();
+  public final int hashCode();
+  public final boolean equals(java.lang.Object);
+  public java.lang.String type();
+  public java.lang.String version();
+  public java.util.Map<java.lang.String, java.lang.String> parameters();
+}
+final class io.github.aalsanie.boundedorigin.cli.ConfigurationModel$FallbackConfiguration extends java.lang.Record {
+  public final java.lang.String toString();
+  public final int hashCode();
+  public final boolean equals(java.lang.Object);
+  public java.lang.String id();
+  public long version();
+  public int precedence();
+  public io.github.aalsanie.boundedorigin.cli.ConfigurationModel$Strategy strategy();
+}
+final class io.github.aalsanie.boundedorigin.cli.ConfigurationModel$KeyConfiguration extends java.lang.Record {
+  public final java.lang.String toString();
+  public final int hashCode();
+  public final boolean equals(java.lang.Object);
+  public java.util.List<java.lang.String> path();
+  public io.github.aalsanie.boundedorigin.cli.ConfigurationModel$QueryKeyConfiguration query();
+}
+final class io.github.aalsanie.boundedorigin.cli.ConfigurationModel$MatchConfiguration extends java.lang.Record {
+  public final java.lang.String toString();
+  public final int hashCode();
+  public final boolean equals(java.lang.Object);
+  public java.util.Optional<java.lang.String> method();
+  public java.util.Optional<java.lang.String> host();
+  public java.lang.String path();
+  public java.util.Optional<io.github.aalsanie.boundedorigin.cli.ConfigurationModel$Trust> trust();
+}
+final class io.github.aalsanie.boundedorigin.cli.ConfigurationModel$QueryKeyConfiguration extends java.lang.Record {
+  public final java.lang.String toString();
+  public final int hashCode();
+  public final boolean equals(java.lang.Object);
+  public java.util.List<java.lang.String> include();
+  public boolean orderIndependent();
+}
+final class io.github.aalsanie.boundedorigin.cli.ConfigurationModel$RouteConfiguration extends java.lang.Record {
+  public final java.lang.String toString();
+  public final int hashCode();
+  public final boolean equals(java.lang.Object);
+  public java.lang.String id();
+  public long version();
+  public int precedence();
+  public io.github.aalsanie.boundedorigin.cli.ConfigurationModel$MatchConfiguration match();
+  public io.github.aalsanie.boundedorigin.cli.ConfigurationModel$Strategy strategy();
+  public java.util.Optional<io.github.aalsanie.boundedorigin.cli.ConfigurationModel$KeyConfiguration> key();
+  public java.util.Optional<java.lang.String> materializerVersion();
+  public java.util.Optional<io.github.aalsanie.boundedorigin.cli.ConfigurationModel$BudgetConfiguration> budget();
+  public java.util.Optional<io.github.aalsanie.boundedorigin.cli.ConfigurationModel$ClientComputationConfiguration> clientComputation();
+}
+final class io.github.aalsanie.boundedorigin.cli.ConfigurationModel$RuntimeConfiguration extends java.lang.Record {
+  public final java.lang.String toString();
+  public final int hashCode();
+  public final boolean equals(java.lang.Object);
+  public int schema();
+  public java.util.Map<java.lang.String, java.lang.String> gateway();
+  public io.github.aalsanie.boundedorigin.cli.ConfigurationModel$StoreConfiguration store();
+  public java.util.List<io.github.aalsanie.boundedorigin.cli.ConfigurationModel$RouteConfiguration> routes();
+  public io.github.aalsanie.boundedorigin.cli.ConfigurationModel$FallbackConfiguration fallback();
+}
+final class io.github.aalsanie.boundedorigin.cli.ConfigurationModel$StoreConfiguration extends java.lang.Record {
+  public final java.lang.String toString();
+  public final int hashCode();
+  public final boolean equals(java.lang.Object);
+  public java.lang.String directory();
+  public long maxBytes();
+  public long maxArtifactBytes();
+}
+final class io.github.aalsanie.boundedorigin.cli.ConfigurationModel$Strategy extends java.lang.Enum<io.github.aalsanie.boundedorigin.cli.ConfigurationModel$Strategy> {
+  public static final io.github.aalsanie.boundedorigin.cli.ConfigurationModel$Strategy ARTIFACT_ONLY;
+  public static final io.github.aalsanie.boundedorigin.cli.ConfigurationModel$Strategy BOUNDED_COMPUTE;
+  public static final io.github.aalsanie.boundedorigin.cli.ConfigurationModel$Strategy MATERIALIZE;
+  public static final io.github.aalsanie.boundedorigin.cli.ConfigurationModel$Strategy CLIENT_COMPUTE;
+  public static final io.github.aalsanie.boundedorigin.cli.ConfigurationModel$Strategy DENY;
+  public static io.github.aalsanie.boundedorigin.cli.ConfigurationModel$Strategy[] values();
+  public static io.github.aalsanie.boundedorigin.cli.ConfigurationModel$Strategy valueOf(java.lang.String);
+}
+final class io.github.aalsanie.boundedorigin.cli.ConfigurationModel$Trust extends java.lang.Enum<io.github.aalsanie.boundedorigin.cli.ConfigurationModel$Trust> {
+  public static final io.github.aalsanie.boundedorigin.cli.ConfigurationModel$Trust UNTRUSTED;
+  public static final io.github.aalsanie.boundedorigin.cli.ConfigurationModel$Trust TRUSTED;
+  public static io.github.aalsanie.boundedorigin.cli.ConfigurationModel$Trust[] values();
+  public static io.github.aalsanie.boundedorigin.cli.ConfigurationModel$Trust valueOf(java.lang.String);
+}
+final class io.github.aalsanie.boundedorigin.cli.ConfigurationValues {
+}
+final class io.github.aalsanie.boundedorigin.cli.GatewayConfigurationValidator {
+}
+final class io.github.aalsanie.boundedorigin.cli.RouteConfigurationDecoder {
+}
+final class io.github.aalsanie.boundedorigin.cli.YamlConfigurationLoader {
+}
+final class io.github.aalsanie.boundedorigin.cli.YamlStructureGuard {
+}

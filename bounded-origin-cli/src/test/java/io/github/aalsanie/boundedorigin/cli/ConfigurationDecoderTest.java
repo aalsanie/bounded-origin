@@ -26,7 +26,8 @@ class ConfigurationDecoderTest {
   @Test
   void rejectsUnknownKeysAtEverySchemaBoundary() {
     assertMutation(
-        fixture -> fixture.root().put("unknown", true), "configuration contains unknown key unknown");
+        fixture -> fixture.root().put("unknown", true),
+        "configuration contains unknown key unknown");
     assertMutation(
         fixture -> fixture.gateway().put("unknown", true),
         "configuration.gateway contains unknown key unknown");
@@ -58,11 +59,9 @@ class ConfigurationDecoderTest {
 
   @Test
   void rejectsMissingRootAndGatewayRequirements() {
+    assertMutation(fixture -> fixture.root().remove("schema"), "configuration.schema is required");
     assertMutation(
-        fixture -> fixture.root().remove("schema"), "configuration.schema is required");
-    assertMutation(
-        fixture -> fixture.root().put("gateway", null),
-        "configuration.gateway must not be null");
+        fixture -> fixture.root().put("gateway", null), "configuration.gateway must not be null");
     assertMutation(
         fixture -> fixture.gateway().remove("origin.host"),
         "configuration.gateway.origin.host is required");
@@ -79,9 +78,11 @@ class ConfigurationDecoderTest {
     assertMutation(
         fixture -> fixture.root().put("store", null), "configuration.store must not be null");
     assertMutation(
-        fixture -> fixture.store().remove("directory"), "configuration.store.directory is required");
+        fixture -> fixture.store().remove("directory"),
+        "configuration.store.directory is required");
     assertMutation(
-        fixture -> fixture.store().remove("max-bytes"), "configuration.store.max-bytes is required");
+        fixture -> fixture.store().remove("max-bytes"),
+        "configuration.store.max-bytes is required");
     assertMutation(
         fixture -> fixture.store().remove("max-artifact-bytes"),
         "configuration.store.max-artifact-bytes is required");
@@ -113,8 +114,7 @@ class ConfigurationDecoderTest {
   @Test
   void rejectsMissingFallbackRequirements() {
     assertMutation(
-        fixture -> fixture.root().put("fallback", null),
-        "configuration.fallback must not be null");
+        fixture -> fixture.root().put("fallback", null), "configuration.fallback must not be null");
     assertMutation(
         fixture -> fixture.fallback().remove("id"), "configuration.fallback.id is required");
     assertMutation(
@@ -135,8 +135,7 @@ class ConfigurationDecoderTest {
         fixture -> fixture.root().put("gateway", List.of()),
         "configuration.gateway must be a mapping");
     assertMutation(
-        fixture -> fixture.root().put("store", List.of()),
-        "configuration.store must be a mapping");
+        fixture -> fixture.root().put("store", List.of()), "configuration.store must be a mapping");
     assertMutation(
         fixture -> fixture.root().put("routes", fixture.gateway()),
         "configuration.routes must be a sequence");
@@ -144,8 +143,7 @@ class ConfigurationDecoderTest {
         fixture -> fixture.root().put("fallback", List.of()),
         "configuration.fallback must be a mapping");
     assertMutation(
-        fixture -> fixture.routes().set(0, List.of()),
-        "configuration.routes[0] must be a mapping");
+        fixture -> fixture.routes().set(0, List.of()), "configuration.routes[0] must be a mapping");
     assertMutation(
         fixture -> fixture.render().put("match", List.of()),
         "configuration.routes[0].match must be a mapping");
@@ -173,8 +171,7 @@ class ConfigurationDecoderTest {
 
   @Test
   void rejectsDuplicatePolicyIds() {
-    assertMutation(
-        fixture -> fixture.fallback().put("id", "render"), "duplicate policy id render");
+    assertMutation(fixture -> fixture.fallback().put("id", "render"), "duplicate policy id render");
     assertMutation(fixture -> fixture.client().put("id", "render"), "duplicate policy id render");
   }
 

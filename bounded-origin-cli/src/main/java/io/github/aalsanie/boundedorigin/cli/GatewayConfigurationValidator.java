@@ -83,8 +83,10 @@ final class GatewayConfigurationValidator {
     if (value.isBlank()) {
       throw new ConfigurationException(path + " must not be blank");
     }
-    if (value.chars()
-        .anyMatch(character -> Character.isWhitespace(character) || Character.isISOControl(character))) {
+    if (value
+        .chars()
+        .anyMatch(
+            character -> Character.isWhitespace(character) || Character.isISOControl(character))) {
       throw new ConfigurationException(path + " contains invalid characters");
     }
   }

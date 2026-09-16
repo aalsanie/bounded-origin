@@ -49,7 +49,8 @@ final class RouteConfigurationDecoder {
     Optional<ConfigurationModel.KeyConfiguration> key = optionalKey(source, path);
     Optional<String> materializerVersion = optionalString(source, "materializer-version", path);
     Optional<ConfigurationModel.BudgetConfiguration> budget = optionalBudget(source, path);
-    Optional<ConfigurationModel.ClientComputationConfiguration> client = optionalClient(source, path);
+    Optional<ConfigurationModel.ClientComputationConfiguration> client =
+        optionalClient(source, path);
     return new ConfigurationModel.RouteConfiguration(
         id, version, precedence, match, strategy, key, materializerVersion, budget, client);
   }
@@ -82,8 +83,7 @@ final class RouteConfigurationDecoder {
     }
     String keyPath = path + ".key";
     Map<String, Object> source =
-        ConfigurationValues.mapping(
-            ConfigurationValues.required(route, "key", path), keyPath);
+        ConfigurationValues.mapping(ConfigurationValues.required(route, "key", path), keyPath);
     ConfigurationValues.rejectUnknown(source, KEY_KEYS, keyPath);
     var pathDimensions =
         source.containsKey("path")
@@ -94,8 +94,7 @@ final class RouteConfigurationDecoder {
             : java.util.List.<String>of();
     ConfigurationModel.QueryKeyConfiguration query =
         source.containsKey("query")
-            ? parseQuery(
-                ConfigurationValues.required(source, "query", keyPath), keyPath + ".query")
+            ? parseQuery(ConfigurationValues.required(source, "query", keyPath), keyPath + ".query")
             : new ConfigurationModel.QueryKeyConfiguration(java.util.List.of(), false);
     return Optional.of(new ConfigurationModel.KeyConfiguration(pathDimensions, query));
   }
@@ -146,8 +145,7 @@ final class RouteConfigurationDecoder {
             ConfigurationValues.required(source, "max-result-bytes", budgetPath),
             budgetPath + ".max-result-bytes");
     return Optional.of(
-        new ConfigurationModel.BudgetConfiguration(
-            maxActive, maxQueued, duration, maxResultBytes));
+        new ConfigurationModel.BudgetConfiguration(maxActive, maxQueued, duration, maxResultBytes));
   }
 
   private static Optional<ConfigurationModel.ClientComputationConfiguration> optionalClient(

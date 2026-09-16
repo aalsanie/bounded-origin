@@ -8,10 +8,12 @@ import java.util.Map;
 import java.util.Set;
 
 final class ConfigurationDecoder {
-  private static final Set<String> ROOT_KEYS = Set.of("schema", "gateway", "store", "routes", "fallback");
+  private static final Set<String> ROOT_KEYS =
+      Set.of("schema", "gateway", "store", "routes", "fallback");
   private static final Set<String> STORE_KEYS =
       Set.of("directory", "max-bytes", "max-artifact-bytes");
-  private static final Set<String> FALLBACK_KEYS = Set.of("id", "version", "precedence", "strategy");
+  private static final Set<String> FALLBACK_KEYS =
+      Set.of("id", "version", "precedence", "strategy");
   private static final Set<String> GATEWAY_KEYS =
       Set.of(
           "listen.host",
@@ -120,8 +122,7 @@ final class ConfigurationDecoder {
   private static List<ConfigurationModel.RouteConfiguration> parseRoutes(Object value)
       throws ConfigurationException {
     List<Object> source =
-        ConfigurationValues.sequence(
-            value, "configuration.routes", ConfigurationLimits.MAX_ROUTES);
+        ConfigurationValues.sequence(value, "configuration.routes", ConfigurationLimits.MAX_ROUTES);
     List<ConfigurationModel.RouteConfiguration> routes = new ArrayList<>(source.size());
     for (int index = 0; index < source.size(); index++) {
       routes.add(RouteConfigurationDecoder.decode(source.get(index), index));

@@ -57,8 +57,7 @@ class ConfigurationBoundaryTest {
         fixture -> fixture.renderBudget().put("max-execution-duration", "-PT1S"),
         "positive duration");
     assertMutation(
-        fixture -> fixture.renderBudget().put("max-execution-duration", 10),
-        "must be a string");
+        fixture -> fixture.renderBudget().put("max-execution-duration", 10), "must be a string");
   }
 
   @Test
@@ -126,8 +125,7 @@ class ConfigurationBoundaryTest {
   @Test
   void rejectsDuplicateKeyDimensions() {
     assertMutation(
-        fixture -> fixture.renderKey().put("path", List.of("id", "id")),
-        "duplicate value id");
+        fixture -> fixture.renderKey().put("path", List.of("id", "id")), "duplicate value id");
     assertMutation(
         fixture -> fixture.renderQuery().put("include", List.of("variant", "variant")),
         "duplicate value variant");
@@ -204,7 +202,8 @@ class ConfigurationBoundaryTest {
     var fixture = ConfigurationTestSupport.objectFixture();
     mutation.accept(fixture);
     ConfigurationException exception =
-        assertThrows(ConfigurationException.class, () -> ConfigurationDecoder.decode(fixture.root()));
+        assertThrows(
+            ConfigurationException.class, () -> ConfigurationDecoder.decode(fixture.root()));
     assertTrue(
         exception.getMessage().contains(expected),
         () -> "expected <" + expected + "> in <" + exception.getMessage() + ">");

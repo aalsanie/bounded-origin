@@ -47,8 +47,7 @@ class YamlConfigurationLoaderTest {
     assertEquals("v1", render.materializerVersion().orElseThrow());
     assertEquals(4, render.budget().orElseThrow().maxActive());
     assertEquals(16, render.budget().orElseThrow().maxQueued());
-    assertEquals(
-        Duration.ofSeconds(10), render.budget().orElseThrow().maxExecutionDuration());
+    assertEquals(Duration.ofSeconds(10), render.budget().orElseThrow().maxExecutionDuration());
     assertEquals(262_144L, render.budget().orElseThrow().maxResultBytes());
     assertTrue(render.clientComputation().isEmpty());
 
@@ -62,16 +61,13 @@ class YamlConfigurationLoaderTest {
     assertTrue(client.budget().isEmpty());
     assertEquals("wasm", client.clientComputation().orElseThrow().type());
     assertEquals("v2", client.clientComputation().orElseThrow().version());
-    assertEquals(
-        "strict", client.clientComputation().orElseThrow().parameters().get("mode"));
+    assertEquals("strict", client.clientComputation().orElseThrow().parameters().get("mode"));
 
     assertEquals(ConfigurationModel.Strategy.DENY, configuration.fallback().strategy());
-    assertThrows(
-        UnsupportedOperationException.class, () -> configuration.gateway().put("x", "y"));
+    assertThrows(UnsupportedOperationException.class, () -> configuration.gateway().put("x", "y"));
     assertThrows(UnsupportedOperationException.class, () -> configuration.routes().clear());
     assertThrows(
-        UnsupportedOperationException.class,
-        () -> render.key().orElseThrow().path().add("other"));
+        UnsupportedOperationException.class, () -> render.key().orElseThrow().path().add("other"));
     assertThrows(
         UnsupportedOperationException.class,
         () -> client.clientComputation().orElseThrow().parameters().put("x", "y"));
