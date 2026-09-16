@@ -237,7 +237,8 @@ final class SemanticKeyPlan {
     try {
       return normalizeQueryComponent(value);
     } catch (IllegalArgumentException exception) {
-      throw new ConfigurationException(path + " contains an invalid query name '" + value + "'", exception);
+      throw new ConfigurationException(
+          path + " contains an invalid query name '" + value + "'", exception);
     }
   }
 
