@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.math.BigInteger;
 import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -14,7 +15,7 @@ import org.junit.jupiter.api.Test;
 
 class ConfigurationValuesTest {
   @Test
-  void validatesMappingsAndSequences() throws Exception {
+  void validatesMappingsAndSequences() throws ConfigurationException {
     assertEquals(Map.of("a", 1), ConfigurationValues.mapping(Map.of("a", 1), "root"));
     assertEquals(List.of("a"), ConfigurationValues.sequence(List.of("a"), "root", 1));
 
@@ -34,7 +35,7 @@ class ConfigurationValuesTest {
   }
 
   @Test
-  void validatesRequiredAndUnknownFields() throws Exception {
+  void validatesRequiredAndUnknownFields() throws ConfigurationException {
     Map<String, Object> values = new LinkedHashMap<>();
     values.put("present", "x");
     values.put("null", null);
@@ -50,7 +51,7 @@ class ConfigurationValuesTest {
   }
 
   @Test
-  void validatesStringsBooleansAndEnums() throws Exception {
+  void validatesStringsBooleansAndEnums() throws ConfigurationException {
     assertEquals("x", ConfigurationValues.nonBlankString("x", "value"));
     assertTrue(ConfigurationValues.booleanValue(true, "value"));
     assertFalse(ConfigurationValues.booleanValue(false, "value"));
@@ -67,7 +68,7 @@ class ConfigurationValuesTest {
   }
 
   @Test
-  void validatesIntegralRanges() throws Exception {
+  void validatesIntegralRanges() throws ConfigurationException {
     assertEquals(Long.MIN_VALUE, ConfigurationValues.longValue(Long.MIN_VALUE, "value"));
     assertEquals(Long.MAX_VALUE, ConfigurationValues.longValue(Long.MAX_VALUE, "value"));
     assertEquals(
@@ -81,6 +82,9 @@ class ConfigurationValuesTest {
 
     assertMessage(() -> ConfigurationValues.longValue(1.5d, "value"), "must be a integer");
     assertMessage(() -> ConfigurationValues.longValue("1", "value"), "must be a integer");
+    assertMessage(
+        () -> ConfigurationValues.longValue(BigInteger.ONE.shiftLeft(63), "value"),
+        "outside the signed 64-bit range");
     assertMessage(
         () -> ConfigurationValues.nonNegativeLong(-1L, "value"), "must be non-negative");
     assertMessage(() -> ConfigurationValues.positiveLong(0L, "value"), "must be positive");
@@ -96,7 +100,7 @@ class ConfigurationValuesTest {
   }
 
   @Test
-  void validatesDurations() throws Exception {
+  void validatesDurations() throws ConfigurationException {
     assertEquals(
         Duration.ofSeconds(1), ConfigurationValues.positiveDuration("PT1S", "value"));
     assertMessage(
@@ -108,7 +112,7 @@ class ConfigurationValuesTest {
   }
 
   @Test
-  void validatesUniqueListsAndStringMaps() throws Exception {
+  void validatesUniqueListsAndStringMaps() throws ConfigurationException {
     assertEquals(
         List.of("a", "b"),
         ConfigurationValues.uniqueStringList(List.of("a", "b"), "list", 2));
@@ -130,7 +134,7 @@ class ConfigurationValuesTest {
   }
 
   @Test
-  void normalizesSupportedGatewayScalars() throws Exception {
+  void normalizesSupportedGatewayScalars() throws ConfigurationException {
     assertEquals("text", ConfigurationValues.scalarText("text", "value"));
     assertEquals("true", ConfigurationValues.scalarText(true, "value"));
     assertEquals("42", ConfigurationValues.scalarText(42, "value"));
