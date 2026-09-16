@@ -24,8 +24,7 @@ class RouteAmbiguityTest {
   }
 
   @Test
-  void allowsSamePrecedenceRoutesWhenAConstraintMakesThemDisjoint()
-      throws ConfigurationException {
+  void allowsSamePrecedenceRoutesWhenAConstraintMakesThemDisjoint() throws ConfigurationException {
     RouteTemplateCompiler.compile(
         List.of(
             RouteTemplateTestSupport.route("get", 10, "/x/{id}", "GET", null, null),
@@ -65,8 +64,7 @@ class RouteAmbiguityTest {
             RouteTemplateCompiler.compile(
                 List.of(
                     RouteTemplateTestSupport.route("all", 10, "/x"),
-                    RouteTemplateTestSupport.route(
-                        "host", 10, "/x", null, "Example.COM", null))));
+                    RouteTemplateTestSupport.route("host", 10, "/x", null, "Example.COM", null))));
     assertThrows(
         ConfigurationException.class,
         () ->
@@ -84,10 +82,8 @@ class RouteAmbiguityTest {
         () ->
             RouteTemplateCompiler.compile(
                 List.of(
-                    RouteTemplateTestSupport.route(
-                        "a", 10, "/x", null, "EXAMPLE.COM", null),
-                    RouteTemplateTestSupport.route(
-                        "b", 10, "/x", null, "example.com", null))));
+                    RouteTemplateTestSupport.route("a", 10, "/x", null, "EXAMPLE.COM", null),
+                    RouteTemplateTestSupport.route("b", 10, "/x", null, "example.com", null))));
   }
 
   @Test
