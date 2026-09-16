@@ -130,7 +130,9 @@ class YamlConfigurationSecurityTest {
 
   @Test
   void rejectsEmptyDocument() throws Exception {
-    assertMessage(ConfigurationTestSupport.write(tempDirectory, ""), "mapping");
+    assertMessage(
+        ConfigurationTestSupport.write(tempDirectory, ""),
+        "configuration must contain exactly one complete YAML document");
   }
 
   private void assertMessage(Path path, String expected) {
