@@ -89,8 +89,7 @@ class SemanticKeyPlanBoundaryTest {
     assertThrows(
         IllegalArgumentException.class,
         () ->
-            plan.operation(
-                request(List.of("x=1", "x=2"), null, List.of(SHA)), Map.of("id", "a")));
+            plan.operation(request(List.of("x=1", "x=2"), null, List.of(SHA)), Map.of("id", "a")));
     assertThrows(
         IllegalArgumentException.class,
         () -> plan.operation(request(null, null, List.of(SHA)), Map.of()));
@@ -99,19 +98,15 @@ class SemanticKeyPlanBoundaryTest {
         () -> plan.operation(request(null, null, List.of(SHA)), Map.of("id", "")));
     assertThrows(
         IllegalArgumentException.class,
-        () ->
-            plan.operation(
-                request(List.of("variant=%"), null, List.of(SHA)), Map.of("id", "a")));
+        () -> plan.operation(request(List.of("variant=%"), null, List.of(SHA)), Map.of("id", "a")));
     assertThrows(
         IllegalArgumentException.class,
         () ->
-            plan.operation(
-                request(List.of("variant=%GG"), null, List.of(SHA)), Map.of("id", "a")));
+            plan.operation(request(List.of("variant=%GG"), null, List.of(SHA)), Map.of("id", "a")));
     assertThrows(
         IllegalArgumentException.class,
         () ->
-            plan.operation(
-                request(List.of("variant=a b"), null, List.of(SHA)), Map.of("id", "a")));
+            plan.operation(request(List.of("variant=a b"), null, List.of(SHA)), Map.of("id", "a")));
     assertThrows(
         IllegalArgumentException.class,
         () -> plan.operation(request(null, null, List.of("z".repeat(64))), Map.of("id", "a")));
@@ -147,10 +142,7 @@ class SemanticKeyPlanBoundaryTest {
             request(List.of("variant=%41%30%2D%2E%5F%7E"), null, List.of(SHA)),
             Map.of("id", "%41"));
     String literal =
-        identity(
-            plan,
-            request(List.of("variant=A0-._~"), null, List.of(SHA)),
-            Map.of("id", "A"));
+        identity(plan, request(List.of("variant=A0-._~"), null, List.of(SHA)), Map.of("id", "A"));
 
     assertEquals(encoded, literal);
   }
@@ -162,8 +154,7 @@ class SemanticKeyPlanBoundaryTest {
         withMatch(
             withKey(
                 base,
-                Optional.of(
-                    new ConfigurationModel.KeyConfiguration(List.of(), Optional.empty()))),
+                Optional.of(new ConfigurationModel.KeyConfiguration(List.of(), Optional.empty()))),
             new ConfigurationModel.MatchConfiguration(
                 Optional.of("GET"), Optional.of("example.com"), "/**", Optional.empty()));
     SemanticKeyPlan plan = SemanticKeyPlan.compile(catchAll, Set.of(), "configuration.routes[0]");
@@ -185,8 +176,7 @@ class SemanticKeyPlanBoundaryTest {
         NullPointerException.class,
         () -> SemanticKeyPlan.compile(route, null, "configuration.routes[0]"));
     assertThrows(
-        NullPointerException.class,
-        () -> SemanticKeyPlan.compile(route, Set.of("id"), null));
+        NullPointerException.class, () -> SemanticKeyPlan.compile(route, Set.of("id"), null));
   }
 
   private static void assertInvalidSelector(String selector, String expected)
