@@ -37,9 +37,6 @@ jobs:
       - name: Generate API snapshot
         run: ./gradlew :bounded-origin-cli:apiDump --stacktrace
 
-      - name: Verify CLI
-        run: ./gradlew :bounded-origin-cli:test :bounded-origin-cli:jacocoTestCoverageVerification :bounded-origin-cli:spotbugsMain :bounded-origin-cli:spotbugsTest :bounded-origin-cli:pitest :bounded-origin-cli:apiCheck spotlessCheck --stacktrace
-
       - name: Verify dependency locks
         run: ./scripts/verify-locks.sh
 
@@ -53,6 +50,9 @@ jobs:
           fi
           git commit -m "build: record configuration loader verification state"
           git push origin HEAD:${GITHUB_HEAD_REF}
+
+      - name: Verify CLI
+        run: ./gradlew :bounded-origin-cli:test :bounded-origin-cli:jacocoTestCoverageVerification :bounded-origin-cli:spotbugsMain :bounded-origin-cli:spotbugsTest :bounded-origin-cli:pitest :bounded-origin-cli:apiCheck spotlessCheck --continue --stacktrace
 
       - name: Upload verification reports
         if: always()
