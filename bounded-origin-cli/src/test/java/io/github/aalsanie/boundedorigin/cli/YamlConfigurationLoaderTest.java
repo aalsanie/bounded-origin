@@ -18,9 +18,10 @@ class YamlConfigurationLoaderTest {
   private final YamlConfigurationLoader loader = new YamlConfigurationLoader();
 
   @Test
-  void loadsTypedImmutableConfiguration() throws Exception {
+  void loadsTypedImmutableConfiguration() throws IOException, ConfigurationException {
     var configuration =
-        loader.load(ConfigurationTestSupport.write(tempDirectory, ConfigurationTestSupport.VALID));
+        loader.load(
+            ConfigurationTestSupport.write(tempDirectory, ConfigurationTestSupport.validYaml()));
 
     assertEquals(1, configuration.schema());
     assertEquals("origin.internal", configuration.gateway().get("origin.host"));
@@ -77,7 +78,7 @@ class YamlConfigurationLoaderTest {
   }
 
   @Test
-  void supportsMinimalSafeConfiguration() throws Exception {
+  void supportsMinimalSafeConfiguration() throws IOException, ConfigurationException {
     String yaml =
         """
         schema: 1
@@ -104,10 +105,10 @@ class YamlConfigurationLoaderTest {
   }
 
   @Test
-  void keepsEnvironmentSyntaxLiteral() throws Exception {
+  void keepsEnvironmentSyntaxLiteral() throws IOException, ConfigurationException {
     String yaml =
         ConfigurationTestSupport.replace(
-            ConfigurationTestSupport.VALID, "origin.internal", "${ORIGIN_HOST}");
+            ConfigurationTestSupport.validYaml(), "origin.internal", "${ORIGIN_HOST}");
 
     var configuration = loader.load(ConfigurationTestSupport.write(tempDirectory, yaml));
 
@@ -121,7 +122,7 @@ class YamlConfigurationLoaderTest {
   }
 
   @Test
-  void rejectsInvalidUtf8() throws Exception {
+  void rejectsInvalidUtf8() throws IOException {
     Path path = tempDirectory.resolve("config.yaml");
     Files.write(path, new byte[] {(byte) 0xc3, (byte) 0x28});
 
