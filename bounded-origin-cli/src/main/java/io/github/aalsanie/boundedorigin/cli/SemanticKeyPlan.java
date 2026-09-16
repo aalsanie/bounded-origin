@@ -66,9 +66,6 @@ final class SemanticKeyPlan {
       throw new ConfigurationException(path + ".key is required for keyed strategy");
     }
     ConfigurationModel.KeyConfiguration key = route.key().orElseThrow();
-    if (key.path() == null) {
-      throw new ConfigurationException(path + ".key.path must not be null");
-    }
 
     Set<String> configuredPath = new HashSet<>(key.path());
     if (configuredPath.size() != key.path().size()) {
@@ -88,17 +85,11 @@ final class SemanticKeyPlan {
     }
 
     List<String> orderedCaptures = key.path().stream().sorted().toList();
-    if (key.query() == null) {
-      throw new ConfigurationException(path + ".key.query must not be null");
-    }
     boolean rawQuery = key.query().isEmpty();
     boolean orderIndependent = false;
     Set<String> selectedQueryNames = new HashSet<>();
     if (key.query().isPresent()) {
       ConfigurationModel.QueryKeyConfiguration query = key.query().orElseThrow();
-      if (query.include() == null) {
-        throw new ConfigurationException(path + ".key.query.include must not be null");
-      }
       orderIndependent = query.orderIndependent();
       for (String name : query.include()) {
         String normalized = normalizeConfiguredQueryName(name, path + ".key.query.include");
@@ -230,7 +221,7 @@ final class SemanticKeyPlan {
 
   private static String normalizeConfiguredQueryName(String value, String path)
       throws ConfigurationException {
-    if (value == null || value.isBlank()) {
+    if (value.isBlank()) {
       throw new ConfigurationException(path + " contains a blank query name");
     }
     for (int index = 0; index < value.length(); index++) {
@@ -325,7 +316,7 @@ final class SemanticKeyPlan {
     if (values == null || values.size() != 1) {
       throw new IllegalArgumentException(name + " must contain exactly one value");
     }
-    return Objects.requireNonNull(values.getFirst(), name + " value");
+    return values.getFirst();
   }
 
   private static Optional<String> optionalSingleAttribute(RequestDescriptor request, String name) {
@@ -336,7 +327,7 @@ final class SemanticKeyPlan {
     if (values.size() != 1) {
       throw new IllegalArgumentException(name + " must contain exactly one value");
     }
-    return Optional.of(Objects.requireNonNull(values.getFirst(), name + " value"));
+    return Optional.of(values.getFirst());
   }
 
   private static boolean hasCatchAll(String template) {
