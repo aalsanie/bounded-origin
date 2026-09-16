@@ -22,9 +22,7 @@ class RouteTemplatePropertyTest {
               List.of(RouteTemplateTestSupport.route("route", 1, template)));
 
       CompiledRouteTable.Match match =
-          table
-              .match("GET", "example.com", path, ConfigurationModel.Trust.UNTRUSTED)
-              .orElseThrow();
+          table.match("GET", "example.com", path, ConfigurationModel.Trust.UNTRUSTED).orElseThrow();
       assertEquals(value, match.pathCaptures().get("value"));
       assertTrue(
           table
@@ -38,12 +36,10 @@ class RouteTemplatePropertyTest {
   }
 
   @Test
-  void routeSelectionIsStableAcrossGeneratedFileOrderPermutations()
-      throws ConfigurationException {
+  void routeSelectionIsStableAcrossGeneratedFileOrderPermutations() throws ConfigurationException {
     List<ConfigurationModel.RouteConfiguration> routes = new ArrayList<>();
     for (int index = 0; index < 40; index++) {
-      routes.add(
-          RouteTemplateTestSupport.route("route-" + index, index, "/r" + index + "/{id}"));
+      routes.add(RouteTemplateTestSupport.route("route-" + index, index, "/r" + index + "/{id}"));
     }
 
     for (int seed = 0; seed < 20; seed++) {
