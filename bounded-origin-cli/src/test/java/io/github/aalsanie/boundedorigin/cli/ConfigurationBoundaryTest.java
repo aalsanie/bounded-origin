@@ -103,7 +103,7 @@ class ConfigurationBoundaryTest {
   }
 
   @Test
-  void normalizesGatewayScalars() throws Exception {
+  void normalizesGatewayScalars() throws ConfigurationException {
     var fixture = ConfigurationTestSupport.objectFixture();
 
     var configuration = ConfigurationDecoder.decode(fixture.root());
@@ -132,7 +132,7 @@ class ConfigurationBoundaryTest {
   }
 
   @Test
-  void suppliesDefaultsForOptionalKeyAndClientStructures() throws Exception {
+  void suppliesDefaultsForOptionalKeyAndClientStructures() throws ConfigurationException {
     var fixture = ConfigurationTestSupport.objectFixture();
     fixture.renderKey().remove("path");
     fixture.renderKey().put("query", new java.util.LinkedHashMap<String, Object>());
@@ -149,7 +149,7 @@ class ConfigurationBoundaryTest {
   }
 
   @Test
-  void supportsKeyWithoutQueryAndQueryWithoutOrderFlag() throws Exception {
+  void supportsKeyWithoutQueryAndQueryWithoutOrderFlag() throws ConfigurationException {
     var withoutQuery = ConfigurationTestSupport.objectFixture();
     withoutQuery.renderKey().remove("query");
     var first = ConfigurationDecoder.decode(withoutQuery.root());
