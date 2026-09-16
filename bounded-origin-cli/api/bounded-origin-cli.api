@@ -1,4 +1,12 @@
 # bounded-origin-cli public API
+final class io.github.aalsanie.boundedorigin.cli.CompiledPathTemplate {
+}
+final class io.github.aalsanie.boundedorigin.cli.CompiledPathTemplate$Segment {
+}
+final class io.github.aalsanie.boundedorigin.cli.CompiledRouteTable {
+}
+final class io.github.aalsanie.boundedorigin.cli.CompiledRouteTable$Match {
+}
 final class io.github.aalsanie.boundedorigin.cli.ConfigurationDecoder {
 }
 final class io.github.aalsanie.boundedorigin.cli.ConfigurationException extends java.lang.Exception {
@@ -108,6 +116,10 @@ final class io.github.aalsanie.boundedorigin.cli.ConfigurationValues {
 final class io.github.aalsanie.boundedorigin.cli.GatewayConfigurationValidator {
 }
 final class io.github.aalsanie.boundedorigin.cli.RouteConfigurationDecoder {
+}
+final class io.github.aalsanie.boundedorigin.cli.RouteTemplateCompiler {
+}
+final class io.github.aalsanie.boundedorigin.cli.RouteTemplateCompiler$CompiledRoute {
 }
 final class io.github.aalsanie.boundedorigin.cli.YamlConfigurationLoader {
 }
