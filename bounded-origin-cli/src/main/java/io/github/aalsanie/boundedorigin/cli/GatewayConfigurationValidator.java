@@ -156,7 +156,10 @@ final class GatewayConfigurationValidator {
         throw new ConfigurationException(path + " must be a positive duration");
       }
       try {
-        duration.toNanos();
+        long nanos = duration.toNanos();
+        if (nanos <= 0) {
+          throw new ConfigurationException(path + " must be at least one nanosecond");
+        }
       } catch (ArithmeticException exception) {
         throw new ConfigurationException(path + " is too large", exception);
       }
