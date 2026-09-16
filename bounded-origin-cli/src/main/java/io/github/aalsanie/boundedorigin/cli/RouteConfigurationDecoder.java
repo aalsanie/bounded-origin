@@ -92,10 +92,12 @@ final class RouteConfigurationDecoder {
                 keyPath + ".path",
                 ConfigurationLimits.MAX_DIMENSIONS)
             : java.util.List.<String>of();
-    ConfigurationModel.QueryKeyConfiguration query =
+    Optional<ConfigurationModel.QueryKeyConfiguration> query =
         source.containsKey("query")
-            ? parseQuery(ConfigurationValues.required(source, "query", keyPath), keyPath + ".query")
-            : new ConfigurationModel.QueryKeyConfiguration(java.util.List.of(), false);
+            ? Optional.of(
+                parseQuery(
+                    ConfigurationValues.required(source, "query", keyPath), keyPath + ".query"))
+            : Optional.empty();
     return Optional.of(new ConfigurationModel.KeyConfiguration(pathDimensions, query));
   }
 
