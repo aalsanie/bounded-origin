@@ -22,11 +22,11 @@ class YamlConfigurationSecurityTest {
   }
 
   @Test
-  void acceptsMaximumDocumentSizeBeforeSchemaValidation() throws Exception {
+  void enforcesStructuralLimitsAtMaximumDocumentSize() throws Exception {
     Path path = tempDirectory.resolve("config.yaml");
     Files.writeString(path, "x".repeat(ConfigurationLimits.MAX_BYTES));
 
-    assertMessage(path, "mapping");
+    assertMessage(path, "scalar");
   }
 
   @Test
