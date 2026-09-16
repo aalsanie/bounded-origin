@@ -14,7 +14,6 @@ import io.github.aalsanie.boundedorigin.api.RequestDescriptor;
 import io.github.aalsanie.boundedorigin.api.TrustLevel;
 import io.github.aalsanie.boundedorigin.core.PolicyEngine;
 import java.time.Duration;
-import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -45,6 +44,7 @@ class PolicyConfigurationCompilerTest {
     OriginDecision.Selected materialized =
         assertSelected(engine, "/materialize/a", ExecutionStrategy.MATERIALIZE);
     assertEquals(2, materialized.policy().budget().orElseThrow().maxActive());
+
     OriginDecision.Selected client =
         assertSelected(engine, "/client-compute/a", ExecutionStrategy.CLIENT_COMPUTE);
     ClientComputation computation = client.policy().clientComputation().orElseThrow();
@@ -65,11 +65,11 @@ class PolicyConfigurationCompilerTest {
 
   @Test
   void trustComesOnlyFromRequestDescriptorTrustLevel() throws ConfigurationException {
-    ConfigurationModel.RuntimeConfiguration base = baseConfiguration();
     ConfigurationModel.RouteConfiguration route =
         keyedRoute("artifact", "/artifact/{id}", 100, ConfigurationModel.Strategy.ARTIFACT_ONLY);
     PolicyEngine engine =
-        PolicyConfigurationCompiler.compile(withRoutes(base, List.of(route)), GLOBAL_BUDGET);
+        PolicyConfigurationCompiler.compile(
+            withRoutes(baseConfiguration(), List.of(route)), GLOBAL_BUDGET);
 
     OriginDecision.Selected untrusted =
         assertInstanceOf(
@@ -90,12 +90,27 @@ class PolicyConfigurationCompilerTest {
         keyedRoute("artifact", "/artifact/{id}", 100, ConfigurationModel.Strategy.ARTIFACT_ONLY);
     ConfigurationModel.RouteConfiguration bounded =
         boundedRoute("bounded", "/bounded/{id}", 100, ConfigurationModel.Strategy.BOUNDED_COMPUTE);
+    ConfigurationModel.RouteConfiguration materialize =
+        boundedRoute("materialize", "/materialize/{id}", 100, ConfigurationModel.Strategy.MATERIALIZE);
     ConfigurationModel.RouteConfiguration client = clientRoute("client", "/client/{id}", 100);
     ConfigurationModel.RouteConfiguration deny = denyRoute("deny", "/deny/{id}", 100);
 
     assertCompileFailure(
-        copy(artifact, artifact.key(), artifact.materializerVersion(), Optional.of(policyBudget()), Optional.empty()),
+        copy(
+            artifact,
+            artifact.key(),
+            artifact.materializerVersion(),
+            Optional.of(policyBudget()),
+            Optional.empty()),
         "budget is not allowed for ARTIFACT_ONLY");
+    assertCompileFailure(
+        copy(
+            artifact,
+            artifact.key(),
+            artifact.materializerVersion(),
+            Optional.empty(),
+            Optional.of(clientComputation())),
+        "client-computation is not allowed for ARTIFACT_ONLY");
     assertCompileFailure(
         copy(bounded, bounded.key(), bounded.materializerVersion(), Optional.empty(), Optional.empty()),
         "budget is required for BOUNDED_COMPUTE");
@@ -108,26 +123,60 @@ class PolicyConfigurationCompilerTest {
             Optional.of(clientComputation())),
         "client-computation is not allowed for BOUNDED_COMPUTE");
     assertCompileFailure(
+        copy(
+            materialize,
+            materialize.key(),
+            materialize.materializerVersion(),
+            Optional.empty(),
+            Optional.empty()),
+        "budget is required for MATERIALIZE");
+    assertCompileFailure(
         copy(client, client.key(), client.materializerVersion(), Optional.empty(), Optional.empty()),
         "client-computation is required for CLIENT_COMPUTE");
     assertCompileFailure(
-        copy(client, client.key(), client.materializerVersion(), Optional.of(policyBudget()), client.clientComputation()),
+        copy(
+            client,
+            client.key(),
+            client.materializerVersion(),
+            Optional.of(policyBudget()),
+            client.clientComputation()),
         "budget is not allowed for CLIENT_COMPUTE");
     assertCompileFailure(
-        copy(deny, keyedIdentity(), Optional.of("v1"), Optional.empty(), Optional.empty()),
+        copy(deny, keyedIdentity(), Optional.empty(), Optional.empty(), Optional.empty()),
         "key is not allowed for DENY");
+    assertCompileFailure(
+        copy(deny, Optional.empty(), Optional.of("v1"), Optional.empty(), Optional.empty()),
+        "materializer-version is not allowed for DENY");
+    assertCompileFailure(
+        copy(deny, Optional.empty(), Optional.empty(), Optional.of(policyBudget()), Optional.empty()),
+        "budget is not allowed for DENY");
+    assertCompileFailure(
+        copy(
+            deny,
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.of(clientComputation())),
+        "client-computation is not allowed for DENY");
     assertCompileFailure(
         copy(artifact, Optional.empty(), artifact.materializerVersion(), Optional.empty(), Optional.empty()),
         "key is required for ARTIFACT_ONLY");
     assertCompileFailure(
         copy(artifact, artifact.key(), Optional.empty(), Optional.empty(), Optional.empty()),
         "materializer-version is required for ARTIFACT_ONLY");
+    assertCompileFailure(
+        copy(artifact, artifact.key(), Optional.of(" "), Optional.empty(), Optional.empty()),
+        "materializer-version must not be blank");
   }
 
   @Test
   void rejectsEveryPolicyBudgetThatExceedsGlobalLimit() throws ConfigurationException {
-    assertBudgetFailure(new ConfigurationModel.BudgetConfiguration(9, 1, Duration.ofSeconds(1), 1), "max-active");
-    assertBudgetFailure(new ConfigurationModel.BudgetConfiguration(1, 65, Duration.ofSeconds(1), 1), "max-queued");
+    assertBudgetFailure(
+        new ConfigurationModel.BudgetConfiguration(9, 1, Duration.ofSeconds(1), 1),
+        "max-active");
+    assertBudgetFailure(
+        new ConfigurationModel.BudgetConfiguration(1, 65, Duration.ofSeconds(1), 1),
+        "max-queued");
     assertBudgetFailure(
         new ConfigurationModel.BudgetConfiguration(1, 1, Duration.ofSeconds(21), 1),
         "max-execution-duration");
@@ -138,7 +187,7 @@ class PolicyConfigurationCompilerTest {
 
   @Test
   void acceptsPolicyBudgetExactlyAtGlobalLimits() throws ConfigurationException {
-    ConfigurationModel.RouteConfiguration route =
+    ConfigurationModel.RouteConfiguration baseRoute =
         boundedRoute("bounded", "/bounded/{id}", 100, ConfigurationModel.Strategy.BOUNDED_COMPUTE);
     ConfigurationModel.BudgetConfiguration exact =
         new ConfigurationModel.BudgetConfiguration(
@@ -146,7 +195,13 @@ class PolicyConfigurationCompilerTest {
             GLOBAL_BUDGET.maxQueued(),
             GLOBAL_BUDGET.timeout(),
             GLOBAL_BUDGET.maxResultBytes());
-    route = copy(route, route.key(), route.materializerVersion(), Optional.of(exact), Optional.empty());
+    ConfigurationModel.RouteConfiguration route =
+        copy(
+            baseRoute,
+            baseRoute.key(),
+            baseRoute.materializerVersion(),
+            Optional.of(exact),
+            Optional.empty());
 
     PolicyEngine engine =
         PolicyConfigurationCompiler.compile(
@@ -158,36 +213,100 @@ class PolicyConfigurationCompilerTest {
   }
 
   @Test
+  void invalidTypedBudgetFailsAsConfigurationError() throws ConfigurationException {
+    ConfigurationModel.RouteConfiguration baseRoute =
+        boundedRoute("bounded", "/bounded/{id}", 100, ConfigurationModel.Strategy.BOUNDED_COMPUTE);
+    ConfigurationModel.BudgetConfiguration invalid =
+        new ConfigurationModel.BudgetConfiguration(0, 1, Duration.ofSeconds(1), 1);
+    ConfigurationModel.RouteConfiguration route =
+        copy(
+            baseRoute,
+            baseRoute.key(),
+            baseRoute.materializerVersion(),
+            Optional.of(invalid),
+            Optional.empty());
+
+    assertCompileFailure(route, "budget is invalid");
+  }
+
+  @Test
   void rejectsUnsafeFallbacksAndImpossiblePrecedence() throws ConfigurationException {
     ConfigurationModel.RuntimeConfiguration base = baseConfiguration();
     ConfigurationModel.RouteConfiguration route =
         keyedRoute("artifact", "/artifact/{id}", 100, ConfigurationModel.Strategy.ARTIFACT_ONLY);
 
-    ConfigurationModel.FallbackConfiguration unsafe =
-        new ConfigurationModel.FallbackConfiguration(
-            "default-deny", 1, Integer.MIN_VALUE, ConfigurationModel.Strategy.MATERIALIZE);
-    assertConfigurationFailure(withFallback(withRoutes(base, List.of(route)), unsafe), "strategy must be DENY");
-
-    ConfigurationModel.FallbackConfiguration peer =
-        new ConfigurationModel.FallbackConfiguration("default-deny", 1, 100, ConfigurationModel.Strategy.DENY);
     assertConfigurationFailure(
-        withFallback(withRoutes(base, List.of(route)), peer),
-        "precedence must exceed configuration.fallback.precedence");
-
-    ConfigurationModel.FallbackConfiguration duplicate =
-        new ConfigurationModel.FallbackConfiguration("artifact", 1, Integer.MIN_VALUE, ConfigurationModel.Strategy.DENY);
-    assertConfigurationFailure(withFallback(withRoutes(base, List.of(route)), duplicate), "duplicate policy id artifact");
-
-    ConfigurationModel.FallbackConfiguration invalidVersion =
-        new ConfigurationModel.FallbackConfiguration("default-deny", -1, Integer.MIN_VALUE, ConfigurationModel.Strategy.DENY);
+        new ConfigurationModel.RuntimeConfiguration(
+            base.schema(), base.gateway(), base.store(), List.of(route), null),
+        "fallback must not be null");
     assertConfigurationFailure(
-        withFallback(withRoutes(base, List.of(route)), invalidVersion),
+        withFallback(
+            withRoutes(base, List.of(route)),
+            new ConfigurationModel.FallbackConfiguration(
+                " ", 1, Integer.MIN_VALUE, ConfigurationModel.Strategy.DENY)),
+        "fallback.id must not be blank");
+    assertConfigurationFailure(
+        withFallback(
+            withRoutes(base, List.of(route)),
+            new ConfigurationModel.FallbackConfiguration(
+                "default-deny", -1, Integer.MIN_VALUE, ConfigurationModel.Strategy.DENY)),
         "fallback.version must be non-negative");
+    assertConfigurationFailure(
+        withFallback(
+            withRoutes(base, List.of(route)),
+            new ConfigurationModel.FallbackConfiguration(
+                "default-deny", 1, Integer.MIN_VALUE, ConfigurationModel.Strategy.MATERIALIZE)),
+        "strategy must be DENY");
+    assertConfigurationFailure(
+        withFallback(
+            withRoutes(base, List.of(route)),
+            new ConfigurationModel.FallbackConfiguration(
+                "default-deny", 1, 100, ConfigurationModel.Strategy.DENY)),
+        "precedence must exceed configuration.fallback.precedence");
+    assertConfigurationFailure(
+        withFallback(
+            withRoutes(base, List.of(route)),
+            new ConfigurationModel.FallbackConfiguration(
+                "artifact", 1, Integer.MIN_VALUE, ConfigurationModel.Strategy.DENY)),
+        "duplicate policy id artifact");
   }
 
   @Test
-  void rejectsAmbiguousSamePrecedenceRoutesBeforeEngineConstruction() throws ConfigurationException {
-    ConfigurationModel.RuntimeConfiguration base = baseConfiguration();
+  void rejectsMalformedRouteShapes() throws ConfigurationException {
+    ConfigurationModel.RouteConfiguration base =
+        keyedRoute("artifact", "/artifact/{id}", 100, ConfigurationModel.Strategy.ARTIFACT_ONLY);
+
+    assertCompileFailure(withIdentity(base, null, 1, base.strategy()), ".id must not be blank");
+    assertCompileFailure(withIdentity(base, " ", 1, base.strategy()), ".id must not be blank");
+    assertCompileFailure(withIdentity(base, "artifact", -1, base.strategy()), ".version must be non-negative");
+    assertCompileFailure(withIdentity(base, "artifact", 1, null), ".strategy must not be null");
+    assertCompileFailure(
+        new ConfigurationModel.RouteConfiguration(
+            base.id(),
+            base.version(),
+            base.precedence(),
+            base.match(),
+            base.strategy(),
+            null,
+            base.materializerVersion(),
+            base.budget(),
+            base.clientComputation()),
+        "optional policy fields must not be null");
+  }
+
+  @Test
+  void rejectsNullCompilerInputs() throws ConfigurationException {
+    assertConfigurationFailure(null, "configuration must not be null");
+    ConfigurationException failure =
+        assertThrows(
+            ConfigurationException.class,
+            () -> PolicyConfigurationCompiler.compile(baseConfiguration(), null));
+    assertTrue(failure.getMessage().contains("global budget must not be null"));
+  }
+
+  @Test
+  void rejectsAmbiguousSamePrecedenceRoutesBeforeEngineConstruction()
+      throws ConfigurationException {
     ConfigurationModel.RouteConfiguration first =
         keyedRoute("first", "/same/{id}", 100, ConfigurationModel.Strategy.ARTIFACT_ONLY);
     ConfigurationModel.RouteConfiguration second =
@@ -198,21 +317,20 @@ class PolicyConfigurationCompilerTest {
             ConfigurationException.class,
             () ->
                 PolicyConfigurationCompiler.compile(
-                    withRoutes(base, List.of(first, second)), GLOBAL_BUDGET));
+                    withRoutes(baseConfiguration(), List.of(first, second)), GLOBAL_BUDGET));
 
     assertTrue(failure.getMessage().contains("ambiguous same-precedence overlap"));
   }
 
   @Test
   void malformedMatchedRequestFailsClosedToPolicyError() throws ConfigurationException {
-    ConfigurationModel.RuntimeConfiguration base = baseConfiguration();
     ConfigurationModel.RouteConfiguration lower =
         keyedRoute("lower", "/lower/{id}", 100, ConfigurationModel.Strategy.ARTIFACT_ONLY);
     ConfigurationModel.RouteConfiguration higher =
         keyedRoute("higher", "/higher/{id}", 200, ConfigurationModel.Strategy.ARTIFACT_ONLY);
     PolicyEngine engine =
         PolicyConfigurationCompiler.compile(
-            withRoutes(base, List.of(lower, higher)), GLOBAL_BUDGET);
+            withRoutes(baseConfiguration(), List.of(lower, higher)), GLOBAL_BUDGET);
     Map<String, List<String>> attributes = new LinkedHashMap<>();
     attributes.put("method", List.of("GET"));
     attributes.put("path", List.of("/higher/a"));
@@ -250,13 +368,14 @@ class PolicyConfigurationCompilerTest {
     PolicyEngine engine =
         PolicyConfigurationCompiler.compile(
             withRoutes(baseConfiguration(), List.of(route)), GLOBAL_BUDGET);
-    Map<String, List<String>> attributes =
-        Map.of(
-            "method", List.of("GET"),
-            "host", List.of("example.com"),
-            "path", List.of("/deny/a"));
     RequestDescriptor request =
-        new RequestDescriptor("http.request", attributes, TrustLevel.UNTRUSTED);
+        new RequestDescriptor(
+            "http.request",
+            Map.of(
+                "method", List.of("GET"),
+                "host", List.of("example.com"),
+                "path", List.of("/deny/a")),
+            TrustLevel.UNTRUSTED);
 
     OriginDecision.Denied denied =
         assertInstanceOf(OriginDecision.Denied.class, engine.evaluate(request));
@@ -272,10 +391,11 @@ class PolicyConfigurationCompilerTest {
     PolicyEngine engine =
         PolicyConfigurationCompiler.compile(
             withRoutes(baseConfiguration(), List.of(route)), GLOBAL_BUDGET);
-    RequestDescriptor request = request("/artifact/a", TrustLevel.UNTRUSTED, false, "bad");
 
     OriginDecision.Denied denied =
-        assertInstanceOf(OriginDecision.Denied.class, engine.evaluate(request));
+        assertInstanceOf(
+            OriginDecision.Denied.class,
+            engine.evaluate(request("/artifact/a", TrustLevel.UNTRUSTED, false, "bad")));
 
     assertEquals(DenialReason.POLICY_ERROR, denied.reason());
     assertEquals(List.of("artifact"), denied.policyIds());
@@ -291,9 +411,15 @@ class PolicyConfigurationCompilerTest {
 
   private static void assertBudgetFailure(
       ConfigurationModel.BudgetConfiguration budget, String field) throws ConfigurationException {
-    ConfigurationModel.RouteConfiguration route =
+    ConfigurationModel.RouteConfiguration baseRoute =
         boundedRoute("bounded", "/bounded/{id}", 100, ConfigurationModel.Strategy.BOUNDED_COMPUTE);
-    route = copy(route, route.key(), route.materializerVersion(), Optional.of(budget), Optional.empty());
+    ConfigurationModel.RouteConfiguration route =
+        copy(
+            baseRoute,
+            baseRoute.key(),
+            baseRoute.materializerVersion(),
+            Optional.of(budget),
+            Optional.empty());
     ConfigurationException failure =
         assertThrows(
             ConfigurationException.class,
@@ -419,6 +545,23 @@ class PolicyConfigurationCompilerTest {
         materializerVersion,
         budget,
         clientComputation);
+  }
+
+  private static ConfigurationModel.RouteConfiguration withIdentity(
+      ConfigurationModel.RouteConfiguration route,
+      String id,
+      long version,
+      ConfigurationModel.Strategy strategy) {
+    return new ConfigurationModel.RouteConfiguration(
+        id,
+        version,
+        route.precedence(),
+        route.match(),
+        strategy,
+        route.key(),
+        route.materializerVersion(),
+        route.budget(),
+        route.clientComputation());
   }
 
   private static ConfigurationModel.MatchConfiguration match(String path) {
