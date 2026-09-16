@@ -3,6 +3,7 @@ package io.github.aalsanie.boundedorigin.cli;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
@@ -14,7 +15,7 @@ class YamlConfigurationSecurityTest {
   private final YamlConfigurationLoader loader = new YamlConfigurationLoader();
 
   @Test
-  void rejectsOversizedDocument() throws Exception {
+  void rejectsOversizedDocument() throws IOException {
     Path path = tempDirectory.resolve("config.yaml");
     Files.writeString(path, "x".repeat(ConfigurationLimits.MAX_BYTES + 1));
 
@@ -22,7 +23,7 @@ class YamlConfigurationSecurityTest {
   }
 
   @Test
-  void enforcesStructuralLimitsAtMaximumDocumentSize() throws Exception {
+  void enforcesStructuralLimitsAtMaximumDocumentSize() throws IOException {
     Path path = tempDirectory.resolve("config.yaml");
     Files.writeString(path, "x".repeat(ConfigurationLimits.MAX_BYTES));
 
@@ -30,14 +31,14 @@ class YamlConfigurationSecurityTest {
   }
 
   @Test
-  void rejectsDuplicateYamlKeys() throws Exception {
+  void rejectsDuplicateYamlKeys() throws IOException {
     String yaml =
-        ConfigurationTestSupport.VALID.replace("schema: 1\n", "schema: 1\nschema: 1\n");
+        ConfigurationTestSupport.validYaml().replace("schema: 1\n", "schema: 1\nschema: 1\n");
     assertMessage(ConfigurationTestSupport.write(tempDirectory, yaml), "invalid YAML");
   }
 
   @Test
-  void rejectsAliasesAndAnchors() throws Exception {
+  void rejectsAliasesAndAnchors() {
     String yaml =
         """
         schema: 1
@@ -63,25 +64,25 @@ class YamlConfigurationSecurityTest {
   }
 
   @Test
-  void rejectsExplicitNodeTags() throws Exception {
-    String yaml = ConfigurationTestSupport.VALID.replace("schema: 1", "schema: !!int 1");
+  void rejectsExplicitNodeTags() throws IOException {
+    String yaml = ConfigurationTestSupport.validYaml().replace("schema: 1", "schema: !!int 1");
     assertMessage(ConfigurationTestSupport.write(tempDirectory, yaml), "tags");
   }
 
   @Test
-  void rejectsYamlDirectives() throws Exception {
-    String yaml = "%YAML 1.2\n---\n" + ConfigurationTestSupport.VALID;
+  void rejectsYamlDirectives() throws IOException {
+    String yaml = "%YAML 1.2\n---\n" + ConfigurationTestSupport.validYaml();
     assertMessage(ConfigurationTestSupport.write(tempDirectory, yaml), "directives");
   }
 
   @Test
-  void rejectsMultipleDocuments() throws Exception {
-    String yaml = ConfigurationTestSupport.VALID + "\n---\n{}\n";
+  void rejectsMultipleDocuments() throws IOException {
+    String yaml = ConfigurationTestSupport.validYaml() + "\n---\n{}\n";
     assertMessage(ConfigurationTestSupport.write(tempDirectory, yaml), "exactly one YAML document");
   }
 
   @Test
-  void rejectsExcessiveNesting() throws Exception {
+  void rejectsExcessiveNesting() throws IOException {
     StringBuilder yaml = new StringBuilder();
     for (int index = 0; index <= ConfigurationLimits.MAX_DEPTH; index++) {
       yaml.append("[");
@@ -94,13 +95,13 @@ class YamlConfigurationSecurityTest {
   }
 
   @Test
-  void rejectsOversizedScalar() throws Exception {
+  void rejectsOversizedScalar() throws IOException {
     String yaml = "key: " + "x".repeat(ConfigurationLimits.MAX_SCALAR_CODE_POINTS + 1);
     assertMessage(ConfigurationTestSupport.write(tempDirectory, yaml), "scalar");
   }
 
   @Test
-  void rejectsOversizedCollection() throws Exception {
+  void rejectsOversizedCollection() throws IOException {
     StringBuilder yaml = new StringBuilder("[\n");
     for (int index = 0; index <= ConfigurationLimits.MAX_COLLECTION_NODES; index++) {
       yaml.append("0,");
@@ -110,7 +111,7 @@ class YamlConfigurationSecurityTest {
   }
 
   @Test
-  void rejectsExcessiveTotalNodeCount() throws Exception {
+  void rejectsExcessiveTotalNodeCount() throws IOException {
     StringBuilder yaml = new StringBuilder("[\n");
     for (int group = 0; group < 5; group++) {
       yaml.append("[");
@@ -124,12 +125,12 @@ class YamlConfigurationSecurityTest {
   }
 
   @Test
-  void rejectsMalformedYaml() throws Exception {
+  void rejectsMalformedYaml() throws IOException {
     assertMessage(ConfigurationTestSupport.write(tempDirectory, "[unterminated"), "invalid YAML");
   }
 
   @Test
-  void rejectsEmptyDocument() throws Exception {
+  void rejectsEmptyDocument() throws IOException {
     assertMessage(
         ConfigurationTestSupport.write(tempDirectory, ""),
         "configuration must contain exactly one complete YAML document");
