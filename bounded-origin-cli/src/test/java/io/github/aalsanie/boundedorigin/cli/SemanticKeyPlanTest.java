@@ -26,12 +26,20 @@ class SemanticKeyPlanTest {
     String first =
         identity(
             plan,
-            request("GET", "example.com", "/render/%41", "ignored=x&variant=%7e&variant=a+b&variant"),
+            request(
+                "GET",
+                "example.com",
+                "/render/%41",
+                "ignored=x&variant=%7e&variant=a+b&variant"),
             Map.of("id", "%41"));
     String reordered =
         identity(
             plan,
-            request("GET", "example.com", "/render/A", "variant&variant=a+b&variant=~&ignored=y"),
+            request(
+                "GET",
+                "example.com",
+                "/render/A",
+                "variant&variant=a+b&variant=~&ignored=y"),
             Map.of("id", "A"));
     String fewer =
         identity(
@@ -95,7 +103,8 @@ class SemanticKeyPlanTest {
   void preservesRawQueryWhenSelectedModeIsAbsent() throws ConfigurationException {
     var fixture = ConfigurationTestSupport.objectFixture();
     fixture.renderKey().remove("query");
-    ConfigurationModel.RouteConfiguration route = ConfigurationDecoder.decode(fixture.root()).routes().getFirst();
+    ConfigurationModel.RouteConfiguration route =
+        ConfigurationDecoder.decode(fixture.root()).routes().getFirst();
     SemanticKeyPlan plan = compile(route);
 
     String first =
@@ -180,7 +189,8 @@ class SemanticKeyPlanTest {
         identity(plan, request("GET", "example.com", "/render/a", "variant=x"), captures);
     String method =
         identity(plan, request("POST", "example.com", "/render/a", "variant=x"), captures);
-    String host = identity(plan, request("GET", "other.example", "/render/a", "variant=x"), captures);
+    String host =
+        identity(plan, request("GET", "other.example", "/render/a", "variant=x"), captures);
     String trust =
         identity(
             plan,
@@ -219,7 +229,13 @@ class SemanticKeyPlanTest {
     String lower =
         identity(
             plan,
-            request("GET", "example.com", "/render/a", "variant=x", BODY_A, TrustLevel.UNTRUSTED),
+            request(
+                "GET",
+                "example.com",
+                "/render/a",
+                "variant=x",
+                BODY_A,
+                TrustLevel.UNTRUSTED),
             captures);
     String upper =
         identity(
@@ -235,7 +251,13 @@ class SemanticKeyPlanTest {
     String other =
         identity(
             plan,
-            request("GET", "example.com", "/render/a", "variant=x", BODY_B, TrustLevel.UNTRUSTED),
+            request(
+                "GET",
+                "example.com",
+                "/render/a",
+                "variant=x",
+                BODY_B,
+                TrustLevel.UNTRUSTED),
             captures);
 
     assertEquals(lower, upper);
@@ -368,8 +390,7 @@ class SemanticKeyPlanTest {
         route.clientComputation());
   }
 
-  private static RequestDescriptor request(
-      String method, String host, String path, String query) {
+  private static RequestDescriptor request(String method, String host, String path, String query) {
     return request(method, host, path, query, BODY_A, TrustLevel.UNTRUSTED);
   }
 
