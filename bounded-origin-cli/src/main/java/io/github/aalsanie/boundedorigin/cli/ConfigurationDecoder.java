@@ -90,6 +90,7 @@ final class ConfigurationDecoder {
           ConfigurationValues.scalarText(
               entry.getValue(), "configuration.gateway." + entry.getKey()));
     }
+    GatewayConfigurationValidator.validate(result);
     return Map.copyOf(result);
   }
 
