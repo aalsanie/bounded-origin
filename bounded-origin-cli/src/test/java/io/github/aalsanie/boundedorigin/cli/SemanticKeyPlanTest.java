@@ -11,7 +11,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 import org.junit.jupiter.api.Test;
 
 class SemanticKeyPlanTest {
@@ -27,19 +26,12 @@ class SemanticKeyPlanTest {
         identity(
             plan,
             request(
-                "GET",
-                "example.com",
-                "/render/%41",
-                "ignored=x&variant=%7e&variant=a+b&variant"),
+                "GET", "example.com", "/render/%41", "ignored=x&variant=%7e&variant=a+b&variant"),
             Map.of("id", "%41"));
     String reordered =
         identity(
             plan,
-            request(
-                "GET",
-                "example.com",
-                "/render/A",
-                "variant&variant=a+b&variant=~&ignored=y"),
+            request("GET", "example.com", "/render/A", "variant&variant=a+b&variant=~&ignored=y"),
             Map.of("id", "A"));
     String fewer =
         identity(
@@ -56,15 +48,9 @@ class SemanticKeyPlanTest {
     SemanticKeyPlan plan = compile(renderRoute());
 
     String missingEquals =
-        identity(
-            plan,
-            request("GET", "example.com", "/render/a", "variant"),
-            Map.of("id", "a"));
+        identity(plan, request("GET", "example.com", "/render/a", "variant"), Map.of("id", "a"));
     String emptyValue =
-        identity(
-            plan,
-            request("GET", "example.com", "/render/a", "variant="),
-            Map.of("id", "a"));
+        identity(plan, request("GET", "example.com", "/render/a", "variant="), Map.of("id", "a"));
 
     assertNotEquals(missingEquals, emptyValue);
   }
@@ -76,24 +62,16 @@ class SemanticKeyPlanTest {
 
     String plus =
         identity(
-            plan,
-            request("GET", "example.com", "/render/a", "variant=a+b"),
-            Map.of("id", "a"));
+            plan, request("GET", "example.com", "/render/a", "variant=a+b"), Map.of("id", "a"));
     String encodedSpace =
         identity(
-            plan,
-            request("GET", "example.com", "/render/a", "variant=a%20b"),
-            Map.of("id", "a"));
+            plan, request("GET", "example.com", "/render/a", "variant=a%20b"), Map.of("id", "a"));
     String encodedSlashLower =
         identity(
-            plan,
-            request("GET", "example.com", "/render/a", "variant=a%2fb"),
-            Map.of("id", "a"));
+            plan, request("GET", "example.com", "/render/a", "variant=a%2fb"), Map.of("id", "a"));
     String encodedSlashUpper =
         identity(
-            plan,
-            request("GET", "example.com", "/render/a", "variant=a%2Fb"),
-            Map.of("id", "a"));
+            plan, request("GET", "example.com", "/render/a", "variant=a%2Fb"), Map.of("id", "a"));
 
     assertNotEquals(plus, encodedSpace);
     assertEquals(encodedSlashLower, encodedSlashUpper);
@@ -108,20 +86,11 @@ class SemanticKeyPlanTest {
     SemanticKeyPlan plan = compile(route);
 
     String first =
-        identity(
-            plan,
-            request("GET", "example.com", "/render/a", "b=2&a=%7e"),
-            Map.of("id", "a"));
+        identity(plan, request("GET", "example.com", "/render/a", "b=2&a=%7e"), Map.of("id", "a"));
     String reordered =
-        identity(
-            plan,
-            request("GET", "example.com", "/render/a", "a=%7e&b=2"),
-            Map.of("id", "a"));
+        identity(plan, request("GET", "example.com", "/render/a", "a=%7e&b=2"), Map.of("id", "a"));
     String normalizedAlias =
-        identity(
-            plan,
-            request("GET", "example.com", "/render/a", "b=2&a=~"),
-            Map.of("id", "a"));
+        identity(plan, request("GET", "example.com", "/render/a", "b=2&a=~"), Map.of("id", "a"));
 
     assertNotEquals(first, reordered);
     assertNotEquals(first, normalizedAlias);
@@ -138,15 +107,9 @@ class SemanticKeyPlanTest {
     SemanticKeyPlan plan = compile(route);
 
     String first =
-        identity(
-            plan,
-            request("GET", "example.com", "/render/a", "x=1"),
-            Map.of("id", "a"));
+        identity(plan, request("GET", "example.com", "/render/a", "x=1"), Map.of("id", "a"));
     String second =
-        identity(
-            plan,
-            request("GET", "example.com", "/render/a", "x=2"),
-            Map.of("id", "a"));
+        identity(plan, request("GET", "example.com", "/render/a", "x=2"), Map.of("id", "a"));
 
     assertEquals(first, second);
   }
@@ -194,8 +157,7 @@ class SemanticKeyPlanTest {
     String trust =
         identity(
             plan,
-            request(
-                "GET", "example.com", "/render/a", "variant=x", BODY_A, TrustLevel.TRUSTED),
+            request("GET", "example.com", "/render/a", "variant=x", BODY_A, TrustLevel.TRUSTED),
             captures);
 
     assertNotEquals(baseline, method);
@@ -213,10 +175,8 @@ class SemanticKeyPlanTest {
         new ConfigurationModel.KeyConfiguration(List.of(), Optional.empty());
     SemanticKeyPlan plan = compile(withKey(withMatch(base, catchAll), Optional.of(key)));
 
-    String first =
-        identity(plan, request("GET", "example.com", "/render/a", null), Map.of());
-    String second =
-        identity(plan, request("GET", "example.com", "/render/b", null), Map.of());
+    String first = identity(plan, request("GET", "example.com", "/render/a", null), Map.of());
+    String second = identity(plan, request("GET", "example.com", "/render/b", null), Map.of());
 
     assertNotEquals(first, second);
   }
@@ -229,13 +189,7 @@ class SemanticKeyPlanTest {
     String lower =
         identity(
             plan,
-            request(
-                "GET",
-                "example.com",
-                "/render/a",
-                "variant=x",
-                BODY_A,
-                TrustLevel.UNTRUSTED),
+            request("GET", "example.com", "/render/a", "variant=x", BODY_A, TrustLevel.UNTRUSTED),
             captures);
     String upper =
         identity(
@@ -251,13 +205,7 @@ class SemanticKeyPlanTest {
     String other =
         identity(
             plan,
-            request(
-                "GET",
-                "example.com",
-                "/render/a",
-                "variant=x",
-                BODY_B,
-                TrustLevel.UNTRUSTED),
+            request("GET", "example.com", "/render/a", "variant=x", BODY_B, TrustLevel.UNTRUSTED),
             captures);
 
     assertEquals(lower, upper);
@@ -274,12 +222,10 @@ class SemanticKeyPlanTest {
 
     ConfigurationException missingFailure =
         assertThrows(
-            ConfigurationException.class,
-            () -> compile(withKey(base, Optional.of(missing))));
+            ConfigurationException.class, () -> compile(withKey(base, Optional.of(missing))));
     ConfigurationException unknownFailure =
         assertThrows(
-            ConfigurationException.class,
-            () -> compile(withKey(base, Optional.of(unknown))));
+            ConfigurationException.class, () -> compile(withKey(base, Optional.of(unknown))));
 
     assertTrue(missingFailure.getMessage().contains("must include variable capture 'id'"));
     assertTrue(unknownFailure.getMessage().contains("references unknown capture 'other'"));
@@ -297,8 +243,7 @@ class SemanticKeyPlanTest {
         assertThrows(ConfigurationException.class, () -> compile(withKey(base, Optional.empty())));
     ConfigurationException duplicate =
         assertThrows(
-            ConfigurationException.class,
-            () -> compile(withKey(base, Optional.of(aliased))));
+            ConfigurationException.class, () -> compile(withKey(base, Optional.of(aliased))));
 
     assertTrue(missing.getMessage().contains("key is required"));
     assertTrue(duplicate.getMessage().contains("semantically duplicate"));
@@ -314,8 +259,7 @@ class SemanticKeyPlanTest {
 
     ConfigurationException selector =
         assertThrows(
-            ConfigurationException.class,
-            () -> compile(withKey(base, Optional.of(invalid))));
+            ConfigurationException.class, () -> compile(withKey(base, Optional.of(invalid))));
     SemanticKeyPlan plan = compile(base);
     IllegalArgumentException digest =
         assertThrows(
@@ -395,12 +339,7 @@ class SemanticKeyPlanTest {
   }
 
   private static RequestDescriptor request(
-      String method,
-      String host,
-      String path,
-      String query,
-      String bodySha256,
-      TrustLevel trust) {
+      String method, String host, String path, String query, String bodySha256, TrustLevel trust) {
     Map<String, List<String>> attributes = new LinkedHashMap<>();
     attributes.put("method", List.of(method));
     attributes.put("host", List.of(host));
