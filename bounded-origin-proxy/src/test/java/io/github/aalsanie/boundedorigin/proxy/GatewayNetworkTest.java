@@ -539,6 +539,7 @@ class GatewayNetworkTest {
                   Map.entry("origin.max-result-bytes", "32"),
                   Map.entry("origin.response-timeout", "PT0.2S"),
                   Map.entry("origin.max-execution-duration", "PT1S"),
+                  Map.entry("origin.failure-cooldown", "PT5S"),
                   Map.entry("request.timeout", "PT2S")));
       try (BoundedOriginGateway gateway =
           GatewayTestFixtures.start(
