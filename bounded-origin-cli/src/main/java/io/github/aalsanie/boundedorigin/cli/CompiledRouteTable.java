@@ -14,8 +14,7 @@ final class CompiledRouteTable {
     this.routes = List.copyOf(routes);
   }
 
-  Optional<Match> match(
-      String method, String host, String path, ConfigurationModel.Trust trust) {
+  Optional<Match> match(String method, String host, String path, ConfigurationModel.Trust trust) {
     Objects.requireNonNull(method, "method");
     Objects.requireNonNull(host, "host");
     Objects.requireNonNull(path, "path");
