@@ -56,9 +56,7 @@ class RouteTemplateCompilerTest {
             .route()
             .id());
     assertTrue(
-        table
-            .match("OPTIONS", "example.com", "*", ConfigurationModel.Trust.UNTRUSTED)
-            .isEmpty());
+        table.match("OPTIONS", "example.com", "*", ConfigurationModel.Trust.UNTRUSTED).isEmpty());
     assertTrue(
         table
             .match("GET", "example.com", "/render/", ConfigurationModel.Trust.UNTRUSTED)
@@ -159,7 +157,6 @@ class RouteTemplateCompilerTest {
     assertThrows(
         NullPointerException.class,
         () -> table.match("GET", "example.com", null, ConfigurationModel.Trust.UNTRUSTED));
-    assertThrows(
-        NullPointerException.class, () -> table.match("GET", "example.com", "/x", null));
+    assertThrows(NullPointerException.class, () -> table.match("GET", "example.com", "/x", null));
   }
 }
