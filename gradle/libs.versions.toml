@@ -6,6 +6,7 @@ netty = "4.2.18.Final"
 pitest = "1.30.0"
 pitestGradle = "1.19.0"
 pitestJunit5 = "1.2.3"
+snakeyaml-engine = "3.1.1"
 spotbugs = "4.10.3"
 spotbugsGradle = "6.5.11"
 spotless = "8.10.2"
@@ -17,6 +18,7 @@ netty-codec-http = { module = "io.netty:netty-codec-http", version.ref = "netty"
 netty-handler = { module = "io.netty:netty-handler", version.ref = "netty" }
 netty-resolver = { module = "io.netty:netty-resolver", version.ref = "netty" }
 netty-transport = { module = "io.netty:netty-transport", version.ref = "netty" }
+snakeyaml-engine = { module = "org.snakeyaml:snakeyaml-engine", version.ref = "snakeyaml-engine" }
 
 [plugins]
 pitest = { id = "info.solidsoft.pitest", version.ref = "pitestGradle" }
