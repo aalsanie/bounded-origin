@@ -18,18 +18,13 @@ class SemanticKeyPlanBoundaryTest {
   private static final String SHA = "a".repeat(64);
 
   @Test
-  void rejectsMalformedInternalConfigurationShapes() throws ConfigurationException {
+  void rejectsReachableMalformedConfigurationShapes() throws ConfigurationException {
     ConfigurationModel.RouteConfiguration base = route();
     String path = "configuration.routes[0]";
 
-    assertFailure(() -> SemanticKeyPlan.compile(withKey(base, null), Set.of("id"), path), "key is required");
     assertFailure(
-        () ->
-            SemanticKeyPlan.compile(
-                withKey(base, Optional.of(new ConfigurationModel.KeyConfiguration(null, Optional.empty()))),
-                Set.of("id"),
-                path),
-        "key.path must not be null");
+        () -> SemanticKeyPlan.compile(withKey(base, null), Set.of("id"), path),
+        "key is required");
     assertFailure(
         () ->
             SemanticKeyPlan.compile(
@@ -41,27 +36,6 @@ class SemanticKeyPlanBoundaryTest {
                 Set.of("id"),
                 path),
         "duplicate capture names");
-    assertFailure(
-        () ->
-            SemanticKeyPlan.compile(
-                withKey(
-                    base,
-                    Optional.of(new ConfigurationModel.KeyConfiguration(List.of("id"), null))),
-                Set.of("id"),
-                path),
-        "key.query must not be null");
-    assertFailure(
-        () ->
-            SemanticKeyPlan.compile(
-                withKey(
-                    base,
-                    Optional.of(
-                        new ConfigurationModel.KeyConfiguration(
-                            List.of("id"),
-                            Optional.of(new ConfigurationModel.QueryKeyConfiguration(null, false))))),
-                Set.of("id"),
-                path),
-        "query.include must not be null");
     assertFailure(
         () -> SemanticKeyPlan.compile(withMatch(base, null), Set.of("id"), path),
         "match must not be null");
@@ -81,6 +55,16 @@ class SemanticKeyPlanBoundaryTest {
                 withMatch(
                     base,
                     new ConfigurationModel.MatchConfiguration(
+                        Optional.empty(), Optional.empty(), null, Optional.empty())),
+                Set.of("id"),
+                path),
+        "match.path must not be blank");
+    assertFailure(
+        () ->
+            SemanticKeyPlan.compile(
+                withMatch(
+                    base,
+                    new ConfigurationModel.MatchConfiguration(
                         Optional.empty(), Optional.empty(), " ", Optional.empty())),
                 Set.of("id"),
                 path),
@@ -88,8 +72,7 @@ class SemanticKeyPlanBoundaryTest {
   }
 
   @Test
-  void rejectsEveryInvalidConfiguredQueryNameForm() throws ConfigurationException {
-    assertInvalidSelector(null, "blank query name");
+  void rejectsEveryConstructibleInvalidConfiguredQueryNameForm() throws ConfigurationException {
     assertInvalidSelector(" ", "blank query name");
     assertInvalidSelector("a&b", "invalid query name");
     assertInvalidSelector("a=b", "invalid query name");
@@ -106,34 +89,45 @@ class SemanticKeyPlanBoundaryTest {
 
     assertThrows(
         IllegalArgumentException.class,
-        () -> plan.operation(request(null, null, SHA), Map.of("id", "a")));
+        () -> plan.operation(request(List.of("x=1", "x=2"), null, List.of(SHA)), Map.of("id", "a")));
     assertThrows(
         IllegalArgumentException.class,
-        () -> plan.operation(request(List.of("x=1", "x=2"), null, SHA), Map.of("id", "a")));
+        () -> plan.operation(request(null, null, List.of(SHA)), Map.of()));
     assertThrows(
         IllegalArgumentException.class,
-        () -> plan.operation(request(null, null, SHA), Map.of()));
+        () -> plan.operation(request(null, null, List.of(SHA)), Map.of("id", "")));
     assertThrows(
         IllegalArgumentException.class,
-        () -> plan.operation(request(null, null, SHA), Map.of("id", "")));
+        () -> plan.operation(request(List.of("variant=%"), null, List.of(SHA)), Map.of("id", "a")));
     assertThrows(
         IllegalArgumentException.class,
-        () -> plan.operation(request(List.of("variant=%"), null, SHA), Map.of("id", "a")));
+        () -> plan.operation(request(List.of("variant=%GG"), null, List.of(SHA)), Map.of("id", "a")));
     assertThrows(
         IllegalArgumentException.class,
-        () -> plan.operation(request(List.of("variant=%GG"), null, SHA), Map.of("id", "a")));
+        () -> plan.operation(request(List.of("variant=a b"), null, List.of(SHA)), Map.of("id", "a")));
     assertThrows(
         IllegalArgumentException.class,
-        () -> plan.operation(request(List.of("variant=a b"), null, SHA), Map.of("id", "a")));
+        () -> plan.operation(request(null, null, List.of("z".repeat(64))), Map.of("id", "a")));
     assertThrows(
         IllegalArgumentException.class,
-        () -> plan.operation(request(null, null, "z".repeat(64)), Map.of("id", "a")));
+        () -> plan.operation(request(null, null, List.of(SHA, SHA)), Map.of("id", "a")));
     assertThrows(
         IllegalArgumentException.class,
-        () -> plan.operation(request(null, null, SHA), Map.of("id", "%5c")));
+        () -> plan.operation(request(null, null, List.of(SHA)), Map.of("id", "%5c")));
     assertThrows(
         IllegalArgumentException.class,
-        () -> plan.operation(request(null, null, SHA), Map.of("id", "%00")));
+        () -> plan.operation(request(null, null, List.of(SHA)), Map.of("id", "%00")));
+  }
+
+  @Test
+  void selectedQueryMayBeAbsentWithoutChangingUnselectedIdentity() throws ConfigurationException {
+    SemanticKeyPlan plan = compile(route());
+
+    String absent = identity(plan, request(null, null, List.of(SHA)), Map.of("id", "a"));
+    String ignored =
+        identity(plan, request(List.of("ignored=x"), null, List.of(SHA)), Map.of("id", "a"));
+
+    assertEquals(absent, ignored);
   }
 
   @Test
@@ -141,9 +135,15 @@ class SemanticKeyPlanBoundaryTest {
     SemanticKeyPlan plan = compile(route());
 
     String encoded =
-        identity(plan, request(List.of("variant=%41%30%2D%2E%5F%7E"), null, SHA), Map.of("id", "%41"));
+        identity(
+            plan,
+            request(List.of("variant=%41%30%2D%2E%5F%7E"), null, List.of(SHA)),
+            Map.of("id", "%41"));
     String literal =
-        identity(plan, request(List.of("variant=A0-._~"), null, SHA), Map.of("id", "A"));
+        identity(
+            plan,
+            request(List.of("variant=A0-._~"), null, List.of(SHA)),
+            Map.of("id", "A"));
 
     assertEquals(encoded, literal);
   }
@@ -161,10 +161,24 @@ class SemanticKeyPlanBoundaryTest {
                 Optional.of("GET"), Optional.of("example.com"), "/**", Optional.empty()));
     SemanticKeyPlan plan = SemanticKeyPlan.compile(catchAll, Set.of(), "configuration.routes[0]");
 
-    String first = identity(plan, request(null, "/a", SHA), Map.of());
-    String second = identity(plan, request(null, "/b", SHA), Map.of());
+    String first = identity(plan, request(null, "/a", List.of(SHA)), Map.of());
+    String second = identity(plan, request(null, "/b", List.of(SHA)), Map.of());
 
     assertNotEquals(first, second);
+  }
+
+  @Test
+  void nullCompilationInputsAreRejected() throws ConfigurationException {
+    ConfigurationModel.RouteConfiguration route = route();
+
+    assertThrows(
+        NullPointerException.class,
+        () -> SemanticKeyPlan.compile(null, Set.of("id"), "configuration.routes[0]"));
+    assertThrows(
+        NullPointerException.class,
+        () -> SemanticKeyPlan.compile(route, null, "configuration.routes[0]"));
+    assertThrows(
+        NullPointerException.class, () -> SemanticKeyPlan.compile(route, Set.of("id"), null));
   }
 
   private static void assertInvalidSelector(String selector, String expected)
@@ -175,7 +189,9 @@ class SemanticKeyPlanBoundaryTest {
             List.of("id"),
             Optional.of(new ConfigurationModel.QueryKeyConfiguration(List.of(selector), false)));
     assertFailure(
-        () -> SemanticKeyPlan.compile(withKey(base, Optional.of(key)), Set.of("id"), "configuration.routes[0]"),
+        () ->
+            SemanticKeyPlan.compile(
+                withKey(base, Optional.of(key)), Set.of("id"), "configuration.routes[0]"),
         expected);
   }
 
@@ -224,7 +240,8 @@ class SemanticKeyPlanBoundaryTest {
         route.clientComputation());
   }
 
-  private static RequestDescriptor request(List<String> query, String path, String sha) {
+  private static RequestDescriptor request(
+      List<String> query, String path, List<String> bodyShaValues) {
     Map<String, List<String>> attributes = new LinkedHashMap<>();
     attributes.put("method", List.of("GET"));
     attributes.put("host", List.of("example.com"));
@@ -232,7 +249,7 @@ class SemanticKeyPlanBoundaryTest {
     if (query != null) {
       attributes.put("query", query);
     }
-    attributes.put("body-sha256", List.of(sha));
+    attributes.put("body-sha256", bodyShaValues);
     return new RequestDescriptor("http.request", attributes, TrustLevel.UNTRUSTED);
   }
 
