@@ -113,7 +113,16 @@ final class io.github.aalsanie.boundedorigin.cli.ConfigurationModel$Trust extend
 }
 final class io.github.aalsanie.boundedorigin.cli.ConfigurationValues {
 }
+final class io.github.aalsanie.boundedorigin.cli.ConfiguredPolicyMatcher implements io.github.aalsanie.boundedorigin.api.PolicyMatcher {
+  public java.util.Optional<io.github.aalsanie.boundedorigin.api.Operation> classify(io.github.aalsanie.boundedorigin.api.RequestDescriptor);
+}
+class io.github.aalsanie.boundedorigin.cli.ConfiguredPolicyMatcher$1 {
+}
 final class io.github.aalsanie.boundedorigin.cli.GatewayConfigurationValidator {
+}
+final class io.github.aalsanie.boundedorigin.cli.PolicyConfigurationCompiler {
+}
+class io.github.aalsanie.boundedorigin.cli.PolicyConfigurationCompiler$1 {
 }
 final class io.github.aalsanie.boundedorigin.cli.RouteConfigurationDecoder {
 }

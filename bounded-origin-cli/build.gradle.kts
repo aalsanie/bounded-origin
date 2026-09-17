@@ -8,6 +8,7 @@ description = "Command-line entry points."
 
 dependencies {
     implementation(project(":bounded-origin-api"))
+    implementation(project(":bounded-origin-core"))
     implementation(libs.snakeyaml.engine)
 }
 
