@@ -3,6 +3,7 @@ package io.github.aalsanie.boundedorigin.cli;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 
 final class ConfigurationModel {
@@ -49,9 +50,10 @@ final class ConfigurationModel {
   record MatchConfiguration(
       Optional<String> method, Optional<String> host, String path, Optional<Trust> trust) {}
 
-  record KeyConfiguration(List<String> path, QueryKeyConfiguration query) {
+  record KeyConfiguration(List<String> path, Optional<QueryKeyConfiguration> query) {
     KeyConfiguration {
       path = List.copyOf(path);
+      query = Objects.requireNonNull(query, "query");
     }
   }
 

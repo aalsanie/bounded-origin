@@ -142,8 +142,9 @@ class ConfigurationBoundaryTest {
 
     var key = configuration.routes().getFirst().key().orElseThrow();
     assertTrue(key.path().isEmpty());
-    assertTrue(key.query().include().isEmpty());
-    assertFalse(key.query().orderIndependent());
+    var query = key.query().orElseThrow();
+    assertTrue(query.include().isEmpty());
+    assertFalse(query.orderIndependent());
     assertTrue(
         configuration.routes().get(1).clientComputation().orElseThrow().parameters().isEmpty());
   }
@@ -153,13 +154,13 @@ class ConfigurationBoundaryTest {
     var withoutQuery = ConfigurationTestSupport.objectFixture();
     withoutQuery.renderKey().remove("query");
     var first = ConfigurationDecoder.decode(withoutQuery.root());
-    assertTrue(first.routes().getFirst().key().orElseThrow().query().include().isEmpty());
-    assertFalse(first.routes().getFirst().key().orElseThrow().query().orderIndependent());
+    assertTrue(first.routes().getFirst().key().orElseThrow().query().isEmpty());
 
     var withoutOrder = ConfigurationTestSupport.objectFixture();
     withoutOrder.renderQuery().remove("order-independent");
     var second = ConfigurationDecoder.decode(withoutOrder.root());
-    assertFalse(second.routes().getFirst().key().orElseThrow().query().orderIndependent());
+    assertFalse(
+        second.routes().getFirst().key().orElseThrow().query().orElseThrow().orderIndependent());
   }
 
   @Test

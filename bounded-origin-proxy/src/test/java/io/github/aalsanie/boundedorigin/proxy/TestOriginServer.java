@@ -138,6 +138,9 @@ final class TestOriginServer implements AutoCloseable {
               };
         }
         if (!responder.respond(request, socket)) {
+          if (socket.getSoLinger() != 0) {
+            socket.shutdownOutput();
+          }
           return;
         }
       }

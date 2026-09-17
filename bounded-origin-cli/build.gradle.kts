@@ -7,6 +7,7 @@ plugins {
 description = "Command-line entry points."
 
 dependencies {
+    implementation(project(":bounded-origin-api"))
     implementation(libs.snakeyaml.engine)
 }
 

@@ -42,8 +42,9 @@ class YamlConfigurationLoaderTest {
     assertEquals("/render/{id}", render.match().path());
     assertEquals(ConfigurationModel.Trust.UNTRUSTED, render.match().trust().orElseThrow());
     assertEquals(java.util.List.of("id"), render.key().orElseThrow().path());
-    assertEquals(java.util.List.of("variant"), render.key().orElseThrow().query().include());
-    assertTrue(render.key().orElseThrow().query().orderIndependent());
+    var query = render.key().orElseThrow().query().orElseThrow();
+    assertEquals(java.util.List.of("variant"), query.include());
+    assertTrue(query.orderIndependent());
     assertEquals("v1", render.materializerVersion().orElseThrow());
     assertEquals(4, render.budget().orElseThrow().maxActive());
     assertEquals(16, render.budget().orElseThrow().maxQueued());
