@@ -57,8 +57,9 @@ class YamlConfigurationLoaderTest {
     assertTrue(client.match().method().isEmpty());
     assertTrue(client.match().host().isEmpty());
     assertTrue(client.match().trust().isEmpty());
-    assertTrue(client.key().isEmpty());
-    assertTrue(client.materializerVersion().isEmpty());
+    assertEquals(java.util.List.of("id"), client.key().orElseThrow().path());
+    assertTrue(client.key().orElseThrow().query().isEmpty());
+    assertEquals("client-v2", client.materializerVersion().orElseThrow());
     assertTrue(client.budget().isEmpty());
     assertEquals("wasm", client.clientComputation().orElseThrow().type());
     assertEquals("v2", client.clientComputation().orElseThrow().version());

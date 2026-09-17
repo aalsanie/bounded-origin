@@ -52,6 +52,9 @@ final class ConfigurationTestSupport {
         match:
           path: /client/{id}
         strategy: CLIENT_COMPUTE
+        key:
+          path: [id]
+        materializer-version: client-v2
         client-computation:
           type: wasm
           version: v2
@@ -124,6 +127,9 @@ final class ConfigurationTestSupport {
     Map<String, Object> clientMatch = new LinkedHashMap<>();
     clientMatch.put("path", "/client/{id}");
 
+    Map<String, Object> clientKey = new LinkedHashMap<>();
+    clientKey.put("path", new ArrayList<>(List.of("id")));
+
     Map<String, Object> clientParameters = new LinkedHashMap<>();
     clientParameters.put("mode", "strict");
 
@@ -138,6 +144,8 @@ final class ConfigurationTestSupport {
     client.put("precedence", 90);
     client.put("match", clientMatch);
     client.put("strategy", "CLIENT_COMPUTE");
+    client.put("key", clientKey);
+    client.put("materializer-version", "client-v2");
     client.put("client-computation", clientComputation);
 
     List<Object> routes = new ArrayList<>();
