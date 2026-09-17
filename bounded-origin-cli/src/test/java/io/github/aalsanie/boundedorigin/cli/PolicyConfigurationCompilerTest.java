@@ -21,8 +21,7 @@ import java.util.Optional;
 import org.junit.jupiter.api.Test;
 
 class PolicyConfigurationCompilerTest {
-  private static final Budget GLOBAL_BUDGET =
-      new Budget(8, 64, Duration.ofSeconds(20), 1_048_576);
+  private static final Budget GLOBAL_BUDGET = new Budget(8, 64, Duration.ofSeconds(20), 1_048_576);
   private static final String BODY_SHA = "a".repeat(64);
 
   @Test
@@ -30,14 +29,16 @@ class PolicyConfigurationCompilerTest {
     ConfigurationModel.RuntimeConfiguration base = baseConfiguration();
     List<ConfigurationModel.RouteConfiguration> routes =
         List.of(
-            keyedRoute("artifact", "/artifact/{id}", 500, ConfigurationModel.Strategy.ARTIFACT_ONLY),
+            keyedRoute(
+                "artifact", "/artifact/{id}", 500, ConfigurationModel.Strategy.ARTIFACT_ONLY),
             boundedRoute(
                 "bounded", "/bounded/{id}", 400, ConfigurationModel.Strategy.BOUNDED_COMPUTE),
             boundedRoute(
                 "materialize", "/materialize/{id}", 300, ConfigurationModel.Strategy.MATERIALIZE),
             clientRoute("client-compute", "/client-compute/{id}", 200),
             denyRoute("blocked", "/blocked/{id}", 100));
-    PolicyEngine engine = PolicyConfigurationCompiler.compile(withRoutes(base, routes), GLOBAL_BUDGET);
+    PolicyEngine engine =
+        PolicyConfigurationCompiler.compile(withRoutes(base, routes), GLOBAL_BUDGET);
 
     assertSelected(engine, "/artifact/a", ExecutionStrategy.ARTIFACT_ONLY);
     assertSelected(engine, "/bounded/a", ExecutionStrategy.BOUNDED_COMPUTE);
@@ -91,7 +92,8 @@ class PolicyConfigurationCompilerTest {
     ConfigurationModel.RouteConfiguration bounded =
         boundedRoute("bounded", "/bounded/{id}", 100, ConfigurationModel.Strategy.BOUNDED_COMPUTE);
     ConfigurationModel.RouteConfiguration materialize =
-        boundedRoute("materialize", "/materialize/{id}", 100, ConfigurationModel.Strategy.MATERIALIZE);
+        boundedRoute(
+            "materialize", "/materialize/{id}", 100, ConfigurationModel.Strategy.MATERIALIZE);
     ConfigurationModel.RouteConfiguration client = clientRoute("client", "/client/{id}", 100);
     ConfigurationModel.RouteConfiguration deny = denyRoute("deny", "/deny/{id}", 100);
 
@@ -112,7 +114,12 @@ class PolicyConfigurationCompilerTest {
             Optional.of(clientComputation())),
         "client-computation is not allowed for ARTIFACT_ONLY");
     assertCompileFailure(
-        copy(bounded, bounded.key(), bounded.materializerVersion(), Optional.empty(), Optional.empty()),
+        copy(
+            bounded,
+            bounded.key(),
+            bounded.materializerVersion(),
+            Optional.empty(),
+            Optional.empty()),
         "budget is required for BOUNDED_COMPUTE");
     assertCompileFailure(
         copy(
@@ -131,7 +138,8 @@ class PolicyConfigurationCompilerTest {
             Optional.empty()),
         "budget is required for MATERIALIZE");
     assertCompileFailure(
-        copy(client, client.key(), client.materializerVersion(), Optional.empty(), Optional.empty()),
+        copy(
+            client, client.key(), client.materializerVersion(), Optional.empty(), Optional.empty()),
         "client-computation is required for CLIENT_COMPUTE");
     assertCompileFailure(
         copy(
@@ -148,7 +156,12 @@ class PolicyConfigurationCompilerTest {
         copy(deny, Optional.empty(), Optional.of("v1"), Optional.empty(), Optional.empty()),
         "materializer-version is not allowed for DENY");
     assertCompileFailure(
-        copy(deny, Optional.empty(), Optional.empty(), Optional.of(policyBudget()), Optional.empty()),
+        copy(
+            deny,
+            Optional.empty(),
+            Optional.empty(),
+            Optional.of(policyBudget()),
+            Optional.empty()),
         "budget is not allowed for DENY");
     assertCompileFailure(
         copy(
@@ -159,7 +172,12 @@ class PolicyConfigurationCompilerTest {
             Optional.of(clientComputation())),
         "client-computation is not allowed for DENY");
     assertCompileFailure(
-        copy(artifact, Optional.empty(), artifact.materializerVersion(), Optional.empty(), Optional.empty()),
+        copy(
+            artifact,
+            Optional.empty(),
+            artifact.materializerVersion(),
+            Optional.empty(),
+            Optional.empty()),
         "key is required for ARTIFACT_ONLY");
     assertCompileFailure(
         copy(artifact, artifact.key(), Optional.empty(), Optional.empty(), Optional.empty()),
@@ -172,11 +190,9 @@ class PolicyConfigurationCompilerTest {
   @Test
   void rejectsEveryPolicyBudgetThatExceedsGlobalLimit() throws ConfigurationException {
     assertBudgetFailure(
-        new ConfigurationModel.BudgetConfiguration(9, 1, Duration.ofSeconds(1), 1),
-        "max-active");
+        new ConfigurationModel.BudgetConfiguration(9, 1, Duration.ofSeconds(1), 1), "max-active");
     assertBudgetFailure(
-        new ConfigurationModel.BudgetConfiguration(1, 65, Duration.ofSeconds(1), 1),
-        "max-queued");
+        new ConfigurationModel.BudgetConfiguration(1, 65, Duration.ofSeconds(1), 1), "max-queued");
     assertBudgetFailure(
         new ConfigurationModel.BudgetConfiguration(1, 1, Duration.ofSeconds(21), 1),
         "max-execution-duration");
@@ -278,7 +294,8 @@ class PolicyConfigurationCompilerTest {
 
     assertCompileFailure(withIdentity(base, null, 1, base.strategy()), ".id must not be blank");
     assertCompileFailure(withIdentity(base, " ", 1, base.strategy()), ".id must not be blank");
-    assertCompileFailure(withIdentity(base, "artifact", -1, base.strategy()), ".version must be non-negative");
+    assertCompileFailure(
+        withIdentity(base, "artifact", -1, base.strategy()), ".version must be non-negative");
     assertCompileFailure(withIdentity(base, "artifact", 1, null), ".strategy must not be null");
     assertCompileFailure(
         new ConfigurationModel.RouteConfiguration(

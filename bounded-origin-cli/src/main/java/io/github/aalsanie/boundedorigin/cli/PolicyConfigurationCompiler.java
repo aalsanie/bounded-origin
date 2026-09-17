@@ -150,8 +150,8 @@ final class PolicyConfigurationCompiler {
     }
   }
 
-  private static void validateRouteShape(
-      ConfigurationModel.RouteConfiguration route, String path) throws ConfigurationException {
+  private static void validateRouteShape(ConfigurationModel.RouteConfiguration route, String path)
+      throws ConfigurationException {
     Objects.requireNonNull(route, "route");
     if (route.id() == null || route.id().isBlank()) {
       throw new ConfigurationException(path + ".id must not be blank");
@@ -186,8 +186,7 @@ final class PolicyConfigurationCompiler {
       case CLIENT_COMPUTE -> {
         requireKeyed(route, path);
         requireAbsent(route.budget(), path + ".budget", route.strategy());
-        requirePresent(
-            route.clientComputation(), path + ".client-computation", route.strategy());
+        requirePresent(route.clientComputation(), path + ".client-computation", route.strategy());
       }
       case DENY -> {
         requireAbsent(route.key(), path + ".key", route.strategy());
@@ -202,8 +201,7 @@ final class PolicyConfigurationCompiler {
   private static void requireKeyed(ConfigurationModel.RouteConfiguration route, String path)
       throws ConfigurationException {
     requirePresent(route.key(), path + ".key", route.strategy());
-    requirePresent(
-        route.materializerVersion(), path + ".materializer-version", route.strategy());
+    requirePresent(route.materializerVersion(), path + ".materializer-version", route.strategy());
     String materializerVersion = route.materializerVersion().orElseThrow();
     if (materializerVersion.isBlank()) {
       throw new ConfigurationException(path + ".materializer-version must not be blank");
@@ -226,11 +224,12 @@ final class PolicyConfigurationCompiler {
     }
   }
 
-  private static Canonicalizer requiredCanonicalizer(
-      ConfiguredPolicyMatcher matcher, String path) throws ConfigurationException {
+  private static Canonicalizer requiredCanonicalizer(ConfiguredPolicyMatcher matcher, String path)
+      throws ConfigurationException {
     return matcher
         .canonicalizer()
-        .orElseThrow(() -> new ConfigurationException(path + ".key did not compile a canonicalizer"));
+        .orElseThrow(
+            () -> new ConfigurationException(path + ".key did not compile a canonicalizer"));
   }
 
   private static Budget policyBudget(
@@ -280,7 +279,8 @@ final class PolicyConfigurationCompiler {
       throw new ConfigurationException(path + ".client-computation.version must not be blank");
     }
     try {
-      return new ClientComputation(configured.type(), configured.version(), configured.parameters());
+      return new ClientComputation(
+          configured.type(), configured.version(), configured.parameters());
     } catch (IllegalArgumentException exception) {
       throw new ConfigurationException(path + ".client-computation is invalid", exception);
     }

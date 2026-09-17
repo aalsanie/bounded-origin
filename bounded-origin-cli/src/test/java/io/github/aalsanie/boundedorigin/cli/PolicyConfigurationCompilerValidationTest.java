@@ -11,8 +11,7 @@ import java.util.Optional;
 import org.junit.jupiter.api.Test;
 
 class PolicyConfigurationCompilerValidationTest {
-  private static final Budget GLOBAL_BUDGET =
-      new Budget(8, 64, Duration.ofSeconds(20), 1_048_576);
+  private static final Budget GLOBAL_BUDGET = new Budget(8, 64, Duration.ofSeconds(20), 1_048_576);
 
   @Test
   void rejectsNullBudgetDurationAsConfigurationError() {
