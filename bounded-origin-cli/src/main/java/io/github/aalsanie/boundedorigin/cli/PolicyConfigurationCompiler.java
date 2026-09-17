@@ -47,7 +47,7 @@ final class PolicyConfigurationCompiler {
         OriginPolicy.deny(fallback.id(), fallback.version(), fallback.precedence());
     try {
       return new PolicyEngine(rules, fallbackPolicy);
-    } catch (IllegalArgumentException | NullPointerException exception) {
+    } catch (IllegalArgumentException exception) {
       throw new ConfigurationException("configuration policies are invalid", exception);
     }
   }
@@ -64,7 +64,7 @@ final class PolicyConfigurationCompiler {
     OriginPolicy policy;
     try {
       policy = createPolicy(route, matcher, globalBudget, path);
-    } catch (IllegalArgumentException | NullPointerException exception) {
+    } catch (IllegalArgumentException exception) {
       throw new ConfigurationException(path + " cannot be compiled into a policy", exception);
     }
     return new PolicyRule(policy, matcher);
@@ -107,7 +107,7 @@ final class PolicyConfigurationCompiler {
               route.precedence(),
               route.materializerVersion().orElseThrow(),
               requiredCanonicalizer(matcher, path),
-              clientComputation(route.clientComputation().orElseThrow()));
+              clientComputation(route.clientComputation().orElseThrow(), path));
       case DENY -> OriginPolicy.deny(route.id(), route.version(), route.precedence());
     };
   }
@@ -236,6 +236,10 @@ final class PolicyConfigurationCompiler {
   private static Budget policyBudget(
       ConfigurationModel.BudgetConfiguration configured, Budget global, String path)
       throws ConfigurationException {
+    if (configured.maxExecutionDuration() == null) {
+      throw new ConfigurationException(path + ".budget.max-execution-duration must not be null");
+    }
+
     Budget budget;
     try {
       budget =
@@ -244,7 +248,7 @@ final class PolicyConfigurationCompiler {
               configured.maxQueued(),
               configured.maxExecutionDuration(),
               configured.maxResultBytes());
-    } catch (IllegalArgumentException | NullPointerException exception) {
+    } catch (IllegalArgumentException exception) {
       throw new ConfigurationException(path + ".budget is invalid", exception);
     }
     if (budget.maxActive() > global.maxActive()) {
@@ -267,7 +271,18 @@ final class PolicyConfigurationCompiler {
   }
 
   private static ClientComputation clientComputation(
-      ConfigurationModel.ClientComputationConfiguration configured) {
-    return new ClientComputation(configured.type(), configured.version(), configured.parameters());
+      ConfigurationModel.ClientComputationConfiguration configured, String path)
+      throws ConfigurationException {
+    if (configured.type() == null || configured.type().isBlank()) {
+      throw new ConfigurationException(path + ".client-computation.type must not be blank");
+    }
+    if (configured.version() == null || configured.version().isBlank()) {
+      throw new ConfigurationException(path + ".client-computation.version must not be blank");
+    }
+    try {
+      return new ClientComputation(configured.type(), configured.version(), configured.parameters());
+    } catch (IllegalArgumentException exception) {
+      throw new ConfigurationException(path + ".client-computation is invalid", exception);
+    }
   }
 }
