@@ -1,4 +1,7 @@
 # bounded-origin-cli public API
+public final class io.github.aalsanie.boundedorigin.cli.BoundedOriginCli {
+  public static void main(java.lang.String[]);
+}
 final class io.github.aalsanie.boundedorigin.cli.CompiledPathTemplate {
 }
 final class io.github.aalsanie.boundedorigin.cli.CompiledPathTemplate$Segment {

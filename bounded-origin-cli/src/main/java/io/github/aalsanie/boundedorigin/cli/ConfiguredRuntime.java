@@ -22,18 +22,25 @@ final class ConfiguredRuntime implements AutoCloseable {
     this.store = Objects.requireNonNull(store, "store");
   }
 
+  static void validate(ConfigurationModel.RuntimeConfiguration configuration)
+      throws ConfigurationException {
+    ConfigurationModel.RuntimeConfiguration required = requireConfiguration(configuration);
+    GatewayConfig gatewayConfig = gatewayConfig(required);
+    PolicyConfigurationCompiler.compile(required, gatewayConfig.globalBudget());
+    ConfigurationModel.StoreConfiguration storeConfiguration = validateStore(required.store());
+    storePath(storeConfiguration.directory());
+    validateStoreCompatibility(required, storeConfiguration);
+  }
+
   static ConfiguredRuntime assemble(ConfigurationModel.RuntimeConfiguration configuration)
       throws ConfigurationException, IOException {
-    if (configuration == null) {
-      throw new ConfigurationException("configuration must not be null");
-    }
-
-    GatewayConfig gatewayConfig = gatewayConfig(configuration);
+    ConfigurationModel.RuntimeConfiguration required = requireConfiguration(configuration);
+    GatewayConfig gatewayConfig = gatewayConfig(required);
     PolicyEngine policyEngine =
-        PolicyConfigurationCompiler.compile(configuration, gatewayConfig.globalBudget());
-    ConfigurationModel.StoreConfiguration storeConfiguration = validateStore(configuration.store());
+        PolicyConfigurationCompiler.compile(required, gatewayConfig.globalBudget());
+    ConfigurationModel.StoreConfiguration storeConfiguration = validateStore(required.store());
     Path storeDirectory = storePath(storeConfiguration.directory());
-    validateStoreCompatibility(configuration, storeConfiguration);
+    validateStoreCompatibility(required, storeConfiguration);
     FileSystemArtifactStore store =
         new FileSystemArtifactStore(
             storeDirectory, storeConfiguration.maxBytes(), storeConfiguration.maxArtifactBytes());
@@ -98,6 +105,14 @@ final class ConfiguredRuntime implements AutoCloseable {
       closed = true;
       closeResources();
     }
+  }
+
+  private static ConfigurationModel.RuntimeConfiguration requireConfiguration(
+      ConfigurationModel.RuntimeConfiguration configuration) throws ConfigurationException {
+    if (configuration == null) {
+      throw new ConfigurationException("configuration must not be null");
+    }
+    return configuration;
   }
 
   private static GatewayConfig gatewayConfig(ConfigurationModel.RuntimeConfiguration configuration)
