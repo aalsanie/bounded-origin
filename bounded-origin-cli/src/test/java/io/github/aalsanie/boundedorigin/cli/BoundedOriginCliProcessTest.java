@@ -131,8 +131,7 @@ class BoundedOriginCliProcessTest {
       throws IOException, InterruptedException {
     int firstPort = CliTestSupport.freePort();
     int secondPort = CliTestSupport.freePort();
-    Path configuration =
-        CliTestSupport.writeRuntimeConfiguration(temporaryDirectory, firstPort, 0);
+    Path configuration = CliTestSupport.writeRuntimeConfiguration(temporaryDirectory, firstPort, 0);
 
     Process first = startProcess("run", "--config", configuration.toString());
     awaitListening(first, firstPort);
