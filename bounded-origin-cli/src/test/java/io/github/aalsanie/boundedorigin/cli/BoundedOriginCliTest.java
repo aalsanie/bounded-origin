@@ -2,6 +2,7 @@ package io.github.aalsanie.boundedorigin.cli;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.github.aalsanie.boundedorigin.store.fs.FileSystemArtifactStore;
@@ -131,8 +132,9 @@ class BoundedOriginCliTest {
       executor.awaitTermination(10, TimeUnit.SECONDS);
     }
 
-    try (FileSystemArtifactStore ignored =
+    try (FileSystemArtifactStore store =
         new FileSystemArtifactStore(temporaryDirectory.resolve("store"), 1_048_576, 262_144)) {
+      assertNotNull(store);
       assertTrue(Files.isDirectory(temporaryDirectory.resolve("store")));
     }
   }
