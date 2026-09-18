@@ -1,6 +1,7 @@
 package io.github.aalsanie.boundedorigin.cli;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -42,6 +43,50 @@ class ConfiguredRuntimeConcurrencyTest {
       for (Future<?> future : futures) {
         future.get();
       }
+    } finally {
+      executor.shutdownNow();
+    }
+
+    assertFalse(runtime.isReady());
+    try (ConfiguredRuntime replacement = ConfiguredRuntime.assemble(configuration)) {
+      assertFalse(replacement.isReady());
+    }
+  }
+
+  @Test
+  void concurrentStartAndCloseLeaveRuntimeClosedAndReleaseStoreLock()
+      throws IOException, ConfigurationException, InterruptedException, ExecutionException {
+    ConfigurationModel.RuntimeConfiguration configuration =
+        ConfigurationTestSupport.runtimeConfiguration(temporaryDirectory);
+    ConfiguredRuntime runtime = ConfiguredRuntime.assemble(configuration);
+    CountDownLatch start = new CountDownLatch(1);
+    ExecutorService executor = Executors.newFixedThreadPool(2);
+
+    try {
+      Future<Throwable> starter =
+          executor.submit(
+              () -> {
+                start.await();
+                try {
+                  runtime.start();
+                  return null;
+                } catch (Throwable failure) {
+                  return failure;
+                }
+              });
+      Future<?> closer =
+          executor.submit(
+              () -> {
+                start.await();
+                runtime.close();
+                return null;
+              });
+
+      start.countDown();
+      Throwable startFailure = starter.get();
+      closer.get();
+
+      assertTrue(startFailure == null || startFailure instanceof IllegalStateException);
     } finally {
       executor.shutdownNow();
     }
