@@ -97,7 +97,8 @@ class ConfiguredRuntimeTest {
   }
 
   @Test
-  void rejectsMaterializationLimitAboveStoreArtifactLimit() throws IOException, ConfigurationException {
+  void rejectsMaterializationLimitAboveStoreArtifactLimit()
+      throws IOException, ConfigurationException {
     ConfigurationModel.RuntimeConfiguration base =
         ConfigurationTestSupport.runtimeConfiguration(temporaryDirectory);
     ConfigurationModel.StoreConfiguration store =
@@ -120,7 +121,8 @@ class ConfiguredRuntimeTest {
   }
 
   @Test
-  void storeLimitMayBeBelowGlobalLimitWhenNothingMaterializes() throws IOException, ConfigurationException {
+  void storeLimitMayBeBelowGlobalLimitWhenNothingMaterializes()
+      throws IOException, ConfigurationException {
     ConfigurationModel.RuntimeConfiguration base =
         ConfigurationTestSupport.runtimeConfiguration(temporaryDirectory);
     List<ConfigurationModel.RouteConfiguration> routes =
