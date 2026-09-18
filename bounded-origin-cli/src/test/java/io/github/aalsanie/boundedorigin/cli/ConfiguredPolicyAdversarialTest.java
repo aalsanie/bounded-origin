@@ -50,7 +50,7 @@ class ConfiguredPolicyAdversarialTest {
     ConfigurationException failure =
         assertThrows(ConfigurationException.class, () -> ConfigurationDecoder.decode(fixture.root()));
 
-    assertTrue(failure.getMessage().contains("maximum entries " + ConfigurationLimits.MAX_DIMENSIONS));
+    assertTrue(\n        failure.getMessage().contains("maximum entries " + ConfigurationLimits.MAX_DIMENSIONS));
   }
 
   @Test
@@ -71,10 +71,10 @@ class ConfiguredPolicyAdversarialTest {
     }
 
     String baseline =
-        identity(plan, request("variant=" + selected), Map.of("id", capture));
-    String noisy = identity(plan, request(noisyQuery.toString()), Map.of("id", capture));
+        identity(plan, requestWithQuery("variant=" + selected), Map.of("id", capture));
+    String noisy = identity(plan, requestWithQuery(noisyQuery.toString()), Map.of("id", capture));
     String changed =
-        identity(plan, request("variant=" + selected + "x"), Map.of("id", capture));
+        identity(plan, requestWithQuery("variant=" + selected + "x"), Map.of("id", capture));
 
     assertEquals(baseline, noisy);
     assertNotEquals(baseline, changed);
@@ -119,13 +119,13 @@ class ConfiguredPolicyAdversarialTest {
                 8, 64, Duration.ofSeconds(20), 1_048_576));
 
     OriginDecision.Selected selected =
-        assertInstanceOf(OriginDecision.Selected.class, engine.evaluate(request("/client/id")));
+        assertInstanceOf(OriginDecision.Selected.class, engine.evaluate(requestAtPath("/client/id")));
     ClientComputation computation = selected.policy().clientComputation().orElseThrow();
 
     assertEquals(Map.of(hostileKey, hostileValue), computation.parameters());
 
     OriginDecision.Denied fallback =
-        assertInstanceOf(OriginDecision.Denied.class, engine.evaluate(request("/missing")));
+        assertInstanceOf(OriginDecision.Denied.class, engine.evaluate(requestAtPath("/missing")));
     assertEquals(DenialReason.NO_MATCH, fallback.reason());
     assertEquals(List.of("default-deny"), fallback.policyIds());
   }
@@ -135,7 +135,7 @@ class ConfiguredPolicyAdversarialTest {
     return plan.canonicalizer().canonicalize(plan.operation(request, captures));
   }
 
-  private static RequestDescriptor request(String query) {
+  private static RequestDescriptor requestWithQuery(String query) {
     Map<String, List<String>> attributes = new LinkedHashMap<>();
     attributes.put("method", List.of("GET"));
     attributes.put("host", List.of("example.com"));
@@ -145,7 +145,7 @@ class ConfiguredPolicyAdversarialTest {
     return new RequestDescriptor("http.request", attributes, TrustLevel.UNTRUSTED);
   }
 
-  private static RequestDescriptor request(String path) {
+  private static RequestDescriptor requestAtPath(String path) {
     Map<String, List<String>> attributes = new LinkedHashMap<>();
     attributes.put("method", List.of("GET"));
     attributes.put("host", List.of("example.com"));
