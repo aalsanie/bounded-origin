@@ -25,6 +25,9 @@ extensions.configure<PitestPluginExtension> {
     pitestVersion.set(libs.versions.pitest.get())
     junit5PluginVersion.set(libs.versions.pitestJunit5.get())
     targetClasses.set(setOf("io.github.aalsanie.boundedorigin.cli.*"))
+    excludedTestClasses.set(
+        setOf("io.github.aalsanie.boundedorigin.cli.ZeroCodeEndToEndTest")
+    )
     mutationThreshold.set(90)
     coverageThreshold.set(91)
     testStrengthThreshold.set(90)
