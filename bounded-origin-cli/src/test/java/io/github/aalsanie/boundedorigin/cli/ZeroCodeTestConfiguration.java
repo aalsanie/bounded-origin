@@ -13,7 +13,9 @@ final class ZeroCodeTestConfiguration {
       throws IOException {
     Path path = directory.resolve("zero-code.yaml");
     Files.writeString(
-        path, yaml(directory, listenPort, adminPort, originPort, denyHealth), StandardCharsets.UTF_8);
+        path,
+        yaml(directory, listenPort, adminPort, originPort, denyHealth),
+        StandardCharsets.UTF_8);
     return path;
   }
 
