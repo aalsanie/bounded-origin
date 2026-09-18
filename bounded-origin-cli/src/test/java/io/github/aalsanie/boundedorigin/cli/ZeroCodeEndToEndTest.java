@@ -431,7 +431,10 @@ class ZeroCodeEndToEndTest {
       List<ProcessHandle> descendants = new ArrayList<>(capturedDescendants);
       process
           .descendants()
-          .filter(candidate -> descendants.stream().noneMatch(existing -> existing.pid() == candidate.pid()))
+          .filter(
+              candidate ->
+                  descendants.stream()
+                      .noneMatch(existing -> existing.pid() == candidate.pid()))
           .forEach(descendants::add);
       return descendants;
     }
