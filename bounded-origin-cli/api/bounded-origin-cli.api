@@ -119,7 +119,7 @@ final class io.github.aalsanie.boundedorigin.cli.ConfiguredPolicyMatcher impleme
 class io.github.aalsanie.boundedorigin.cli.ConfiguredPolicyMatcher$1 {
 }
 final class io.github.aalsanie.boundedorigin.cli.ConfiguredRuntime implements java.lang.AutoCloseable {
-  public synchronized void close() throws java.io.IOException;
+  public void close() throws java.io.IOException;
 }
 final class io.github.aalsanie.boundedorigin.cli.GatewayConfigurationValidator {
 }

@@ -11,6 +11,7 @@ import java.nio.file.Path;
 import java.util.Objects;
 
 final class ConfiguredRuntime implements AutoCloseable {
+  private final Object lifecycleLock = new Object();
   private final BoundedOriginGateway gateway;
   private final FileSystemArtifactStore store;
   private boolean started;
@@ -45,69 +46,57 @@ final class ConfiguredRuntime implements AutoCloseable {
     }
   }
 
-  synchronized void start() throws IOException {
-    if (closed) {
-      throw new IllegalStateException("runtime is closed");
-    }
-    if (started) {
-      throw new IllegalStateException("runtime is already started");
-    }
-    try {
-      gateway.start();
-      started = true;
-    } catch (IOException | RuntimeException | Error exception) {
-      closed = true;
-      closeAfterStartFailure(exception);
-      throw exception;
+  void start() throws IOException {
+    synchronized (lifecycleLock) {
+      if (closed) {
+        throw new IllegalStateException("runtime is closed");
+      }
+      if (started) {
+        throw new IllegalStateException("runtime is already started");
+      }
+      try {
+        gateway.start();
+        started = true;
+      } catch (IOException | RuntimeException | Error exception) {
+        closed = true;
+        closeAfterStartFailure(exception);
+        throw exception;
+      }
     }
   }
 
-  synchronized boolean isReady() {
-    return started && !closed && gateway.isReady();
+  boolean isReady() {
+    synchronized (lifecycleLock) {
+      return started && !closed && gateway.isReady();
+    }
   }
 
-  synchronized InetSocketAddress listenAddress() {
-    if (!started || closed) {
-      throw new IllegalStateException("runtime is not running");
+  InetSocketAddress listenAddress() {
+    synchronized (lifecycleLock) {
+      if (!started || closed) {
+        throw new IllegalStateException("runtime is not running");
+      }
+      return gateway.listenAddress();
     }
-    return gateway.listenAddress();
   }
 
-  synchronized InetSocketAddress adminAddress() {
-    if (!started || closed) {
-      throw new IllegalStateException("runtime is not running");
+  InetSocketAddress adminAddress() {
+    synchronized (lifecycleLock) {
+      if (!started || closed) {
+        throw new IllegalStateException("runtime is not running");
+      }
+      return gateway.adminAddress();
     }
-    return gateway.adminAddress();
   }
 
   @Override
-  public synchronized void close() throws IOException {
-    if (closed) {
-      return;
-    }
-    closed = true;
-
-    Throwable failure = null;
-    try {
-      gateway.close();
-    } catch (RuntimeException | Error exception) {
-      failure = exception;
-    }
-
-    try {
-      store.close();
-    } catch (IOException exception) {
-      if (failure == null) {
-        throw exception;
+  public void close() throws IOException {
+    synchronized (lifecycleLock) {
+      if (closed) {
+        return;
       }
-      failure.addSuppressed(exception);
-    }
-
-    if (failure instanceof RuntimeException runtimeException) {
-      throw runtimeException;
-    }
-    if (failure instanceof Error error) {
-      throw error;
+      closed = true;
+      closeResources();
     }
   }
 
@@ -167,14 +156,17 @@ final class ConfiguredRuntime implements AutoCloseable {
 
   private void closeAfterStartFailure(Throwable failure) {
     try {
-      gateway.close();
-    } catch (RuntimeException | Error closeFailure) {
+      closeResources();
+    } catch (IOException | RuntimeException | Error closeFailure) {
       failure.addSuppressed(closeFailure);
     }
+  }
+
+  private void closeResources() throws IOException {
     try {
+      gateway.close();
+    } finally {
       store.close();
-    } catch (IOException closeFailure) {
-      failure.addSuppressed(closeFailure);
     }
   }
 

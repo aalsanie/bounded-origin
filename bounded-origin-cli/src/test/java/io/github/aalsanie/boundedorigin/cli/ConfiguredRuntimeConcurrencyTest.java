@@ -2,9 +2,11 @@ package io.github.aalsanie.boundedorigin.cli;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -15,7 +17,8 @@ class ConfiguredRuntimeConcurrencyTest {
   @TempDir java.nio.file.Path temporaryDirectory;
 
   @Test
-  void concurrentCloseIsIdempotentAndReleasesStoreLock() throws Exception {
+  void concurrentCloseIsIdempotentAndReleasesStoreLock()
+      throws IOException, ConfigurationException, InterruptedException, ExecutionException {
     ConfigurationModel.RuntimeConfiguration configuration =
         ConfigurationTestSupport.runtimeConfiguration(temporaryDirectory);
     ConfiguredRuntime runtime = ConfiguredRuntime.assemble(configuration);

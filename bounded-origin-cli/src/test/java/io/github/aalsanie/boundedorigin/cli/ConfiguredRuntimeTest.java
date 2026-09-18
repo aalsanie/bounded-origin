@@ -19,7 +19,7 @@ class ConfiguredRuntimeTest {
   @TempDir Path temporaryDirectory;
 
   @Test
-  void assemblesStartsAndClosesConfiguredRuntime() throws Exception {
+  void assemblesStartsAndClosesConfiguredRuntime() throws IOException, ConfigurationException {
     ConfigurationModel.RuntimeConfiguration configuration =
         ConfigurationTestSupport.runtimeConfiguration(temporaryDirectory);
 
@@ -45,7 +45,7 @@ class ConfiguredRuntimeTest {
   }
 
   @Test
-  void rejectsNullAndInvalidTypedConfiguration() throws Exception {
+  void rejectsNullAndInvalidTypedConfiguration() throws IOException, ConfigurationException {
     ConfigurationException nullConfiguration =
         assertThrows(ConfigurationException.class, () -> ConfiguredRuntime.assemble(null));
     assertTrue(nullConfiguration.getMessage().contains("configuration must not be null"));
@@ -66,7 +66,7 @@ class ConfiguredRuntimeTest {
   }
 
   @Test
-  void rejectsInvalidTypedStoreConfiguration() throws Exception {
+  void rejectsInvalidTypedStoreConfiguration() throws IOException, ConfigurationException {
     ConfigurationModel.RuntimeConfiguration base =
         ConfigurationTestSupport.runtimeConfiguration(temporaryDirectory);
 
@@ -97,7 +97,7 @@ class ConfiguredRuntimeTest {
   }
 
   @Test
-  void rejectsMaterializationLimitAboveStoreArtifactLimit() throws Exception {
+  void rejectsMaterializationLimitAboveStoreArtifactLimit() throws IOException, ConfigurationException {
     ConfigurationModel.RuntimeConfiguration base =
         ConfigurationTestSupport.runtimeConfiguration(temporaryDirectory);
     ConfigurationModel.StoreConfiguration store =
@@ -120,7 +120,7 @@ class ConfiguredRuntimeTest {
   }
 
   @Test
-  void storeLimitMayBeBelowGlobalLimitWhenNothingMaterializes() throws Exception {
+  void storeLimitMayBeBelowGlobalLimitWhenNothingMaterializes() throws IOException, ConfigurationException {
     ConfigurationModel.RuntimeConfiguration base =
         ConfigurationTestSupport.runtimeConfiguration(temporaryDirectory);
     List<ConfigurationModel.RouteConfiguration> routes =
@@ -140,7 +140,7 @@ class ConfiguredRuntimeTest {
   }
 
   @Test
-  void ownsAndReleasesArtifactStoreLock() throws Exception {
+  void ownsAndReleasesArtifactStoreLock() throws IOException, ConfigurationException {
     ConfigurationModel.RuntimeConfiguration configuration =
         ConfigurationTestSupport.runtimeConfiguration(temporaryDirectory);
     ConfiguredRuntime first = ConfiguredRuntime.assemble(configuration);
@@ -155,7 +155,7 @@ class ConfiguredRuntimeTest {
   }
 
   @Test
-  void failedStartClosesOwnedStore() throws Exception {
+  void failedStartClosesOwnedStore() throws IOException, ConfigurationException {
     try (ServerSocket blocker = new ServerSocket(0, 1, InetAddress.getByName("127.0.0.1"))) {
       ConfigurationModel.RuntimeConfiguration base =
           ConfigurationTestSupport.runtimeConfiguration(temporaryDirectory);
@@ -177,7 +177,7 @@ class ConfiguredRuntimeTest {
   }
 
   @Test
-  void rejectsSecondStart() throws Exception {
+  void rejectsSecondStart() throws IOException, ConfigurationException {
     ConfigurationModel.RuntimeConfiguration configuration =
         ConfigurationTestSupport.runtimeConfiguration(temporaryDirectory);
 
