@@ -163,7 +163,7 @@ final class ConfiguredRuntime implements AutoCloseable {
   }
 
   private void closeResources() throws IOException {
-    try (FileSystemArtifactStore ignored = store) {
+    try (store) {
       gateway.close();
     }
   }
