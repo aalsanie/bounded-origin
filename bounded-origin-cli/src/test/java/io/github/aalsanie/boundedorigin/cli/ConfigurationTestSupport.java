@@ -81,6 +81,20 @@ final class ConfigurationTestSupport {
     return original.replace(target, replacement);
   }
 
+  static ConfigurationModel.RuntimeConfiguration runtimeConfiguration(Path directory)
+      throws ConfigurationException {
+    ObjectFixture fixture = objectFixture();
+    fixture.gateway().put("listen.host", "127.0.0.1");
+    fixture.gateway().put("listen.port", 0);
+    fixture.gateway().put("admin.host", "127.0.0.1");
+    fixture.gateway().put("admin.port", 0);
+    fixture.gateway().put("origin.host", "127.0.0.1");
+    fixture.gateway().put("origin.port", 65_534);
+    fixture.gateway().put("temporary.directory", directory.resolve("spool").toString());
+    fixture.store().put("directory", directory.resolve("store").toString());
+    return ConfigurationDecoder.decode(fixture.root());
+  }
+
   static ObjectFixture objectFixture() {
     Map<String, Object> gateway = new LinkedHashMap<>();
     gateway.put("origin.host", "origin.internal");
