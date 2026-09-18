@@ -27,7 +27,7 @@ class BoundedOriginCliProcessTest {
   @TempDir Path temporaryDirectory;
 
   @Test
-  void generatedNativeLauncherValidatesConfiguration() throws Exception {
+  void generatedNativeLauncherValidatesConfiguration() throws IOException, InterruptedException {
     Path launcherDirectory = launcherDirectory();
     assertTrue(Files.isRegularFile(launcherDirectory.resolve("bounded-origin")));
     assertTrue(Files.isRegularFile(launcherDirectory.resolve("bounded-origin.bat")));
@@ -40,7 +40,7 @@ class BoundedOriginCliProcessTest {
   }
 
   @Test
-  void malformedCommandLineUsesStableUsageExitCode() throws Exception {
+  void malformedCommandLineUsesStableUsageExitCode() throws IOException, InterruptedException {
     ProcessResult result = runToCompletion("reload", "--config", "ignored.yaml");
 
     assertEquals(BoundedOriginCli.EXIT_USAGE, result.exitCode());
@@ -48,7 +48,7 @@ class BoundedOriginCliProcessTest {
   }
 
   @Test
-  void invalidConfigurationFailsBeforePublicBind() throws Exception {
+  void invalidConfigurationFailsBeforePublicBind() throws IOException, InterruptedException {
     try (ServerSocket blocker = CliTestSupport.bindLoopback(0)) {
       Path configuration =
           ConfigurationTestSupport.write(
@@ -64,7 +64,7 @@ class BoundedOriginCliProcessTest {
   }
 
   @Test
-  void validateDoesNotBindConfiguredListeners() throws Exception {
+  void validateDoesNotBindConfiguredListeners() throws IOException, InterruptedException {
     try (ServerSocket publicBlocker = CliTestSupport.bindLoopback(0);
         ServerSocket adminBlocker = CliTestSupport.bindLoopback(0)) {
       Path configuration =
@@ -79,7 +79,7 @@ class BoundedOriginCliProcessTest {
   }
 
   @Test
-  void lockedStoreFailsBeforeServing() throws Exception {
+  void lockedStoreFailsBeforeServing() throws IOException, InterruptedException {
     int listenPort = CliTestSupport.freePort();
     Path configuration =
         CliTestSupport.writeRuntimeConfiguration(temporaryDirectory, listenPort, 0);
@@ -111,11 +111,10 @@ class BoundedOriginCliProcessTest {
   }
 
   @Test
-  void startupFailureReleasesStoreLock() throws Exception {
+  void startupFailureReleasesStoreLock() throws IOException, InterruptedException {
     try (ServerSocket blocker = CliTestSupport.bindLoopback(0)) {
       Path configuration =
-          CliTestSupport.writeRuntimeConfiguration(
-              temporaryDirectory, blocker.getLocalPort(), 0);
+          CliTestSupport.writeRuntimeConfiguration(temporaryDirectory, blocker.getLocalPort(), 0);
 
       ProcessResult result = runToCompletion("run", "--config", configuration.toString());
 
@@ -128,7 +127,8 @@ class BoundedOriginCliProcessTest {
 
   @Test
   @EnabledOnOs({OS.LINUX, OS.MAC})
-  void gracefulTerminationReleasesResourcesAndRestartRereadsConfiguration() throws Exception {
+  void gracefulTerminationReleasesResourcesAndRestartRereadsConfiguration()
+      throws IOException, InterruptedException {
     int firstPort = CliTestSupport.freePort();
     int secondPort = CliTestSupport.freePort();
     Path configuration =
@@ -142,8 +142,7 @@ class BoundedOriginCliProcessTest {
     assertFalse(canConnect(firstPort));
 
     ConfigurationTestSupport.write(
-        temporaryDirectory,
-        CliTestSupport.runtimeYaml(temporaryDirectory, secondPort, 0));
+        temporaryDirectory, CliTestSupport.runtimeYaml(temporaryDirectory, secondPort, 0));
 
     Process second = startProcess("run", "--config", configuration.toString());
     awaitListening(second, secondPort);
@@ -161,7 +160,8 @@ class BoundedOriginCliProcessTest {
     }
   }
 
-  private static void awaitListening(Process process, int port) throws Exception {
+  private static void awaitListening(Process process, int port)
+      throws IOException, InterruptedException {
     long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(PROCESS_TIMEOUT_SECONDS);
     while (System.nanoTime() < deadline) {
       if (!process.isAlive()) {
@@ -185,7 +185,8 @@ class BoundedOriginCliProcessTest {
     }
   }
 
-  private static ProcessResult runToCompletion(String... arguments) throws Exception {
+  private static ProcessResult runToCompletion(String... arguments)
+      throws IOException, InterruptedException {
     Process process = startProcess(arguments);
     if (!process.waitFor(PROCESS_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
       process.destroyForcibly();

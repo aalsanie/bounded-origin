@@ -14,10 +14,12 @@ import java.net.Socket;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
@@ -100,7 +102,7 @@ class BoundedOriginCliTest {
 
   @Test
   void interruptedRunReturnsRuntimeFailureAndReleasesStore()
-      throws Exception {
+      throws IOException, InterruptedException, ExecutionException, TimeoutException {
     int listenPort = CliTestSupport.freePort();
     Path configuration =
         CliTestSupport.writeRuntimeConfiguration(temporaryDirectory, listenPort, 0);
@@ -152,7 +154,7 @@ class BoundedOriginCliTest {
     return new PrintStream(output, true, StandardCharsets.UTF_8);
   }
 
-  private static void awaitListening(int port, Future<Integer> result) throws Exception {
+  private static void awaitListening(int port, Future<Integer> result) throws InterruptedException {
     long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
     while (System.nanoTime() < deadline) {
       if (result.isDone()) {

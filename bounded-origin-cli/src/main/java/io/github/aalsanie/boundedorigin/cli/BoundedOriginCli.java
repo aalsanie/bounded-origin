@@ -93,8 +93,7 @@ public final class BoundedOriginCli {
     return Path.of(arguments[2]);
   }
 
-  private static void run(
-      ConfigurationModel.RuntimeConfiguration configuration, PrintStream error)
+  private static void run(ConfigurationModel.RuntimeConfiguration configuration, PrintStream error)
       throws ConfigurationException, IOException, InterruptedException {
     try (ConfiguredRuntime runtime = ConfiguredRuntime.assemble(configuration)) {
       Thread shutdownHook =

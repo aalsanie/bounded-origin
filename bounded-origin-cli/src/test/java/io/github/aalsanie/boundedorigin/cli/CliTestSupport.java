@@ -8,13 +8,14 @@ import java.nio.file.Path;
 final class CliTestSupport {
   private CliTestSupport() {}
 
-  static Path writeRuntimeConfiguration(
-      Path directory, int listenPort, int adminPort) throws IOException {
+  static Path writeRuntimeConfiguration(Path directory, int listenPort, int adminPort)
+      throws IOException {
     return ConfigurationTestSupport.write(directory, runtimeYaml(directory, listenPort, adminPort));
   }
 
   static String runtimeYaml(Path directory, int listenPort, int adminPort) {
-    String temporary = yamlScalar(directory.resolve("spool").toAbsolutePath().normalize().toString());
+    String temporary =
+        yamlScalar(directory.resolve("spool").toAbsolutePath().normalize().toString());
     String store = yamlScalar(directory.resolve("store").toAbsolutePath().normalize().toString());
     String gatewayPrefix =
         "gateway:\n"
