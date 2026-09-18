@@ -247,8 +247,7 @@ class ZeroCodeEndToEndTest {
   private static PortPair freePorts() throws IOException {
     try (ServerSocket listen =
             new ServerSocket(0, 16, java.net.InetAddress.getByName("127.0.0.1"));
-        ServerSocket admin =
-            new ServerSocket(0, 16, java.net.InetAddress.getByName("127.0.0.1"))) {
+        ServerSocket admin = new ServerSocket(0, 16, java.net.InetAddress.getByName("127.0.0.1"))) {
       return new PortPair(listen.getLocalPort(), admin.getLocalPort());
     }
   }
@@ -320,8 +319,7 @@ class ZeroCodeEndToEndTest {
     long metric(String name) throws IOException, InterruptedException {
       HttpResponse<String> response =
           CLIENT.send(
-              HttpRequest.newBuilder(
-                      URI.create("http://127.0.0.1:" + adminPort + "/metrics"))
+              HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + adminPort + "/metrics"))
                   .timeout(Duration.ofSeconds(2))
                   .GET()
                   .build(),
@@ -354,28 +352,40 @@ class ZeroCodeEndToEndTest {
 
     @Override
     public void close() {
-      if (!process.isAlive()) {
+      List<ProcessHandle> descendants = process.descendants().toList();
+      if (!process.isAlive() && descendants.stream().noneMatch(ProcessHandle::isAlive)) {
         return;
       }
-      List<ProcessHandle> descendants = process.descendants().toList();
       if (isWindows()) {
-        descendants.forEach(ProcessHandle::destroy);
+        descendants.stream().filter(ProcessHandle::isAlive).forEach(ProcessHandle::destroyForcibly);
       }
       process.destroy();
       try {
         if (!process.waitFor(10, TimeUnit.SECONDS)) {
-          descendants.stream()
-              .filter(ProcessHandle::isAlive)
-              .forEach(ProcessHandle::destroyForcibly);
           process.destroyForcibly();
           process.waitFor(10, TimeUnit.SECONDS);
         }
+        awaitDescendantsExit(descendants);
       } catch (InterruptedException exception) {
         Thread.currentThread().interrupt();
-        descendants.stream()
-            .filter(ProcessHandle::isAlive)
-            .forEach(ProcessHandle::destroyForcibly);
+        descendants.stream().filter(ProcessHandle::isAlive).forEach(ProcessHandle::destroyForcibly);
         process.destroyForcibly();
+      }
+    }
+
+    private static void awaitDescendantsExit(List<ProcessHandle> descendants) {
+      long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
+      while (System.nanoTime() < deadline) {
+        List<ProcessHandle> alive =
+            descendants.stream().filter(ProcessHandle::isAlive).toList();
+        if (alive.isEmpty()) {
+          return;
+        }
+        alive.forEach(ProcessHandle::destroyForcibly);
+        LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(10));
+      }
+      if (descendants.stream().anyMatch(ProcessHandle::isAlive)) {
+        throw new AssertionError("bounded-origin descendant did not terminate");
       }
     }
 
@@ -388,8 +398,7 @@ class ZeroCodeEndToEndTest {
         try {
           HttpResponse<String> response =
               CLIENT.send(
-                  HttpRequest.newBuilder(
-                          URI.create("http://127.0.0.1:" + adminPort + "/ready"))
+                  HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + adminPort + "/ready"))
                       .timeout(Duration.ofSeconds(1))
                       .GET()
                       .build(),
