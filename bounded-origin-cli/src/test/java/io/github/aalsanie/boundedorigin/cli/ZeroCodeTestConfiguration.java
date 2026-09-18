@@ -60,12 +60,12 @@ final class ZeroCodeTestConfiguration {
         schema: 1
         gateway:
           listen.host: 127.0.0.1
-          listen.port: %d
+          listen.port: __LISTEN_PORT__
           admin.host: 127.0.0.1
-          admin.port: %d
+          admin.port: __ADMIN_PORT__
           origin.host: 127.0.0.1
-          origin.port: %d
-          temporary.directory: %s
+          origin.port: __ORIGIN_PORT__
+          temporary.directory: __TEMPORARY_DIRECTORY__
           ingress.trust: UNTRUSTED
           forwarded.trust: false
           http.max-request-body-bytes: 65536
@@ -83,7 +83,7 @@ final class ZeroCodeTestConfiguration {
           request.timeout: PT10S
           drain.timeout: PT5S
         store:
-          directory: %s
+          directory: __STORE_DIRECTORY__
           max-bytes: 4194304
           max-artifact-bytes: 65536
         routes:
@@ -133,14 +133,19 @@ final class ZeroCodeTestConfiguration {
               path: /unsafe/**
               trust: UNTRUSTED
             strategy: DENY
-        %s
+        __HEALTH_ROUTE__
         fallback:
           id: default-deny
           version: 1
           precedence: -2147483648
           strategy: DENY
         """
-        .formatted(listenPort, adminPort, originPort, temporary, store, health);
+        .replace("__LISTEN_PORT__", Integer.toString(listenPort))
+        .replace("__ADMIN_PORT__", Integer.toString(adminPort))
+        .replace("__ORIGIN_PORT__", Integer.toString(originPort))
+        .replace("__TEMPORARY_DIRECTORY__", temporary)
+        .replace("__STORE_DIRECTORY__", store)
+        .replace("__HEALTH_ROUTE__", health);
   }
 
   private static String yamlScalar(String value) {

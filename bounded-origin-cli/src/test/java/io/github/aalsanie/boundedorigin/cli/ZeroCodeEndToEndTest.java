@@ -1,7 +1,6 @@
 package io.github.aalsanie.boundedorigin.cli;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
@@ -35,7 +34,7 @@ class ZeroCodeEndToEndTest {
   @TempDir Path temporaryDirectory;
 
   @Test
-  void materializationSingleFlightAndSemanticAliasesUseOneOriginComputation() throws Exception {
+  void materializationSingleFlightAndSemanticAliasesUseOneOriginComputation() throws IOException, InterruptedException {
     try (SyntheticOrigin origin = new SyntheticOrigin()) {
       int listenPort = freePort();
       int adminPort = freePort();
@@ -43,7 +42,8 @@ class ZeroCodeEndToEndTest {
           ZeroCodeTestConfiguration.write(
               temporaryDirectory, listenPort, adminPort, origin.port(), false);
 
-      try (RunningCli cli = RunningCli.start(configuration, listenPort, adminPort, temporaryDirectory)) {
+      try (RunningCli cli =
+          RunningCli.start(configuration, listenPort, adminPort, temporaryDirectory)) {
         origin.blockResponses();
         List<String> aliases = new ArrayList<>();
         for (int index = 0; index < 12; index++) {
@@ -97,7 +97,7 @@ class ZeroCodeEndToEndTest {
   }
 
   @Test
-  void uniqueKeyPressureNeverExceedsConfiguredActiveAndQueueBudgets() throws Exception {
+  void uniqueKeyPressureNeverExceedsConfiguredActiveAndQueueBudgets() throws IOException, InterruptedException {
     try (SyntheticOrigin origin = new SyntheticOrigin()) {
       int listenPort = freePort();
       int adminPort = freePort();
@@ -105,7 +105,8 @@ class ZeroCodeEndToEndTest {
           ZeroCodeTestConfiguration.write(
               temporaryDirectory, listenPort, adminPort, origin.port(), false);
 
-      try (RunningCli cli = RunningCli.start(configuration, listenPort, adminPort, temporaryDirectory)) {
+      try (RunningCli cli =
+          RunningCli.start(configuration, listenPort, adminPort, temporaryDirectory)) {
         origin.blockResponses();
         List<CompletableFuture<HttpResponse<String>>> requests = new ArrayList<>();
         for (int index = 0; index < 8; index++) {
@@ -121,8 +122,10 @@ class ZeroCodeEndToEndTest {
 
         origin.releaseResponses();
         List<HttpResponse<String>> responses = join(requests);
-        long successes = responses.stream().filter(response -> response.statusCode() == 200).count();
-        long rejections = responses.stream().filter(response -> response.statusCode() == 503).count();
+        long successes =
+            responses.stream().filter(response -> response.statusCode() == 200).count();
+        long rejections =
+            responses.stream().filter(response -> response.statusCode() == 503).count();
 
         assertEquals(4, successes);
         assertEquals(4, rejections);
@@ -133,7 +136,7 @@ class ZeroCodeEndToEndTest {
   }
 
   @Test
-  void denyFallbackAndRoutePrecedenceAreEnforcedBeforeOrigin() throws Exception {
+  void denyFallbackAndRoutePrecedenceAreEnforcedBeforeOrigin() throws IOException, InterruptedException {
     try (SyntheticOrigin origin = new SyntheticOrigin()) {
       int listenPort = freePort();
       int adminPort = freePort();
@@ -141,7 +144,8 @@ class ZeroCodeEndToEndTest {
           ZeroCodeTestConfiguration.write(
               temporaryDirectory, listenPort, adminPort, origin.port(), false);
 
-      try (RunningCli cli = RunningCli.start(configuration, listenPort, adminPort, temporaryDirectory)) {
+      try (RunningCli cli =
+          RunningCli.start(configuration, listenPort, adminPort, temporaryDirectory)) {
         assertTrue(cli.isAlive());
         HttpResponse<String> denied = get(listenPort, "/unsafe/blocked");
         assertEquals(403, denied.statusCode());
@@ -164,7 +168,7 @@ class ZeroCodeEndToEndTest {
   }
 
   @Test
-  void artifactsSurviveRestartAndConfigurationChangesApplyOnlyAfterRestart() throws Exception {
+  void artifactsSurviveRestartAndConfigurationChangesApplyOnlyAfterRestart() throws IOException, InterruptedException {
     try (SyntheticOrigin origin = new SyntheticOrigin()) {
       int listenPort = freePort();
       int adminPort = freePort();
@@ -207,12 +211,14 @@ class ZeroCodeEndToEndTest {
   }
 
   private static CompletableFuture<HttpResponse<String>> sendAsync(int port, String target) {
-    return CLIENT.sendAsync(request(port, target), HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+    return CLIENT.sendAsync(
+        request(port, target), HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
   }
 
   private static HttpResponse<String> get(int port, String target)
       throws IOException, InterruptedException {
-    return CLIENT.send(request(port, target), HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+    return CLIENT.send(
+        request(port, target), HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
   }
 
   private static HttpRequest request(int port, String target) {
@@ -224,12 +230,15 @@ class ZeroCodeEndToEndTest {
 
   private static List<HttpResponse<String>> join(
       List<CompletableFuture<HttpResponse<String>>> futures) {
-    CompletableFuture.allOf(futures.toArray(CompletableFuture[]::new)).orTimeout(15, TimeUnit.SECONDS).join();
+    CompletableFuture.allOf(futures.toArray(CompletableFuture[]::new))
+        .orTimeout(15, TimeUnit.SECONDS)
+        .join();
     return futures.stream().map(CompletableFuture::join).toList();
   }
 
   private static int freePort() throws IOException {
-    try (ServerSocket socket = new ServerSocket(0, 16, java.net.InetAddress.getByName("127.0.0.1"))) {
+    try (ServerSocket socket =
+        new ServerSocket(0, 16, java.net.InetAddress.getByName("127.0.0.1"))) {
       return socket.getLocalPort();
     }
   }
@@ -343,13 +352,17 @@ class ZeroCodeEndToEndTest {
       process.destroy();
       try {
         if (!process.waitFor(10, TimeUnit.SECONDS)) {
-          descendants.stream().filter(ProcessHandle::isAlive).forEach(ProcessHandle::destroyForcibly);
+          descendants.stream()
+              .filter(ProcessHandle::isAlive)
+              .forEach(ProcessHandle::destroyForcibly);
           process.destroyForcibly();
           process.waitFor(10, TimeUnit.SECONDS);
         }
       } catch (InterruptedException exception) {
         Thread.currentThread().interrupt();
-        descendants.stream().filter(ProcessHandle::isAlive).forEach(ProcessHandle::destroyForcibly);
+        descendants.stream()
+            .filter(ProcessHandle::isAlive)
+            .forEach(ProcessHandle::destroyForcibly);
         process.destroyForcibly();
       }
     }
