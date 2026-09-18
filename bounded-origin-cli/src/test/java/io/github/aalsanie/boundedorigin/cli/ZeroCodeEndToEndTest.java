@@ -3,7 +3,9 @@ package io.github.aalsanie.boundedorigin.cli;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
@@ -16,6 +18,7 @@ import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.SimpleFileVisitor;
+import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -237,6 +240,163 @@ class ZeroCodeEndToEndTest {
         assertEquals(403, changed.statusCode());
         assertEquals(2, origin.requestCount());
       }
+    }
+  }
+
+  @Test
+  void unselectedQueryCardinalityCannotCreateOriginWork()
+      throws IOException, InterruptedException {
+    try (SyntheticOrigin origin = new SyntheticOrigin()) {
+      PortPair ports = freePorts();
+      int listenPort = ports.listen();
+      int adminPort = ports.admin();
+      Path configuration =
+          ZeroCodeTestConfiguration.write(
+              temporaryDirectory, listenPort, adminPort, origin.port(), false);
+
+      try (RunningCli cli =
+          RunningCli.start(configuration, listenPort, adminPort, temporaryDirectory)) {
+        origin.blockResponses();
+        List<CompletableFuture<HttpResponse<String>>> requests = new ArrayList<>();
+        for (int index = 0; index < 32; index++) {
+          requests.add(
+              sendAsync(
+                  listenPort,
+                  "/render/cardinality?variant=a&noise"
+                      + index
+                      + "="
+                      + "x".repeat(128)));
+        }
+
+        cli.awaitMetricAtLeast("bounded_origin_single_flight_joins_total", 31, WAIT);
+        assertTrue(origin.awaitRequestsAtLeast(1, WAIT));
+        assertEquals(1, origin.requestCount());
+
+        origin.releaseResponses();
+        List<HttpResponse<String>> responses = join(requests);
+        assertEquals(32, responses.size());
+        assertTrue(responses.stream().allMatch(response -> response.statusCode() == 200));
+        assertEquals(1, new HashSet<>(responses.stream().map(HttpResponse::body).toList()).size());
+        assertEquals(1, origin.requestCount());
+      }
+    }
+  }
+
+  @Test
+  void hostileHttpIsRejectedBeforeOriginWork() throws IOException, InterruptedException {
+    try (SyntheticOrigin origin = new SyntheticOrigin()) {
+      PortPair ports = freePorts();
+      int listenPort = ports.listen();
+      int adminPort = ports.admin();
+      Path configuration =
+          ZeroCodeTestConfiguration.write(
+              temporaryDirectory, listenPort, adminPort, origin.port(), false);
+
+      try (RunningCli cli =
+          RunningCli.start(configuration, listenPort, adminPort, temporaryDirectory)) {
+        assertTrue(cli.isAlive());
+        List<String> requests =
+            List.of(
+                "GET /render/%2e%2e?variant=a HTTP/1.1\r\n"
+                    + "Host: example.test\r\nConnection: close\r\n\r\n",
+                "GET /render/a%2fb?variant=a HTTP/1.1\r\n"
+                    + "Host: example.test\r\nConnection: close\r\n\r\n",
+                "GET /render/a%5cb?variant=a HTTP/1.1\r\n"
+                    + "Host: example.test\r\nConnection: close\r\n\r\n",
+                "GET /render/%GG?variant=a HTTP/1.1\r\n"
+                    + "Host: example.test\r\nConnection: close\r\n\r\n",
+                "GET http://example.test/render/a?variant=a HTTP/1.1\r\n"
+                    + "Host: example.test\r\nConnection: close\r\n\r\n",
+                "GET /render/a?variant=a HTTP/1.1\r\n"
+                    + "Host: example.test\r\nHost: attacker.test\r\n"
+                    + "Connection: close\r\n\r\n",
+                "GET /render/a?variant=a HTTP/1.1\r\n"
+                    + "Host: example.test\r\nContent-Length: 0\r\n"
+                    + "Transfer-Encoding: chunked\r\nConnection: close\r\n\r\n"
+                    + "0\r\n\r\n");
+
+        for (String request : requests) {
+          assertEquals(400, rawStatus(listenPort, request));
+        }
+        assertEquals(0, origin.requestCount());
+      }
+    }
+  }
+
+  @Test
+  void corruptArtifactFailsClosedAndRecoveryRemainsSingleFlight()
+      throws IOException, InterruptedException {
+    try (SyntheticOrigin origin = new SyntheticOrigin()) {
+      PortPair ports = freePorts();
+      int listenPort = ports.listen();
+      int adminPort = ports.admin();
+      Path configuration =
+          ZeroCodeTestConfiguration.write(
+              temporaryDirectory, listenPort, adminPort, origin.port(), false);
+
+      try (RunningCli cli =
+          RunningCli.start(configuration, listenPort, adminPort, temporaryDirectory)) {
+        HttpResponse<String> materialized =
+            get(listenPort, "/render/corrupt?variant=a");
+        assertEquals(200, materialized.statusCode());
+        assertEquals(1, origin.requestCount());
+
+        Path object = onlyRegularFile(temporaryDirectory.resolve("store").resolve("objects"));
+        Files.write(object, new byte[] {0}, StandardOpenOption.TRUNCATE_EXISTING);
+
+        HttpResponse<String> corruptRead =
+            get(listenPort, "/render/corrupt?variant=a");
+        assertEquals(500, corruptRead.statusCode());
+        assertEquals(1, origin.requestCount());
+
+        origin.blockResponses();
+        List<CompletableFuture<HttpResponse<String>>> recovery = new ArrayList<>();
+        for (int index = 0; index < 16; index++) {
+          recovery.add(sendAsync(listenPort, "/render/corrupt?variant=a"));
+        }
+
+        cli.awaitMetricAtLeast("bounded_origin_single_flight_joins_total", 15, WAIT);
+        assertTrue(origin.awaitRequestsAtLeast(2, WAIT));
+        assertEquals(2, origin.requestCount());
+
+        origin.releaseResponses();
+        List<HttpResponse<String>> recovered = join(recovery);
+        assertEquals(16, recovered.size());
+        assertTrue(recovered.stream().allMatch(response -> response.statusCode() == 200));
+        assertEquals(1, new HashSet<>(recovered.stream().map(HttpResponse::body).toList()).size());
+        assertEquals(2, origin.requestCount());
+      }
+    }
+  }
+
+  private static int rawStatus(int port, String request) throws IOException {
+    try (Socket socket = new Socket()) {
+      socket.connect(new InetSocketAddress("127.0.0.1", port), 2_000);
+      socket.setSoTimeout(5_000);
+      socket.getOutputStream().write(request.getBytes(StandardCharsets.ISO_8859_1));
+      socket.getOutputStream().flush();
+
+      try (BufferedReader reader =
+          new BufferedReader(
+              new InputStreamReader(socket.getInputStream(), StandardCharsets.ISO_8859_1))) {
+        String statusLine = reader.readLine();
+        if (statusLine == null) {
+          throw new IOException("gateway closed without an HTTP response");
+        }
+        String[] parts = statusLine.split(" ", 3);
+        if (parts.length < 2) {
+          throw new IOException("malformed HTTP status line: " + statusLine);
+        }
+        return Integer.parseInt(parts[1]);
+      }
+    }
+  }
+
+  private static Path onlyRegularFile(Path root) throws IOException {
+    try (var paths = Files.walk(root)) {
+      List<Path> files = paths.filter(Files::isRegularFile).toList();
+      assertEquals(1, files.size());
+      return files.getFirst();
     }
   }
 
