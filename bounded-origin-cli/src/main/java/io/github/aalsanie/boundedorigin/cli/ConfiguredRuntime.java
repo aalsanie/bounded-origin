@@ -163,10 +163,27 @@ final class ConfiguredRuntime implements AutoCloseable {
   }
 
   private void closeResources() throws IOException {
+    Throwable failure = null;
     try {
       gateway.close();
-    } finally {
+    } catch (RuntimeException | Error exception) {
+      failure = exception;
+    }
+
+    try {
       store.close();
+    } catch (IOException exception) {
+      if (failure == null) {
+        throw exception;
+      }
+      failure.addSuppressed(exception);
+    }
+
+    if (failure instanceof RuntimeException runtimeException) {
+      throw runtimeException;
+    }
+    if (failure instanceof Error error) {
+      throw error;
     }
   }
 
