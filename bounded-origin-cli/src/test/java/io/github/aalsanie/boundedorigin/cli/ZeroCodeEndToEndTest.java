@@ -37,8 +37,9 @@ class ZeroCodeEndToEndTest {
   void materializationSingleFlightAndSemanticAliasesUseOneOriginComputation()
       throws IOException, InterruptedException {
     try (SyntheticOrigin origin = new SyntheticOrigin()) {
-      int listenPort = freePort();
-      int adminPort = freePort();
+      PortPair ports = freePorts();
+      int listenPort = ports.listen();
+      int adminPort = ports.admin();
       Path configuration =
           ZeroCodeTestConfiguration.write(
               temporaryDirectory, listenPort, adminPort, origin.port(), false);
@@ -101,8 +102,9 @@ class ZeroCodeEndToEndTest {
   void uniqueKeyPressureNeverExceedsConfiguredActiveAndQueueBudgets()
       throws IOException, InterruptedException {
     try (SyntheticOrigin origin = new SyntheticOrigin()) {
-      int listenPort = freePort();
-      int adminPort = freePort();
+      PortPair ports = freePorts();
+      int listenPort = ports.listen();
+      int adminPort = ports.admin();
       Path configuration =
           ZeroCodeTestConfiguration.write(
               temporaryDirectory, listenPort, adminPort, origin.port(), false);
@@ -141,8 +143,9 @@ class ZeroCodeEndToEndTest {
   void denyFallbackAndRoutePrecedenceAreEnforcedBeforeOrigin()
       throws IOException, InterruptedException {
     try (SyntheticOrigin origin = new SyntheticOrigin()) {
-      int listenPort = freePort();
-      int adminPort = freePort();
+      PortPair ports = freePorts();
+      int listenPort = ports.listen();
+      int adminPort = ports.admin();
       Path configuration =
           ZeroCodeTestConfiguration.write(
               temporaryDirectory, listenPort, adminPort, origin.port(), false);
@@ -174,8 +177,9 @@ class ZeroCodeEndToEndTest {
   void artifactsSurviveRestartAndConfigurationChangesApplyOnlyAfterRestart()
       throws IOException, InterruptedException {
     try (SyntheticOrigin origin = new SyntheticOrigin()) {
-      int listenPort = freePort();
-      int adminPort = freePort();
+      PortPair ports = freePorts();
+      int listenPort = ports.listen();
+      int adminPort = ports.admin();
       Path configuration =
           ZeroCodeTestConfiguration.write(
               temporaryDirectory, listenPort, adminPort, origin.port(), false);
@@ -240,10 +244,12 @@ class ZeroCodeEndToEndTest {
     return futures.stream().map(CompletableFuture::join).toList();
   }
 
-  private static int freePort() throws IOException {
-    try (ServerSocket socket =
-        new ServerSocket(0, 16, java.net.InetAddress.getByName("127.0.0.1"))) {
-      return socket.getLocalPort();
+  private static PortPair freePorts() throws IOException {
+    try (ServerSocket listen =
+            new ServerSocket(0, 16, java.net.InetAddress.getByName("127.0.0.1"));
+        ServerSocket admin =
+            new ServerSocket(0, 16, java.net.InetAddress.getByName("127.0.0.1"))) {
+      return new PortPair(listen.getLocalPort(), admin.getLocalPort());
     }
   }
 
@@ -260,6 +266,8 @@ class ZeroCodeEndToEndTest {
     }
     throw new IOException("port did not become available: " + port);
   }
+
+  private record PortPair(int listen, int admin) {}
 
   private static final class RunningCli implements AutoCloseable {
     private final Process process;
