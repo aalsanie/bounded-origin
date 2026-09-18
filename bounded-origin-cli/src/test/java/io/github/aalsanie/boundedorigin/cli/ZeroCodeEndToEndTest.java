@@ -34,7 +34,8 @@ class ZeroCodeEndToEndTest {
   @TempDir Path temporaryDirectory;
 
   @Test
-  void materializationSingleFlightAndSemanticAliasesUseOneOriginComputation() throws IOException, InterruptedException {
+  void materializationSingleFlightAndSemanticAliasesUseOneOriginComputation()
+      throws IOException, InterruptedException {
     try (SyntheticOrigin origin = new SyntheticOrigin()) {
       int listenPort = freePort();
       int adminPort = freePort();
@@ -97,7 +98,8 @@ class ZeroCodeEndToEndTest {
   }
 
   @Test
-  void uniqueKeyPressureNeverExceedsConfiguredActiveAndQueueBudgets() throws IOException, InterruptedException {
+  void uniqueKeyPressureNeverExceedsConfiguredActiveAndQueueBudgets()
+      throws IOException, InterruptedException {
     try (SyntheticOrigin origin = new SyntheticOrigin()) {
       int listenPort = freePort();
       int adminPort = freePort();
@@ -136,7 +138,8 @@ class ZeroCodeEndToEndTest {
   }
 
   @Test
-  void denyFallbackAndRoutePrecedenceAreEnforcedBeforeOrigin() throws IOException, InterruptedException {
+  void denyFallbackAndRoutePrecedenceAreEnforcedBeforeOrigin()
+      throws IOException, InterruptedException {
     try (SyntheticOrigin origin = new SyntheticOrigin()) {
       int listenPort = freePort();
       int adminPort = freePort();
@@ -168,7 +171,8 @@ class ZeroCodeEndToEndTest {
   }
 
   @Test
-  void artifactsSurviveRestartAndConfigurationChangesApplyOnlyAfterRestart() throws IOException, InterruptedException {
+  void artifactsSurviveRestartAndConfigurationChangesApplyOnlyAfterRestart()
+      throws IOException, InterruptedException {
     try (SyntheticOrigin origin = new SyntheticOrigin()) {
       int listenPort = freePort();
       int adminPort = freePort();
