@@ -142,6 +142,7 @@ class ZeroCodeEndToEndTest {
               temporaryDirectory, listenPort, adminPort, origin.port(), false);
 
       try (RunningCli cli = RunningCli.start(configuration, listenPort, adminPort, temporaryDirectory)) {
+        assertTrue(cli.isAlive());
         HttpResponse<String> denied = get(listenPort, "/unsafe/blocked");
         assertEquals(403, denied.statusCode());
         assertEquals(0, origin.requestCount());
@@ -174,6 +175,7 @@ class ZeroCodeEndToEndTest {
 
       try (RunningCli first =
           RunningCli.start(configuration, listenPort, adminPort, temporaryDirectory)) {
+        assertTrue(first.isAlive());
         HttpResponse<String> materialized = get(listenPort, "/render/persist?variant=a");
         assertEquals(200, materialized.statusCode());
         storedBody = materialized.body();
@@ -191,6 +193,7 @@ class ZeroCodeEndToEndTest {
 
       try (RunningCli second =
           RunningCli.start(configuration, listenPort, adminPort, temporaryDirectory)) {
+        assertTrue(second.isAlive());
         HttpResponse<String> persisted = get(listenPort, "/render/persist?variant=a");
         assertEquals(200, persisted.statusCode());
         assertEquals(storedBody, persisted.body());
@@ -236,6 +239,7 @@ class ZeroCodeEndToEndTest {
     while (System.nanoTime() < deadline) {
       try (ServerSocket socket =
           new ServerSocket(port, 16, java.net.InetAddress.getByName("127.0.0.1"))) {
+        assertTrue(socket.isBound());
         return;
       } catch (IOException exception) {
         LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(20));
@@ -286,6 +290,10 @@ class ZeroCodeEndToEndTest {
         running.close();
         throw failure;
       }
+    }
+
+    boolean isAlive() {
+      return process.isAlive();
     }
 
     long metric(String name) throws IOException, InterruptedException {
