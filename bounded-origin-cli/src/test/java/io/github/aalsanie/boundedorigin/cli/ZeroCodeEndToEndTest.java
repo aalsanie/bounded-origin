@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
+import java.nio.file.FileVisitResult;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
@@ -14,6 +15,8 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.SimpleFileVisitor;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -21,8 +24,10 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.LockSupport;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.api.io.CleanupMode;
 import org.junit.jupiter.api.io.TempDir;
 
 @Timeout(60)
@@ -31,7 +36,24 @@ class ZeroCodeEndToEndTest {
   private static final HttpClient CLIENT =
       HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(2)).build();
 
-  @TempDir Path temporaryDirectory;
+  @TempDir(cleanup = CleanupMode.NEVER)
+  Path temporaryDirectory;
+
+  @AfterEach
+  void deleteTemporaryDirectory() throws IOException {
+    IOException failure = null;
+    long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
+    while (System.nanoTime() < deadline) {
+      try {
+        deleteRecursively(temporaryDirectory);
+        return;
+      } catch (IOException exception) {
+        failure = exception;
+        LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(20));
+      }
+    }
+    throw new IOException("temporary directory remained locked", failure);
+  }
 
   @Test
   void materializationSingleFlightAndSemanticAliasesUseOneOriginComputation()
@@ -266,12 +288,39 @@ class ZeroCodeEndToEndTest {
     throw new IOException("port did not become available: " + port);
   }
 
+  private static void deleteRecursively(Path directory) throws IOException {
+    if (!Files.exists(directory)) {
+      return;
+    }
+    Files.walkFileTree(
+        directory,
+        new SimpleFileVisitor<>() {
+          @Override
+          public FileVisitResult visitFile(Path file, BasicFileAttributes attributes)
+              throws IOException {
+            Files.deleteIfExists(file);
+            return FileVisitResult.CONTINUE;
+          }
+
+          @Override
+          public FileVisitResult postVisitDirectory(Path current, IOException failure)
+              throws IOException {
+            if (failure != null) {
+              throw failure;
+            }
+            Files.deleteIfExists(current);
+            return FileVisitResult.CONTINUE;
+          }
+        });
+  }
+
   private record PortPair(int listen, int admin) {}
 
   private static final class RunningCli implements AutoCloseable {
     private final Process process;
     private final int adminPort;
     private final Path log;
+    private List<ProcessHandle> capturedDescendants = List.of();
 
     private RunningCli(Process process, int adminPort, Path log) {
       this.process = process;
@@ -304,6 +353,7 @@ class ZeroCodeEndToEndTest {
       RunningCli running = new RunningCli(process, adminPort, log);
       try {
         running.awaitReady(WAIT);
+        running.captureDescendants();
         assertTrue(canConnect(listenPort));
         return running;
       } catch (IOException | InterruptedException | RuntimeException | Error failure) {
@@ -314,6 +364,10 @@ class ZeroCodeEndToEndTest {
 
     boolean isAlive() {
       return process.isAlive();
+    }
+
+    private void captureDescendants() {
+      capturedDescendants = process.descendants().toList();
     }
 
     long metric(String name) throws IOException, InterruptedException {
@@ -352,7 +406,7 @@ class ZeroCodeEndToEndTest {
 
     @Override
     public void close() {
-      List<ProcessHandle> descendants = process.descendants().toList();
+      List<ProcessHandle> descendants = managedDescendants();
       if (!process.isAlive() && descendants.stream().noneMatch(ProcessHandle::isAlive)) {
         return;
       }
@@ -373,11 +427,19 @@ class ZeroCodeEndToEndTest {
       }
     }
 
+    private List<ProcessHandle> managedDescendants() {
+      List<ProcessHandle> descendants = new ArrayList<>(capturedDescendants);
+      process
+          .descendants()
+          .filter(candidate -> descendants.stream().noneMatch(existing -> existing.pid() == candidate.pid()))
+          .forEach(descendants::add);
+      return descendants;
+    }
+
     private static void awaitDescendantsExit(List<ProcessHandle> descendants) {
       long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
       while (System.nanoTime() < deadline) {
-        List<ProcessHandle> alive =
-            descendants.stream().filter(ProcessHandle::isAlive).toList();
+        List<ProcessHandle> alive = descendants.stream().filter(ProcessHandle::isAlive).toList();
         if (alive.isEmpty()) {
           return;
         }
