@@ -226,7 +226,7 @@ class ZeroCodeEndToEndTest {
   }
 
   private static int freePort() throws IOException {
-    try (ServerSocket socket = new ServerSocket(0, 16, java.net.InetAddress.getLoopbackAddress())) {
+    try (ServerSocket socket = new ServerSocket(0, 16, java.net.InetAddress.getByName("127.0.0.1"))) {
       return socket.getLocalPort();
     }
   }
@@ -235,7 +235,7 @@ class ZeroCodeEndToEndTest {
     long deadline = System.nanoTime() + timeout.toNanos();
     while (System.nanoTime() < deadline) {
       try (ServerSocket socket =
-          new ServerSocket(port, 16, java.net.InetAddress.getLoopbackAddress())) {
+          new ServerSocket(port, 16, java.net.InetAddress.getByName("127.0.0.1"))) {
         return;
       } catch (IOException exception) {
         LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(20));

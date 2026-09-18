@@ -28,7 +28,7 @@ final class SyntheticOrigin implements AutoCloseable {
       new AtomicReference<>(new CountDownLatch(0));
 
   SyntheticOrigin() throws IOException {
-    server = HttpServer.create(new InetSocketAddress(InetAddress.getLoopbackAddress(), 0), 0);
+    server = HttpServer.create(new InetSocketAddress(InetAddress.getByName("127.0.0.1"), 0), 0);
     executor = Executors.newVirtualThreadPerTaskExecutor();
     server.setExecutor(executor);
     server.createContext("/", this::handle);
