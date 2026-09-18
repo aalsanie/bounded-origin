@@ -108,6 +108,14 @@ final class ZeroCodeTestConfiguration {
               max-queued: 2
               max-execution-duration: PT5S
               max-result-bytes: 65536
+          - id: unsafe-deny
+            version: 1
+            precedence: 80
+            match:
+              method: GET
+              path: /unsafe/**
+              trust: UNTRUSTED
+            strategy: DENY
           - id: unsafe-allowed
             version: 1
             precedence: 90
@@ -127,14 +135,6 @@ final class ZeroCodeTestConfiguration {
               max-queued: 1
               max-execution-duration: PT5S
               max-result-bytes: 65536
-          - id: unsafe-deny
-            version: 1
-            precedence: 80
-            match:
-              method: GET
-              path: /unsafe/**
-              trust: UNTRUSTED
-            strategy: DENY
         __HEALTH_ROUTE__
         fallback:
           id: default-deny
