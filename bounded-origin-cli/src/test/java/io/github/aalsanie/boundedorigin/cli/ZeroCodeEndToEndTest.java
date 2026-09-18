@@ -4,7 +4,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
-import java.nio.file.FileVisitResult;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
@@ -13,6 +12,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.SimpleFileVisitor;
@@ -433,8 +433,7 @@ class ZeroCodeEndToEndTest {
           .descendants()
           .filter(
               candidate ->
-                  descendants.stream()
-                      .noneMatch(existing -> existing.pid() == candidate.pid()))
+                  descendants.stream().noneMatch(existing -> existing.pid() == candidate.pid()))
           .forEach(descendants::add);
       return descendants;
     }
