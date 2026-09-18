@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import io.github.aalsanie.boundedorigin.api.Budget;
 import io.github.aalsanie.boundedorigin.api.ClientComputation;
 import io.github.aalsanie.boundedorigin.api.DenialReason;
 import io.github.aalsanie.boundedorigin.api.OriginDecision;
@@ -48,9 +49,11 @@ class ConfiguredPolicyAdversarialTest {
 
     maximum.add("overflow");
     ConfigurationException failure =
-        assertThrows(ConfigurationException.class, () -> ConfigurationDecoder.decode(fixture.root()));
+        assertThrows(
+            ConfigurationException.class, () -> ConfigurationDecoder.decode(fixture.root()));
 
-    assertTrue(\n        failure.getMessage().contains("maximum entries " + ConfigurationLimits.MAX_DIMENSIONS));
+    assertTrue(
+        failure.getMessage().contains("maximum entries " + ConfigurationLimits.MAX_DIMENSIONS));
   }
 
   @Test
@@ -115,11 +118,11 @@ class ConfiguredPolicyAdversarialTest {
     PolicyEngine engine =
         PolicyConfigurationCompiler.compile(
             configuration,
-            new io.github.aalsanie.boundedorigin.api.Budget(
-                8, 64, Duration.ofSeconds(20), 1_048_576));
+            new Budget(8, 64, Duration.ofSeconds(20), 1_048_576));
 
     OriginDecision.Selected selected =
-        assertInstanceOf(OriginDecision.Selected.class, engine.evaluate(requestAtPath("/client/id")));
+        assertInstanceOf(
+            OriginDecision.Selected.class, engine.evaluate(requestAtPath("/client/id")));
     ClientComputation computation = selected.policy().clientComputation().orElseThrow();
 
     assertEquals(Map.of(hostileKey, hostileValue), computation.parameters());
