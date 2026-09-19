@@ -67,8 +67,7 @@ class BoundedOriginCliProcessTest {
   void conflictingConfiguredListenersFailBeforePublicBind()
       throws IOException, InterruptedException {
     int port = CliTestSupport.freePort();
-    Path configuration =
-        CliTestSupport.writeRuntimeConfiguration(temporaryDirectory, port, port);
+    Path configuration = CliTestSupport.writeRuntimeConfiguration(temporaryDirectory, port, port);
 
     ProcessResult result = runToCompletion("run", "--config", configuration.toString());
 
