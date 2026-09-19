@@ -244,8 +244,7 @@ class ZeroCodeEndToEndTest {
   }
 
   @Test
-  void unselectedQueryCardinalityCannotCreateOriginWork()
-      throws IOException, InterruptedException {
+  void unselectedQueryCardinalityCannotCreateOriginWork() throws IOException, InterruptedException {
     try (SyntheticOrigin origin = new SyntheticOrigin()) {
       PortPair ports = freePorts();
       int listenPort = ports.listen();
@@ -336,16 +335,14 @@ class ZeroCodeEndToEndTest {
 
       try (RunningCli cli =
           RunningCli.start(configuration, listenPort, adminPort, temporaryDirectory)) {
-        HttpResponse<String> materialized =
-            get(listenPort, "/render/corrupt?variant=a");
+        HttpResponse<String> materialized = get(listenPort, "/render/corrupt?variant=a");
         assertEquals(200, materialized.statusCode());
         assertEquals(1, origin.requestCount());
 
         Path object = onlyRegularFile(temporaryDirectory.resolve("store").resolve("objects"));
         Files.write(object, new byte[] {0}, StandardOpenOption.TRUNCATE_EXISTING);
 
-        HttpResponse<String> corruptRead =
-            get(listenPort, "/render/corrupt?variant=a");
+        HttpResponse<String> corruptRead = get(listenPort, "/render/corrupt?variant=a");
         assertEquals(500, corruptRead.statusCode());
         assertEquals(1, origin.requestCount());
 
