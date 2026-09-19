@@ -261,10 +261,7 @@ class ZeroCodeEndToEndTest {
           requests.add(
               sendAsync(
                   listenPort,
-                  "/render/cardinality?variant=a&noise"
-                      + index
-                      + "="
-                      + "x".repeat(128)));
+                  "/render/cardinality?variant=a&noise" + index + "=" + "x".repeat(128)));
         }
 
         cli.awaitMetricAtLeast("bounded_origin_single_flight_joins_total", 31, WAIT);
