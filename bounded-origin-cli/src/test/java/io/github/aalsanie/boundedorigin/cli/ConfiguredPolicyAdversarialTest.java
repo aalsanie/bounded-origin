@@ -37,15 +37,7 @@ class ConfiguredPolicyAdversarialTest {
 
     assertEquals(
         ConfigurationLimits.MAX_DIMENSIONS,
-        accepted
-            .routes()
-            .getFirst()
-            .key()
-            .orElseThrow()
-            .query()
-            .orElseThrow()
-            .include()
-            .size());
+        accepted.routes().getFirst().key().orElseThrow().query().orElseThrow().include().size());
 
     maximum.add("overflow");
     ConfigurationException failure =
@@ -63,8 +55,7 @@ class ConfiguredPolicyAdversarialTest {
         ConfigurationDecoder.decode(ConfigurationTestSupport.objectFixture().root())
             .routes()
             .getFirst();
-    SemanticKeyPlan plan =
-        SemanticKeyPlan.compile(route, Set.of("id"), "configuration.routes[0]");
+    SemanticKeyPlan plan = SemanticKeyPlan.compile(route, Set.of("id"), "configuration.routes[0]");
 
     String capture = "c".repeat(4_096);
     String selected = "v".repeat(4_096);
@@ -117,8 +108,7 @@ class ConfiguredPolicyAdversarialTest {
         ConfigurationDecoder.decode(fixture.root());
     PolicyEngine engine =
         PolicyConfigurationCompiler.compile(
-            configuration,
-            new Budget(8, 64, Duration.ofSeconds(20), 1_048_576));
+            configuration, new Budget(8, 64, Duration.ofSeconds(20), 1_048_576));
 
     OriginDecision.Selected selected =
         assertInstanceOf(
