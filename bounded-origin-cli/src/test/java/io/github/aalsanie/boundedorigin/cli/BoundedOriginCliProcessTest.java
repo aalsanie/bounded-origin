@@ -64,6 +64,22 @@ class BoundedOriginCliProcessTest {
   }
 
   @Test
+  void conflictingConfiguredListenersFailBeforePublicBind()
+      throws IOException, InterruptedException {
+    int port = CliTestSupport.freePort();
+    Path configuration = CliTestSupport.writeRuntimeConfiguration(temporaryDirectory, port, port);
+
+    ProcessResult result = runToCompletion("run", "--config", configuration.toString());
+
+    assertEquals(BoundedOriginCli.EXIT_CONFIGURATION, result.exitCode());
+    assertEquals("configuration rejected", result.output());
+
+    try (ServerSocket rebound = CliTestSupport.bindLoopback(port)) {
+      assertEquals(port, rebound.getLocalPort());
+    }
+  }
+
+  @Test
   void validateDoesNotBindConfiguredListeners() throws IOException, InterruptedException {
     try (ServerSocket publicBlocker = CliTestSupport.bindLoopback(0);
         ServerSocket adminBlocker = CliTestSupport.bindLoopback(0)) {
