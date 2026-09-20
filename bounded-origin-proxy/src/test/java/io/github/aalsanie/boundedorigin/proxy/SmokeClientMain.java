@@ -25,8 +25,7 @@ final class SmokeClientMain {
     if (metrics.statusCode() != 200
         || !metrics
             .body()
-            .contains(
-                "bounded_origin_origin_executions_total " + expectedOriginExecutions)) {
+            .contains("bounded_origin_origin_executions_total " + expectedOriginExecutions)) {
       throw new IllegalStateException(
           "gateway metrics did not match expected origin executions: " + metrics.body());
     }
