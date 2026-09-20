@@ -7,13 +7,13 @@ cd "$ROOT"
 TMP_DIR=$(mktemp -d)
 trap 'rm -rf "$TMP_DIR"' EXIT INT TERM
 
-./gradlew clean assemble
+./gradlew clean assemble :bounded-origin-cli:distTar :bounded-origin-cli:distZip
 {
   find . -path '*/build/libs/*.jar' -type f -print0
   find ./bounded-origin-cli/build/distributions -type f \( -name '*.tar' -o -name '*.zip' \) -print0
 } | sort -z | xargs -0 sha256sum > "$TMP_DIR/first.sha256"
 
-./gradlew clean assemble
+./gradlew clean assemble :bounded-origin-cli:distTar :bounded-origin-cli:distZip
 {
   find . -path '*/build/libs/*.jar' -type f -print0
   find ./bounded-origin-cli/build/distributions -type f \( -name '*.tar' -o -name '*.zip' \) -print0
