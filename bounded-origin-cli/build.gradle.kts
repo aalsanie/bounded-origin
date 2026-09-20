@@ -58,7 +58,7 @@ tasks.named<Test>("test") {
     systemProperty(
         "boundedOrigin.launcherDir",
         layout.buildDirectory
-            .dir("packaged-distribution-test/bounded-origin/bin")
+            .dir("packaged-distribution-test/${application.applicationName}-${project.version}/bin")
             .get()
             .asFile
             .absolutePath,
