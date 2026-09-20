@@ -10,24 +10,31 @@ final class SmokeClientMain {
   private SmokeClientMain() {}
 
   public static void main(String[] args) throws Exception {
+    int expectedOriginExecutions = args.length == 0 ? 1 : Integer.parseInt(args[0]);
     HttpClient client = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(2)).build();
     waitForReady(client);
-    HttpResponse<String> response =
-        client.send(
-            HttpRequest.newBuilder(URI.create("http://gateway:8080/smoke"))
-                .timeout(Duration.ofSeconds(5))
-                .GET()
-                .build(),
-            HttpResponse.BodyHandlers.ofString());
-    if (response.statusCode() != 200 || !"tenacious-block\n".equals(response.body())) {
-      throw new IllegalStateException(
-          "unexpected gateway response: " + response.statusCode() + " " + response.body());
+
+    assertSmokeResponse(get(client, "http://gateway:8080/smoke"));
+    HttpResponse<String> denied = get(client, "http://gateway:8080/denied");
+    if (denied.statusCode() != 403) {
+      throw new IllegalStateException("deny route returned " + denied.statusCode());
     }
+    assertSmokeResponse(get(client, "http://gateway:8080/smoke"));
 
     HttpResponse<String> metrics = get(client, "http://gateway:8081/metrics");
     if (metrics.statusCode() != 200
-        || !metrics.body().contains("bounded_origin_origin_executions_total 1")) {
-      throw new IllegalStateException("gateway metrics did not record the smoke origin execution");
+        || !metrics
+            .body()
+            .contains("bounded_origin_origin_executions_total " + expectedOriginExecutions)) {
+      throw new IllegalStateException(
+          "gateway metrics did not match expected origin executions: " + metrics.body());
+    }
+  }
+
+  private static void assertSmokeResponse(HttpResponse<String> response) {
+    if (response.statusCode() != 200 || !"tenacious-block\n".equals(response.body())) {
+      throw new IllegalStateException(
+          "unexpected gateway response: " + response.statusCode() + " " + response.body());
     }
   }
 

@@ -1,0 +1,52 @@
+schema: 1
+gateway:
+  listen.host: 0.0.0.0
+  listen.port: 8080
+  admin.host: 0.0.0.0
+  admin.port: 8081
+  origin.host: origin
+  origin.port: 9000
+  temporary.directory: /tmp/bounded-origin
+  ingress.trust: UNTRUSTED
+  forwarded.trust: false
+  origin.max-active: 2
+  origin.max-queued: 2
+  origin.max-execution-duration: PT5S
+  origin.max-result-bytes: 262144
+store:
+  directory: /var/lib/bounded-origin
+  max-bytes: 1048576
+  max-artifact-bytes: 262144
+routes:
+  - id: smoke
+    version: 1
+    precedence: 100
+    match:
+      method: GET
+      path: /smoke
+      trust: UNTRUSTED
+    strategy: MATERIALIZE
+    key:
+      path: []
+      query:
+        include: []
+        order-independent: true
+    materializer-version: smoke-v1
+    budget:
+      max-active: 2
+      max-queued: 2
+      max-execution-duration: PT5S
+      max-result-bytes: 262144
+  - id: denied
+    version: 1
+    precedence: 90
+    match:
+      method: GET
+      path: /denied
+      trust: UNTRUSTED
+    strategy: DENY
+fallback:
+  id: default-deny
+  version: 1
+  precedence: -2147483648
+  strategy: DENY
