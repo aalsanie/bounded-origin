@@ -7,14 +7,22 @@ New-Item -ItemType Directory -Path $Temp | Out-Null
 try {
     & .\gradlew.bat clean assemble
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-    Get-ChildItem -Recurse -Filter *.jar | Where-Object { $_.FullName -match '[\\/]build[\\/]libs[\\/]' } |
+    @(
+        Get-ChildItem -Recurse -Filter *.jar | Where-Object { $_.FullName -match '[\\/]build[\\/]libs[\\/]' }
+        Get-ChildItem -File (Join-Path $Root 'bounded-origin-cli/build/distributions') |
+            Where-Object { $_.Extension -in '.tar', '.zip' }
+    ) |
         Sort-Object FullName |
         ForEach-Object { "{0}  {1}" -f (Get-FileHash -Algorithm SHA256 $_.FullName).Hash.ToLowerInvariant(), $_.FullName.Substring($Root.Length + 1) } |
         Set-Content -Encoding UTF8 (Join-Path $Temp 'first.sha256')
 
     & .\gradlew.bat clean assemble
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-    Get-ChildItem -Recurse -Filter *.jar | Where-Object { $_.FullName -match '[\\/]build[\\/]libs[\\/]' } |
+    @(
+        Get-ChildItem -Recurse -Filter *.jar | Where-Object { $_.FullName -match '[\\/]build[\\/]libs[\\/]' }
+        Get-ChildItem -File (Join-Path $Root 'bounded-origin-cli/build/distributions') |
+            Where-Object { $_.Extension -in '.tar', '.zip' }
+    ) |
         Sort-Object FullName |
         ForEach-Object { "{0}  {1}" -f (Get-FileHash -Algorithm SHA256 $_.FullName).Hash.ToLowerInvariant(), $_.FullName.Substring($Root.Length + 1) } |
         Set-Content -Encoding UTF8 (Join-Path $Temp 'second.sha256')
