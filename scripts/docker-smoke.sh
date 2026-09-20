@@ -84,11 +84,14 @@ start_gateway() {
 
 run_client() {
   expected="$1"
-  docker run --rm \
+  if ! docker run --rm \
     --network "$network" \
     "$image" \
     java -cp /opt/smoke/test-classes \
-    io.github.aalsanie.boundedorigin.proxy.SmokeClientMain "$expected"
+    io.github.aalsanie.boundedorigin.proxy.SmokeClientMain "$expected"; then
+    docker logs "$gateway" >&2 || true
+    return 1
+  fi
 }
 
 start_gateway
