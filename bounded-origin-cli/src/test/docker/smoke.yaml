@@ -13,6 +13,7 @@ gateway:
   origin.max-queued: 2
   origin.max-execution-duration: PT5S
   origin.max-result-bytes: 262144
+  origin.response-timeout: PT5S
   request.timeout: PT10S
 store:
   directory: /var/lib/bounded-origin
