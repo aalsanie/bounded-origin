@@ -88,7 +88,7 @@ jobs:
         with:
           cache-provider: basic
 
-      - name: Verify reproducible JARs
+      - name: Verify reproducible archives
         run: ./scripts/verify-reproducible.sh
 
   docker-smoke:
