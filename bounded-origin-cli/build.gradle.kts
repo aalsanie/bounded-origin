@@ -39,30 +39,38 @@ extensions.configure<PitestPluginExtension> {
     timestampedReports.set(false)
 }
 
-val preparePackagedDistributionTest = tasks.register<Sync>("preparePackagedDistributionTest") {
-    val windows = System.getProperty("os.name").startsWith("Windows")
+val windows = System.getProperty("os.name").startsWith("Windows")
+val distributionArchive =
     if (windows) {
-        val archive = tasks.named<Zip>("distZip")
-        dependsOn(archive)
-        from(archive.map { zipTree(it.archiveFile.get().asFile) })
+        tasks.named<Zip>("distZip")
     } else {
-        val archive = tasks.named<Tar>("distTar")
-        dependsOn(archive)
-        from(archive.map { tarTree(it.archiveFile.get().asFile) })
+        tasks.named<Tar>("distTar")
+    }
+
+val preparePackagedDistributionTest = tasks.register<Sync>("preparePackagedDistributionTest") {
+    dependsOn(distributionArchive)
+    if (windows) {
+        from(distributionArchive.map { zipTree(it.archiveFile.get().asFile) })
+    } else {
+        from(distributionArchive.map { tarTree(it.archiveFile.get().asFile) })
     }
     into(layout.buildDirectory.dir("packaged-distribution-test"))
 }
 
 tasks.named<Test>("test") {
     dependsOn(preparePackagedDistributionTest)
-    systemProperty(
-        "boundedOrigin.launcherDir",
-        layout.buildDirectory
-            .dir("packaged-distribution-test/${application.applicationName}-${project.version}/bin")
-            .get()
-            .asFile
-            .absolutePath,
-    )
+    doFirst {
+        val archive = distributionArchive.get()
+        val root = archive.archiveFileName.get().substringBeforeLast('.')
+        systemProperty(
+            "boundedOrigin.launcherDir",
+            layout.buildDirectory
+                .dir("packaged-distribution-test/$root/bin")
+                .get()
+                .asFile
+                .absolutePath,
+        )
+    }
 }
 
 tasks.named("pitest") {
