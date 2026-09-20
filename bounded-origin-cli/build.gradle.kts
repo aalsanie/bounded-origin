@@ -1,4 +1,7 @@
 import info.solidsoft.gradle.pitest.PitestPluginExtension
+import org.gradle.api.tasks.Sync
+import org.gradle.api.tasks.bundling.Tar
+import org.gradle.api.tasks.bundling.Zip
 import org.gradle.api.tasks.testing.Test
 
 plugins {
@@ -36,11 +39,29 @@ extensions.configure<PitestPluginExtension> {
     timestampedReports.set(false)
 }
 
+val preparePackagedDistributionTest = tasks.register<Sync>("preparePackagedDistributionTest") {
+    val windows = System.getProperty("os.name").startsWith("Windows")
+    if (windows) {
+        val archive = tasks.named<Zip>("distZip")
+        dependsOn(archive)
+        from(archive.map { zipTree(it.archiveFile.get().asFile) })
+    } else {
+        val archive = tasks.named<Tar>("distTar")
+        dependsOn(archive)
+        from(archive.map { tarTree(it.archiveFile.get().asFile) })
+    }
+    into(layout.buildDirectory.dir("packaged-distribution-test"))
+}
+
 tasks.named<Test>("test") {
-    dependsOn("installDist")
+    dependsOn(preparePackagedDistributionTest)
     systemProperty(
         "boundedOrigin.launcherDir",
-        layout.buildDirectory.dir("install/bounded-origin/bin").get().asFile.absolutePath,
+        layout.buildDirectory
+            .dir("packaged-distribution-test/bounded-origin/bin")
+            .get()
+            .asFile
+            .absolutePath,
     )
 }
 
