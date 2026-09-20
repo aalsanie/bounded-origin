@@ -22,14 +22,29 @@ cd "$repo_root"
 
 rm -rf "$context"
 mkdir -p "$context"
-archive="$(find bounded-origin-cli/build/distributions -maxdepth 1 -type f -name '*.tar' -print -quit)"
+archive="$(
+  find bounded-origin-cli/build/distributions \
+    -maxdepth 1 \
+    -type f \
+    -name '*.tar' \
+    -print \
+    -quit
+)"
 if [[ -z "$archive" ]]; then
   echo "bounded-origin distribution tar was not produced" >&2
   exit 1
 fi
 
 tar -xf "$archive" -C "$context"
-distribution="$(find "$context" -mindepth 1 -maxdepth 1 -type d -name 'bounded-origin-*' -print -quit)"
+distribution="$(
+  find "$context" \
+    -mindepth 1 \
+    -maxdepth 1 \
+    -type d \
+    -name 'bounded-origin-*' \
+    -print \
+    -quit
+)"
 if [[ -z "$distribution" ]]; then
   echo "bounded-origin distribution root was not found" >&2
   exit 1
@@ -39,20 +54,41 @@ cp -R bounded-origin-proxy/build/classes/java/test "$context/test-classes"
 cp bounded-origin-cli/src/test/docker/Dockerfile "$context/Dockerfile"
 cp bounded-origin-cli/src/test/docker/smoke.yaml "$context/smoke.yaml"
 
-docker build   --pull=false   --file "$context/Dockerfile"   --tag "$image"   "$context"
+docker build \
+  --pull=false \
+  --file "$context/Dockerfile" \
+  --tag "$image" \
+  "$context"
 
 docker network create "$network" >/dev/null
 docker volume create "$volume" >/dev/null
 
-docker run --detach   --name "$origin"   --network "$network"   --network-alias origin   "$image"   java -cp /opt/smoke/test-classes   io.github.aalsanie.boundedorigin.proxy.SmokeOriginMain >/dev/null
+docker run --detach \
+  --name "$origin" \
+  --network "$network" \
+  --network-alias origin \
+  "$image" \
+  java -cp /opt/smoke/test-classes \
+  io.github.aalsanie.boundedorigin.proxy.SmokeOriginMain >/dev/null
 
 start_gateway() {
-  docker run --detach     --name "$gateway"     --network "$network"     --network-alias gateway     --volume "$volume:/var/lib/bounded-origin"     "$image"     /opt/bounded-origin/bin/bounded-origin     run --config /etc/bounded-origin/smoke.yaml >/dev/null
+  docker run --detach \
+    --name "$gateway" \
+    --network "$network" \
+    --network-alias gateway \
+    --volume "$volume:/var/lib/bounded-origin" \
+    "$image" \
+    /opt/bounded-origin/bin/bounded-origin \
+    run --config /etc/bounded-origin/smoke.yaml >/dev/null
 }
 
 run_client() {
   expected="$1"
-  docker run --rm     --network "$network"     "$image"     java -cp /opt/smoke/test-classes     io.github.aalsanie.boundedorigin.proxy.SmokeClientMain "$expected"
+  docker run --rm \
+    --network "$network" \
+    "$image" \
+    java -cp /opt/smoke/test-classes \
+    io.github.aalsanie.boundedorigin.proxy.SmokeClientMain "$expected"
 }
 
 start_gateway
