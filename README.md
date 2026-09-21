@@ -1,5 +1,8 @@
 # Bounded Origin
 
+[![Verification](https://img.shields.io/github/actions/workflow/status/aalsanie/bounded-origin/ci.yml?branch=main&label=verification)](https://github.com/aalsanie/bounded-origin/actions/workflows/ci.yml)
+[![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-blue)](LICENSE)
+
 **HTTP admission control for expensive origin work.**
 
 Bounded Origin is a Java 21 gateway for endpoints where a cheap request can trigger expensive backend computation. It maps requests to semantic operations, coalesces equivalent in-flight work, applies global and per-policy execution budgets, can persist reusable artifacts, and denies unmatched traffic by default.
