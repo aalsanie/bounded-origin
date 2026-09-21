@@ -1,6 +1,7 @@
 package io.github.aalsanie.boundedorigin.proxy;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -69,10 +70,14 @@ class OriginWorkRegistryTest {
   @Test
   void restartRestoresUnknownOwnershipAndOldCallbacksCannotReleaseIt() throws IOException {
     OriginWorkRegistry.Permit old;
-    try (OriginWorkRegistry registry = registry(1, new GatewayMetrics())) {
+    OriginWorkRegistry registry = registry(1, new GatewayMetrics());
+    try (registry) {
       registry.start();
       old = registry.reserve(key("p", "one"), 1);
+      assertEquals(0, registry.unresolved());
     }
+    assertEquals(1, registry.outstanding());
+    assertEquals(1, registry.unresolved());
     try (OriginWorkRegistry restored = registry(1, new GatewayMetrics())) {
       restored.start();
       assertEquals(1, restored.outstanding());
@@ -155,14 +160,16 @@ class OriginWorkRegistryTest {
 
   @Test
   void eachOperationKeyDimensionSeparatesIdentity() throws IOException {
-    try (OriginWorkRegistry registry = registry(6, new GatewayMetrics())) {
+    try (OriginWorkRegistry registry = registry(7, new GatewayMetrics())) {
       registry.start();
       registry.reserve(new OperationKey("ab", 1, "c", "v"), 6);
       registry.reserve(new OperationKey("a", 1, "bc", "v"), 6);
       registry.reserve(new OperationKey("ab", 2, "c", "v"), 6);
       registry.reserve(new OperationKey("ab", 1, "d", "v"), 6);
       registry.reserve(new OperationKey("ab", 1, "c", "v2"), 6);
-      assertEquals(5, registry.outstanding());
+      registry.reserve(new OperationKey("p1", 2, "x", "v"), 6);
+      registry.reserve(new OperationKey("p", 12, "x", "v"), 6);
+      assertEquals(7, registry.outstanding());
     }
   }
 
@@ -216,6 +223,9 @@ class OriginWorkRegistryTest {
     Files.write(file, bytes);
     try (OriginWorkRegistry restored = registry(2, new GatewayMetrics())) {
       assertThrows(IOException.class, restored::start);
+      var channel = OriginWorkRegistry.class.getDeclaredField("channel");
+      channel.setAccessible(true);
+      assertFalse(((FileChannel) channel.get(restored)).isOpen());
       assertThrows(
           OriginWorkRegistry.UnavailableException.class,
           () -> restored.reserve(key("p", "three"), 2));
