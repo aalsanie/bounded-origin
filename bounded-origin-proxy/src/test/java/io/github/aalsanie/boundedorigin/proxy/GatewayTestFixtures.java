@@ -43,6 +43,8 @@ final class GatewayTestFixtures {
     values.put("admin.port", "0");
     values.put("origin.host", "127.0.0.1");
     values.put("origin.port", Integer.toString(originPort));
+    values.put("origin.completion-contract", "RESPONSE_COMPLETE");
+    values.put("origin.ownership-directory", temporaryDirectory.resolve("ownership").toString());
     values.put("temporary.directory", temporaryDirectory.toString());
     values.put("event-loop.threads", "2");
     values.put("origin.event-loop.threads", "2");

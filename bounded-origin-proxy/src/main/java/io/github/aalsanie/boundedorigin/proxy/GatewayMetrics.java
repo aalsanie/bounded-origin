@@ -22,6 +22,11 @@ final class GatewayMetrics {
   private final LongAdder malformedRequests = new LongAdder();
   private final LongAdder storeFailures = new LongAdder();
   private final LongAdder originPoolRejections = new LongAdder();
+  private volatile OriginWorkState originWork = new OriginWorkState(0, 0, false);
+
+  void originWorkState(int outstanding, int unresolved, boolean available) {
+    originWork = new OriginWorkState(outstanding, unresolved, available);
+  }
 
   void request() {
     requests.increment();
@@ -102,7 +107,19 @@ final class GatewayMetrics {
     counter(output, "bounded_origin_artifact_hits_total", artifactHits.sum());
     counter(output, "bounded_origin_artifact_misses_total", artifactMisses.sum());
     counter(output, "bounded_origin_origin_executions_total", originExecutions.sum());
+    output.append(
+        "# HELP bounded_origin_origin_active Locally executing materializer jobs, not remote CPU work.\n");
     gauge(output, "bounded_origin_origin_active", executorStats.activeJobs());
+    OriginWorkState work = originWork;
+    output.append(
+        "# HELP bounded_origin_origin_work_outstanding Durable reservations without confirmed computation completion.\n");
+    gauge(output, "bounded_origin_origin_work_outstanding", work.outstanding());
+    output.append(
+        "# HELP bounded_origin_origin_work_unresolved Reservations whose computation termination is unknown.\n");
+    gauge(output, "bounded_origin_origin_work_unresolved", work.unresolved());
+    output.append(
+        "# HELP bounded_origin_origin_work_registry_available Registry is enabled, open and healthy; does not indicate free capacity.\n");
+    gauge(output, "bounded_origin_origin_work_registry_available", work.available() ? 1 : 0);
     gauge(output, "bounded_origin_origin_queue_depth", executorStats.queuedJobs());
     gauge(output, "bounded_origin_origin_in_flight", executorStats.inFlightJobs());
     gauge(output, "bounded_origin_failure_cooldown_entries", executorStats.cooldownEntries());
@@ -181,4 +198,6 @@ final class GatewayMetrics {
       long malformedRequests,
       long storeFailures,
       long originPoolRejections) {}
+
+  private record OriginWorkState(int outstanding, int unresolved, boolean available) {}
 }

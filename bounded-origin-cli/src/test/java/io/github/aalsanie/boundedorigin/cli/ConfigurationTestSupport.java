@@ -18,6 +18,8 @@ final class ConfigurationTestSupport {
     gateway:
       origin.host: origin.internal
       origin.port: 8080
+      origin.completion-contract: RESPONSE_COMPLETE
+      origin.ownership-directory: /var/lib/origin-ownership
       temporary.directory: /tmp/bounded-origin
       ingress.trust: UNTRUSTED
       forwarded.trust: false
@@ -92,6 +94,7 @@ final class ConfigurationTestSupport {
     fixture.gateway().put("origin.port", 65_534);
     fixture.gateway().put("temporary.directory", directory.resolve("spool").toString());
     fixture.store().put("directory", directory.resolve("store").toString());
+    fixture.gateway().put("origin.ownership-directory", directory.resolve("ownership").toString());
     return ConfigurationDecoder.decode(fixture.root());
   }
 
@@ -99,6 +102,8 @@ final class ConfigurationTestSupport {
     Map<String, Object> gateway = new LinkedHashMap<>();
     gateway.put("origin.host", "origin.internal");
     gateway.put("origin.port", 8080);
+    gateway.put("origin.completion-contract", "RESPONSE_COMPLETE");
+    gateway.put("origin.ownership-directory", "/var/lib/origin-ownership");
     gateway.put("temporary.directory", "/tmp/bounded-origin");
     gateway.put("ingress.trust", "UNTRUSTED");
     gateway.put("forwarded.trust", false);

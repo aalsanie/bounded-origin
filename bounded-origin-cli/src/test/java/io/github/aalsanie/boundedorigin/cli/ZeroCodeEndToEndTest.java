@@ -470,7 +470,7 @@ class ZeroCodeEndToEndTest {
 
   private record PortPair(int listen, int admin) {}
 
-  private static final class RunningCli implements AutoCloseable {
+  static final class RunningCli implements AutoCloseable {
     private final Process process;
     private final int adminPort;
     private final Path log;
@@ -564,11 +564,12 @@ class ZeroCodeEndToEndTest {
       if (!process.isAlive() && descendants.stream().noneMatch(ProcessHandle::isAlive)) {
         return;
       }
-      if (isWindows()) {
-        descendants.stream().filter(ProcessHandle::isAlive).forEach(ProcessHandle::destroyForcibly);
-      }
-      process.destroy();
       try {
+        if (isWindows()) {
+          crash();
+          return;
+        }
+        process.destroy();
         if (!process.waitFor(10, TimeUnit.SECONDS)) {
           process.destroyForcibly();
           process.waitFor(10, TimeUnit.SECONDS);
@@ -579,6 +580,14 @@ class ZeroCodeEndToEndTest {
         descendants.stream().filter(ProcessHandle::isAlive).forEach(ProcessHandle::destroyForcibly);
         process.destroyForcibly();
       }
+    }
+
+    void crash() throws InterruptedException {
+      List<ProcessHandle> descendants = managedDescendants();
+      // Stop the launcher first: after Java exits the Windows script can spawn an exit-code shell.
+      process.destroyForcibly();
+      assertTrue(process.waitFor(10, TimeUnit.SECONDS));
+      awaitDescendantsExit(descendants);
     }
 
     private List<ProcessHandle> managedDescendants() {

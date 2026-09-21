@@ -28,7 +28,9 @@ class OriginExchangeAdditionalBoundaryTest {
               GatewayTestFixtures.engine(GatewayTestFixtures.boundedPolicy(config.globalBudget())),
               new GatewayTestFixtures.MemoryArtifactStore())) {
         assertEquals("value", request(gateway, "GET", "/implicit-close").bodyText());
-        assertEquals("value", request(gateway, "GET", "/implicit-close").bodyText());
+        assertEquals(503, request(gateway, "GET", "/implicit-close").status());
+        origin.fixed("/framed", 200, "value");
+        assertEquals("value", request(gateway, "GET", "/framed").bodyText());
         assertEquals(2, origin.connections());
       }
     }

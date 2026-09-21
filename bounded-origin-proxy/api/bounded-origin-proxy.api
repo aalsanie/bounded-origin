@@ -28,6 +28,8 @@ public final class io.github.aalsanie.boundedorigin.proxy.GatewayConfig {
   public static io.github.aalsanie.boundedorigin.proxy.GatewayConfig defaults(java.net.InetSocketAddress, java.net.InetSocketAddress, java.net.InetSocketAddress, java.nio.file.Path, io.github.aalsanie.boundedorigin.api.Budget);
   public static io.github.aalsanie.boundedorigin.proxy.GatewayConfig from(java.util.Map<java.lang.String, java.lang.String>);
   public static io.github.aalsanie.boundedorigin.proxy.GatewayConfig$Builder builder();
+  public io.github.aalsanie.boundedorigin.proxy.OriginCompletionContract originCompletionContract();
+  public java.util.Optional<java.nio.file.Path> originOwnershipDirectory();
   public java.net.InetSocketAddress listenAddress();
   public java.net.InetSocketAddress adminAddress();
   public java.net.InetSocketAddress originAddress();
@@ -61,6 +63,8 @@ public final class io.github.aalsanie.boundedorigin.proxy.GatewayConfig {
   public long chunkedResponseThresholdBytes();
 }
 public final class io.github.aalsanie.boundedorigin.proxy.GatewayConfig$Builder {
+  public io.github.aalsanie.boundedorigin.proxy.GatewayConfig$Builder originCompletionContract(io.github.aalsanie.boundedorigin.proxy.OriginCompletionContract);
+  public io.github.aalsanie.boundedorigin.proxy.GatewayConfig$Builder originOwnershipDirectory(java.nio.file.Path);
   public io.github.aalsanie.boundedorigin.proxy.GatewayConfig$Builder listenAddress(java.net.InetSocketAddress);
   public io.github.aalsanie.boundedorigin.proxy.GatewayConfig$Builder adminAddress(java.net.InetSocketAddress);
   public io.github.aalsanie.boundedorigin.proxy.GatewayConfig$Builder originAddress(java.net.InetSocketAddress);
@@ -95,6 +99,14 @@ public final class io.github.aalsanie.boundedorigin.proxy.GatewayConfig$Builder 
   public io.github.aalsanie.boundedorigin.proxy.GatewayConfig build();
 }
 final class io.github.aalsanie.boundedorigin.proxy.GatewayMetrics {
+}
+final class io.github.aalsanie.boundedorigin.proxy.GatewayMetrics$OriginWorkState extends java.lang.Record {
+  public final java.lang.String toString();
+  public final int hashCode();
+  public final boolean equals(java.lang.Object);
+  public int outstanding();
+  public int unresolved();
+  public boolean available();
 }
 final class io.github.aalsanie.boundedorigin.proxy.GatewayMetrics$Snapshot extends java.lang.Record {
   public final java.lang.String toString();
@@ -175,6 +187,12 @@ final class io.github.aalsanie.boundedorigin.proxy.NettyOriginClient$OriginExcha
   public void channelInactive(io.netty.channel.ChannelHandlerContext);
   public void exceptionCaught(io.netty.channel.ChannelHandlerContext, java.lang.Throwable);
 }
+public final class io.github.aalsanie.boundedorigin.proxy.OriginCompletionContract extends java.lang.Enum<io.github.aalsanie.boundedorigin.proxy.OriginCompletionContract> {
+  public static final io.github.aalsanie.boundedorigin.proxy.OriginCompletionContract DISABLED;
+  public static final io.github.aalsanie.boundedorigin.proxy.OriginCompletionContract RESPONSE_COMPLETE;
+  public static io.github.aalsanie.boundedorigin.proxy.OriginCompletionContract[] values();
+  public static io.github.aalsanie.boundedorigin.proxy.OriginCompletionContract valueOf(java.lang.String);
+}
 final class io.github.aalsanie.boundedorigin.proxy.OriginConnectionPool implements java.lang.AutoCloseable {
   public void close();
 }
@@ -202,6 +220,16 @@ final class io.github.aalsanie.boundedorigin.proxy.OriginRequest extends java.la
   public io.github.aalsanie.boundedorigin.proxy.StreamingSpool$Result body();
   public long maxResponseBytes();
 }
+final class io.github.aalsanie.boundedorigin.proxy.OriginWorkRegistry implements java.lang.AutoCloseable {
+  public synchronized void close();
+}
+final class io.github.aalsanie.boundedorigin.proxy.OriginWorkRegistry$Entry {
+}
+final class io.github.aalsanie.boundedorigin.proxy.OriginWorkRegistry$Permit implements java.lang.AutoCloseable {
+  public void close();
+}
+final class io.github.aalsanie.boundedorigin.proxy.OriginWorkRegistry$UnavailableException extends java.lang.RuntimeException {
+}
 final class io.github.aalsanie.boundedorigin.proxy.ResponseArtifacts {
 }
 final class io.github.aalsanie.boundedorigin.proxy.SpoolQuota {
@@ -228,4 +256,5 @@ final class io.github.aalsanie.boundedorigin.proxy.StructuredLog {
 }
 final class io.github.aalsanie.boundedorigin.proxy.TemporaryArtifactBody implements io.github.aalsanie.boundedorigin.api.ArtifactBody {
   public java.io.InputStream openStream() throws java.io.IOException;
+  public void close();
 }

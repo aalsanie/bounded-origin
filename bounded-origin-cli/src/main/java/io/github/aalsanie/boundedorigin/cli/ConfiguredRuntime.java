@@ -3,10 +3,13 @@ package io.github.aalsanie.boundedorigin.cli;
 import io.github.aalsanie.boundedorigin.core.PolicyEngine;
 import io.github.aalsanie.boundedorigin.proxy.BoundedOriginGateway;
 import io.github.aalsanie.boundedorigin.proxy.GatewayConfig;
+import io.github.aalsanie.boundedorigin.proxy.OriginCompletionContract;
 import io.github.aalsanie.boundedorigin.store.fs.FileSystemArtifactStore;
 import java.io.IOException;
 import java.net.InetSocketAddress;
+import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.util.Objects;
 
@@ -27,8 +30,13 @@ final class ConfiguredRuntime implements AutoCloseable {
     ConfigurationModel.RuntimeConfiguration required = requireConfiguration(configuration);
     GatewayConfig gatewayConfig = gatewayConfig(required);
     PolicyConfigurationCompiler.compile(required, gatewayConfig.globalBudget());
+    validateOriginContract(required, gatewayConfig);
     ConfigurationModel.StoreConfiguration storeConfiguration = validateStore(required.store());
-    storePath(storeConfiguration.directory());
+    Path storeDirectory = storePath(storeConfiguration.directory()).toAbsolutePath().normalize();
+    if (gatewayConfig.originOwnershipDirectory().isPresent()) {
+      validateStorageSeparation(
+          storeDirectory, gatewayConfig.originOwnershipDirectory().orElseThrow());
+    }
     validateStoreCompatibility(required, storeConfiguration);
   }
 
@@ -38,9 +46,15 @@ final class ConfiguredRuntime implements AutoCloseable {
     GatewayConfig gatewayConfig = gatewayConfig(required);
     PolicyEngine policyEngine =
         PolicyConfigurationCompiler.compile(required, gatewayConfig.globalBudget());
+    validateOriginContract(required, gatewayConfig);
     ConfigurationModel.StoreConfiguration storeConfiguration = validateStore(required.store());
     Path storeDirectory = storePath(storeConfiguration.directory());
     validateStoreCompatibility(required, storeConfiguration);
+    if (gatewayConfig.originOwnershipDirectory().isPresent()) {
+      validateStorageSeparation(
+          resolveExistingParents(storeDirectory),
+          resolveExistingParents(gatewayConfig.originOwnershipDirectory().orElseThrow()));
+    }
     FileSystemArtifactStore store =
         new FileSystemArtifactStore(
             storeDirectory, storeConfiguration.maxBytes(), storeConfiguration.maxArtifactBytes());
@@ -142,12 +156,45 @@ final class ConfiguredRuntime implements AutoCloseable {
     return store;
   }
 
+  private static void validateOriginContract(
+      ConfigurationModel.RuntimeConfiguration configuration, GatewayConfig gateway)
+      throws ConfigurationException {
+    for (ConfigurationModel.RouteConfiguration route : configuration.routes()) {
+      if ((route.strategy() == ConfigurationModel.Strategy.BOUNDED_COMPUTE
+              || route.strategy() == ConfigurationModel.Strategy.MATERIALIZE)
+          && gateway.originCompletionContract() == OriginCompletionContract.DISABLED) {
+        throw new ConfigurationException(
+            "computation routes require origin.completion-contract: RESPONSE_COMPLETE and a persistent origin.ownership-directory");
+      }
+    }
+  }
+
   private static Path storePath(String directory) throws ConfigurationException {
     try {
       return Path.of(directory);
     } catch (InvalidPathException exception) {
       throw new ConfigurationException("configuration.store.directory is invalid", exception);
     }
+  }
+
+  private static void validateStorageSeparation(Path store, Path ownership)
+      throws ConfigurationException {
+    if (store.startsWith(ownership) || ownership.startsWith(store)) {
+      throw new ConfigurationException(
+          "origin.ownership-directory and store.directory must not overlap");
+    }
+  }
+
+  private static Path resolveExistingParents(Path path) throws IOException {
+    Path absolute = path.toAbsolutePath().normalize();
+    Path existing = absolute;
+    while (!Files.exists(existing, LinkOption.NOFOLLOW_LINKS)) {
+      existing = existing.getParent();
+      if (existing == null) {
+        throw new IOException("storage path has no accessible parent");
+      }
+    }
+    return existing.toRealPath().resolve(existing.relativize(absolute));
   }
 
   private static void validateStoreCompatibility(

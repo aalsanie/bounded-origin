@@ -40,6 +40,7 @@ public final class BoundedOriginGateway implements AutoCloseable {
   private final EventLoopGroup clientGroup;
   private final EventLoopGroup originGroup;
   private final NettyOriginClient originClient;
+  private final OriginWorkRegistry originWork;
   private final FlightLeaseRegistry flights;
   private final GatewayRequestProcessor processor;
   private final ArtifactResponseWriter responseWriter;
@@ -65,10 +66,18 @@ public final class BoundedOriginGateway implements AutoCloseable {
     this.originGroup =
         new MultiThreadIoEventLoopGroup(config.originEventLoopThreads(), NioIoHandler.newFactory());
     this.originClient = new NettyOriginClient(originGroup, config, metrics, spoolQuota);
+    this.originWork = new OriginWorkRegistry(config, metrics);
     this.flights = new FlightLeaseRegistry(metrics);
     this.processor =
         new GatewayRequestProcessor(
-            config, policyEngine, artifactStore, executor, originClient, metrics, flights);
+            config,
+            policyEngine,
+            artifactStore,
+            executor,
+            originClient,
+            metrics,
+            flights,
+            originWork);
     this.responseWriter = new ArtifactResponseWriter(config, metrics);
   }
 
@@ -82,6 +91,7 @@ public final class BoundedOriginGateway implements AutoCloseable {
       }
       try {
         Files.createDirectories(config.temporaryDirectory());
+        originWork.start();
         runtime.started();
         clientServer = bindClient();
         adminServer = bindAdmin();
@@ -148,6 +158,7 @@ public final class BoundedOriginGateway implements AutoCloseable {
       shutdownResources();
       runtime.closed();
       if (logStopped) {
+        StructuredLog.originWorkRetained(originWork.outstanding());
         StructuredLog.stopped();
       }
     }
@@ -288,6 +299,7 @@ public final class BoundedOriginGateway implements AutoCloseable {
   private void shutdownResources() {
     executor.close();
     originClient.close();
+    originWork.close();
     spoolQuota.close();
     shutdown(originGroup);
     shutdown(clientGroup);

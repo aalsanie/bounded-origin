@@ -57,8 +57,12 @@ final class GatewayConfigurationValidator {
         port(value, path, true);
       } else if ("origin.port".equals(key)) {
         port(value, path, false);
-      } else if ("temporary.directory".equals(key)) {
+      } else if ("temporary.directory".equals(key) || "origin.ownership-directory".equals(key)) {
         path(value, path);
+      } else if ("origin.completion-contract".equals(key)) {
+        if (!"DISABLED".equals(value) && !"RESPONSE_COMPLETE".equals(value)) {
+          throw new ConfigurationException(path + " must be DISABLED or RESPONSE_COMPLETE");
+        }
       } else if ("ingress.trust".equals(key)) {
         trust(value, path);
       } else if ("forwarded.trust".equals(key)) {

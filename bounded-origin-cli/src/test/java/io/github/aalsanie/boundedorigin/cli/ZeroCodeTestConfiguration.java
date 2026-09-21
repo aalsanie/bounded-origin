@@ -67,6 +67,8 @@ final class ZeroCodeTestConfiguration {
           admin.port: __ADMIN_PORT__
           origin.host: 127.0.0.1
           origin.port: __ORIGIN_PORT__
+          origin.completion-contract: RESPONSE_COMPLETE
+          origin.ownership-directory: __OWNERSHIP_DIRECTORY__
           temporary.directory: __TEMPORARY_DIRECTORY__
           ingress.trust: UNTRUSTED
           forwarded.trust: false
@@ -147,6 +149,9 @@ final class ZeroCodeTestConfiguration {
         .replace("__ORIGIN_PORT__", Integer.toString(originPort))
         .replace("__TEMPORARY_DIRECTORY__", temporary)
         .replace("__STORE_DIRECTORY__", store)
+        .replace(
+            "__OWNERSHIP_DIRECTORY__",
+            yamlScalar(directory.resolve("ownership").toAbsolutePath().toString()))
         .replace("__HEALTH_ROUTE__", health);
   }
 

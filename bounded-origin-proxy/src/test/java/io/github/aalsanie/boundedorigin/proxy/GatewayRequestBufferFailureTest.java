@@ -175,7 +175,8 @@ class GatewayRequestBufferFailureTest {
             executor,
             originClient,
             metrics,
-            new FlightLeaseRegistry(metrics));
+            new FlightLeaseRegistry(metrics),
+            new OriginWorkRegistry(config, metrics));
     GatewayRequestHandler handler =
         new GatewayRequestHandler(
             config,

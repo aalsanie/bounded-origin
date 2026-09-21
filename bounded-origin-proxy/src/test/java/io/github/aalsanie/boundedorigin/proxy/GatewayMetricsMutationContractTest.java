@@ -25,6 +25,7 @@ class GatewayMetricsMutationContractTest {
     metrics.malformedRequest();
     metrics.storeFailure();
     metrics.originPoolRejection();
+    metrics.originWorkState(4, 3, true);
 
     String output = metrics.prometheus(new OriginExecutorStats(1, 2, 3, 4), 5, 6, 7, 8, 9, 10);
 
@@ -38,8 +39,18 @@ class GatewayMetricsMutationContractTest {
         bounded_origin_artifact_misses_total 1
         # TYPE bounded_origin_origin_executions_total counter
         bounded_origin_origin_executions_total 1
+        # HELP bounded_origin_origin_active Locally executing materializer jobs, not remote CPU work.
         # TYPE bounded_origin_origin_active gauge
         bounded_origin_origin_active 1
+        # HELP bounded_origin_origin_work_outstanding Durable reservations without confirmed computation completion.
+        # TYPE bounded_origin_origin_work_outstanding gauge
+        bounded_origin_origin_work_outstanding 4
+        # HELP bounded_origin_origin_work_unresolved Reservations whose computation termination is unknown.
+        # TYPE bounded_origin_origin_work_unresolved gauge
+        bounded_origin_origin_work_unresolved 3
+        # HELP bounded_origin_origin_work_registry_available Registry is enabled, open and healthy; does not indicate free capacity.
+        # TYPE bounded_origin_origin_work_registry_available gauge
+        bounded_origin_origin_work_registry_available 1
         # TYPE bounded_origin_origin_queue_depth gauge
         bounded_origin_origin_queue_depth 2
         # TYPE bounded_origin_origin_in_flight gauge

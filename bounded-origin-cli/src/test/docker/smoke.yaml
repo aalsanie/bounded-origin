@@ -6,6 +6,8 @@ gateway:
   admin.port: 8081
   origin.host: origin
   origin.port: 9000
+  origin.completion-contract: RESPONSE_COMPLETE
+  origin.ownership-directory: /var/lib/bounded-origin/ownership
   temporary.directory: /tmp/bounded-origin
   ingress.trust: UNTRUSTED
   forwarded.trust: false
@@ -14,7 +16,7 @@ gateway:
   origin.max-execution-duration: PT5S
   origin.max-result-bytes: 262144
 store:
-  directory: /var/lib/bounded-origin
+  directory: /var/lib/bounded-origin/artifacts
   max-bytes: 1048576
   max-artifact-bytes: 262144
 routes:

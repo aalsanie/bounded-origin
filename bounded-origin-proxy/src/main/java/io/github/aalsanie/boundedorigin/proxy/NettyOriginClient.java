@@ -33,6 +33,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Supplier;
 
 final class NettyOriginClient implements AutoCloseable {
   private final OriginConnectionPool pool;
@@ -49,16 +50,24 @@ final class NettyOriginClient implements AutoCloseable {
   }
 
   Artifact execute(OriginRequest request) throws MaterializationException {
+    return execute(request, () -> null);
+  }
+
+  Artifact execute(OriginRequest request, Supplier<OriginWorkRegistry.Permit> admission)
+      throws MaterializationException {
     Objects.requireNonNull(request, "request");
+    Objects.requireNonNull(admission, "admission");
     long startedNanos = System.nanoTime();
     try {
-      return executeTimed(request);
+      return executeTimed(request, admission);
     } finally {
       metrics.originDuration(System.nanoTime() - startedNanos);
     }
   }
 
-  private Artifact executeTimed(OriginRequest request) throws MaterializationException {
+  private Artifact executeTimed(
+      OriginRequest request, Supplier<OriginWorkRegistry.Permit> admission)
+      throws MaterializationException {
     CompletableFuture<OriginConnectionPool.Lease> acquisition =
         pool.acquire().toCompletableFuture();
     OriginConnectionPool.Lease lease;
@@ -77,25 +86,56 @@ final class NettyOriginClient implements AutoCloseable {
       throw new MaterializationException("origin connection acquisition failed", unwrap(exception));
     }
 
-    OriginExchangeHandler exchange =
-        new OriginExchangeHandler(lease, request, config, metrics, spoolQuota);
-    Channel channel = lease.channel();
-    channel.pipeline().addLast(exchange);
+    OriginWorkRegistry.Permit reservation;
     try {
-      sendRequest(channel, request);
-      exchange.startTimeout();
-      channel.read();
-      return await(exchange);
-    } catch (InterruptedException exception) {
-      exchange.cancel(exception);
-      Thread.currentThread().interrupt();
-      throw new MaterializationException("origin request was interrupted", exception);
-    } catch (IOException exception) {
-      exchange.cancel(exception);
-      throw new MaterializationException("failed to stream request to origin", exception);
+      reservation = admission.get();
     } catch (RuntimeException exception) {
-      exchange.cancel(exception);
-      throw new MaterializationException("origin exchange failed", exception);
+      lease.close();
+      throw new MaterializationException("origin computation admission failed", exception);
+    } catch (Error error) {
+      lease.close();
+      throw error;
+    }
+
+    try (OriginWorkRegistry.Permit permit = reservation) {
+      OriginExchangeHandler exchange =
+          new OriginExchangeHandler(lease, request, config, metrics, spoolQuota);
+      Channel channel = lease.channel();
+      try {
+        channel.pipeline().addLast(exchange);
+        sendRequest(channel, request);
+        exchange.startTimeout();
+        channel.read();
+        Artifact artifact = await(exchange);
+        try {
+          if (permit != null && !exchange.closeDelimited) {
+            permit.completed();
+          }
+          return artifact;
+        } catch (RuntimeException | Error exception) {
+          discard(artifact);
+          throw exception;
+        }
+      } catch (InterruptedException exception) {
+        exchange.abandon(exception);
+        Thread.currentThread().interrupt();
+        throw new MaterializationException("origin request was interrupted", exception);
+      } catch (IOException exception) {
+        exchange.abandon(exception);
+        throw new MaterializationException("failed to stream request to origin", exception);
+      } catch (RuntimeException exception) {
+        exchange.abandon(exception);
+        throw new MaterializationException("origin exchange failed", exception);
+      } catch (Error error) {
+        exchange.abandon(error);
+        throw error;
+      }
+    }
+  }
+
+  private static void discard(Artifact artifact) {
+    if (artifact.body() instanceof TemporaryArtifactBody body) {
+      body.delete();
     }
   }
 
@@ -231,6 +271,12 @@ final class NettyOriginClient implements AutoCloseable {
                   () -> fail(new TimeoutException("origin response timed out")),
                   responseTimeout.toNanos(),
                   TimeUnit.NANOSECONDS);
+    }
+
+    void abandon(Throwable cause) {
+      // Completion may have won before interruption of the waiter. Nobody owns its body then.
+      result.thenAccept(NettyOriginClient::discard);
+      cancel(cause);
     }
 
     void cancel(Throwable cause) {

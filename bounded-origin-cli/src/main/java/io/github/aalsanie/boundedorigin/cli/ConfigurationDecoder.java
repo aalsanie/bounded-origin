@@ -22,6 +22,8 @@ final class ConfigurationDecoder {
           "admin.port",
           "origin.host",
           "origin.port",
+          "origin.completion-contract",
+          "origin.ownership-directory",
           "temporary.directory",
           "ingress.trust",
           "forwarded.trust",

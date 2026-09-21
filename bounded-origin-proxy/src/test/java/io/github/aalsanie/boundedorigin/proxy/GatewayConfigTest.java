@@ -19,6 +19,24 @@ import org.junit.jupiter.params.provider.MethodSource;
 
 class GatewayConfigTest {
   @Test
+  void computationRequiresAnExplicitPersistentCompletionContract() {
+    Map<String, String> values = baseValues();
+    assertEquals(
+        OriginCompletionContract.DISABLED, GatewayConfig.from(values).originCompletionContract());
+    assertEquals(java.util.Optional.empty(), GatewayConfig.from(values).originOwnershipDirectory());
+    values.put("origin.completion-contract", "RESPONSE_COMPLETE");
+    assertThrows(IllegalArgumentException.class, () -> GatewayConfig.from(values));
+    values.put("origin.ownership-directory", "build/ownership");
+    GatewayConfig config = GatewayConfig.from(values);
+    assertEquals(OriginCompletionContract.RESPONSE_COMPLETE, config.originCompletionContract());
+    assertEquals(
+        Path.of("build/ownership").toAbsolutePath(),
+        config.originOwnershipDirectory().orElseThrow());
+    values.put("origin.completion-contract", "request_timeout");
+    assertThrows(IllegalArgumentException.class, () -> GatewayConfig.from(values));
+  }
+
+  @Test
   void defaultsAreBoundedAndInternetIngressIsUntrusted() {
     Budget budget = new Budget(4, 8, Duration.ofSeconds(10), 4 * 1024 * 1024);
     GatewayConfig config =
