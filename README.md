@@ -6,8 +6,6 @@ Bounded Origin is a Java 21 gateway for endpoints where a cheap request can trig
 
 > **Invariant:** untrusted demand must not control the rate of expensive origin computation.
 
-The project was inspired by the failure mode described in [Creepy crawlies](https://people.kernel.org/monsieuricon/creepy-crawlies). The implementation is intentionally generic; Git is a motivating workload, not a dependency or special case.
-
 ## The problem
 
 Transport-level controls do not define computational work.
