@@ -793,28 +793,30 @@ public final class FileSystemArtifactStore implements ArtifactStore, AutoCloseab
   }
 
   private void releaseReader(String digest) throws IOException {
-    AtomicInteger readers = openReaders.get(digest);
-    if (readers == null) {
-      throw new IOException("artifact reader accounting is inconsistent");
-    }
-    int remaining = readers.decrementAndGet();
-    if (remaining < 0) {
-      throw new IOException("artifact reader accounting became negative");
-    }
-
     IOException failure = null;
-    if (remaining == 0) {
-      openReaders.remove(digest, readers);
-      stateLock.writeLock().lock();
-      try {
-        if (pendingObjectDeletes.contains(digest) && !objectReferences.containsKey(digest)) {
-          deleteUnreferencedObject(digest);
-        }
-      } catch (IOException exception) {
-        failure = exception;
-      } finally {
-        stateLock.writeLock().unlock();
+    // Removing a zero count must exclude openBody incrementing that same counter.
+    stateLock.writeLock().lock();
+    try {
+      AtomicInteger readers = openReaders.get(digest);
+      if (readers == null) {
+        throw new IOException("artifact reader accounting is inconsistent");
       }
+      int remaining = readers.decrementAndGet();
+      if (remaining < 0) {
+        throw new IOException("artifact reader accounting became negative");
+      }
+      if (remaining == 0) {
+        openReaders.remove(digest, readers);
+        try {
+          if (pendingObjectDeletes.contains(digest) && !objectReferences.containsKey(digest)) {
+            deleteUnreferencedObject(digest);
+          }
+        } catch (IOException exception) {
+          failure = exception;
+        }
+      }
+    } finally {
+      stateLock.writeLock().unlock();
     }
 
     int total = totalOpenReaders.decrementAndGet();
