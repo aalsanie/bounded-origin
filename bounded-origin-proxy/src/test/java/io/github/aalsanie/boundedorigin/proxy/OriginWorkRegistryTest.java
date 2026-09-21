@@ -28,9 +28,12 @@ class OriginWorkRegistryTest {
     GatewayMetrics metrics = new GatewayMetrics();
     try (OriginWorkRegistry registry = registry(2, metrics)) {
       registry.start();
+      assertMetric(metrics, "origin_work_registry_available", 1);
       var first = registry.reserve(key("p", "one"), 1);
       assertEquals(1, registry.outstanding());
       assertEquals(0, registry.unresolved());
+      assertMetric(metrics, "origin_work_outstanding", 1);
+      assertMetric(metrics, "origin_work_unresolved", 0);
       assertThrows(
           OriginWorkRegistry.UnavailableException.class,
           () -> registry.reserve(key("p", "one"), 2));
@@ -51,6 +54,8 @@ class OriginWorkRegistryTest {
       first.completed();
       assertEquals(1, registry.outstanding());
       assertEquals(0, registry.unresolved());
+      assertMetric(metrics, "origin_work_outstanding", 1);
+      assertMetric(metrics, "origin_work_unresolved", 0);
       var replacement = registry.reserve(key("p", "one"), 1);
       first.completed();
       first.close();
@@ -63,6 +68,22 @@ class OriginWorkRegistryTest {
     assertMetric(metrics, "origin_work_registry_available", 0);
     try (OriginWorkRegistry restored = registry(2, new GatewayMetrics())) {
       restored.start();
+      assertEquals(0, restored.outstanding());
+    }
+  }
+
+  @Test
+  void emptyRegistryPersistsBeforeAnyWorkIsAdmitted() throws IOException {
+    try (OriginWorkRegistry registry = registry(1, new GatewayMetrics())) {
+      registry.start();
+      assertEquals(0, registry.outstanding());
+    }
+    try (OriginWorkRegistry restored = registry(1, new GatewayMetrics())) {
+      restored.start();
+      assertEquals(0, restored.outstanding());
+      assertEquals(0, restored.unresolved());
+      var first = restored.reserve(key("p", "one"), 1);
+      first.completed();
       assertEquals(0, restored.outstanding());
     }
   }
