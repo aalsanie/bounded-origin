@@ -4,6 +4,8 @@ import io.github.aalsanie.boundedorigin.api.Canonicalizer;
 import io.github.aalsanie.boundedorigin.api.Canonicalizers;
 import io.github.aalsanie.boundedorigin.api.Operation;
 import io.github.aalsanie.boundedorigin.api.RequestDescriptor;
+import io.github.aalsanie.boundedorigin.proxy.HttpOperation;
+import io.github.aalsanie.boundedorigin.proxy.RepresentationContract;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -32,6 +34,9 @@ final class SemanticKeyPlan {
   private final boolean includeFullPath;
   private final boolean includeQuery;
   private final Canonicalizer canonicalizer;
+  private final String pathTemplate;
+  private final Optional<RepresentationContract> representation;
+  private final List<String> headers;
 
   private SemanticKeyPlan(
       List<String> pathCaptures,
@@ -43,7 +48,10 @@ final class SemanticKeyPlan {
       boolean includeTrust,
       boolean includeFullPath,
       boolean includeQuery,
-      Canonicalizer canonicalizer) {
+      Canonicalizer canonicalizer,
+      String pathTemplate,
+      Optional<RepresentationContract> representation,
+      List<String> headers) {
     this.pathCaptures = List.copyOf(pathCaptures);
     this.selectedQueryNames = Set.copyOf(selectedQueryNames);
     this.rawQuery = rawQuery;
@@ -54,6 +62,9 @@ final class SemanticKeyPlan {
     this.includeFullPath = includeFullPath;
     this.includeQuery = includeQuery;
     this.canonicalizer = Objects.requireNonNull(canonicalizer, "canonicalizer");
+    this.pathTemplate = pathTemplate;
+    this.representation = representation;
+    this.headers = List.copyOf(headers);
   }
 
   static SemanticKeyPlan compile(
@@ -66,6 +77,23 @@ final class SemanticKeyPlan {
       throw new ConfigurationException(path + ".key is required for keyed strategy");
     }
     ConfigurationModel.KeyConfiguration key = route.key().orElseThrow();
+    Set<String> headerNames = new HashSet<>();
+    for (String header : key.headers()) {
+      String name = header.toLowerCase(Locale.ROOT);
+      try {
+        HttpOperation.validateHeaderName(name);
+      } catch (IllegalArgumentException exception) {
+        throw new ConfigurationException(
+            path + ".key.headers contains an unsupported header", exception);
+      }
+      if (!headerNames.add(name)) {
+        throw new ConfigurationException(path + ".key.headers contains a duplicate header");
+      }
+    }
+    if (route.strategy() == ConfigurationModel.Strategy.CLIENT_COMPUTE && !headerNames.isEmpty()) {
+      throw new ConfigurationException(
+          path + ".key.headers is only supported for HTTP representations");
+    }
 
     Set<String> configuredPath = new HashSet<>(key.path());
     if (configuredPath.size() != key.path().size()) {
@@ -147,7 +175,12 @@ final class SemanticKeyPlan {
         includeTrust,
         includeFullPath,
         includeQuery,
-        Canonicalizers.byDimensions(dimensions));
+        route.representation().isPresent()
+            ? HttpOperation.canonicalizer()
+            : Canonicalizers.byDimensions(dimensions),
+        match.path(),
+        route.representation(),
+        headerNames.stream().sorted().toList());
   }
 
   Canonicalizer canonicalizer() {
@@ -157,6 +190,9 @@ final class SemanticKeyPlan {
   Operation operation(RequestDescriptor request, Map<String, String> captures) {
     Objects.requireNonNull(request, "request");
     Objects.requireNonNull(captures, "captures");
+    if (representation.isPresent()) {
+      return httpOperation(request, captures);
+    }
     Map<String, List<String>> dimensions = new LinkedHashMap<>();
     if (includeMethod) {
       dimensions.put(METHOD, List.of(singleAttribute(request, METHOD)));
@@ -206,10 +242,10 @@ final class SemanticKeyPlan {
       }
       String token;
       if (equals < 0) {
-        token = packed(name) + "0";
+        token = name;
       } else {
         String value = normalizeQueryComponent(pair.substring(equals + 1));
-        token = packed(name) + "1" + packed(value);
+        token = name + "=" + value;
       }
       result.add(token);
     }
@@ -217,6 +253,44 @@ final class SemanticKeyPlan {
       result.sort(String::compareTo);
     }
     return List.copyOf(result);
+  }
+
+  private Operation httpOperation(RequestDescriptor request, Map<String, String> captures) {
+    String targetPath = includeFullPath ? singleAttribute(request, PATH) : pathTemplate;
+    Map<String, String> normalizedCaptures = new LinkedHashMap<>();
+    for (String capture : pathCaptures) {
+      String value = captures.get(capture);
+      if (value == null || value.isEmpty()) {
+        throw new IllegalArgumentException("missing matched path capture " + capture);
+      }
+      normalizedCaptures.put(capture, normalizePathCapture(value));
+    }
+    if (!includeFullPath) {
+      String[] segments = pathTemplate.split("/", -1);
+      for (int index = 0; index < segments.length; index++) {
+        String segment = segments[index];
+        if (segment.startsWith("{")) {
+          segments[index] = normalizedCaptures.get(segment.substring(1, segment.length() - 1));
+        }
+      }
+      targetPath = String.join("/", segments);
+    }
+    String query = optionalSingleAttribute(request, QUERY).orElse("");
+    String projectedQuery = rawQuery ? query : String.join("&", selectedQueryPairs(query));
+    String target = targetPath + (projectedQuery.isEmpty() ? "" : "?" + projectedQuery);
+    Map<String, List<String>> selectedHeaders = new LinkedHashMap<>();
+    for (String name : headers) {
+      selectedHeaders.put(name, request.attributes().getOrDefault("header:" + name, List.of()));
+    }
+    return new HttpOperation(
+            singleAttribute(request, METHOD),
+            singleAttribute(request, HOST),
+            target,
+            normalizeSha256(singleAttribute(request, BODY_SHA256)),
+            request.trustLevel(),
+            representation.orElseThrow(),
+            selectedHeaders)
+        .operation();
   }
 
   private static String normalizeConfiguredQueryName(String value, String path)
@@ -337,9 +411,5 @@ final class SemanticKeyPlan {
 
   private static String pathDimension(String capture) {
     return "path:" + capture;
-  }
-
-  private static String packed(String value) {
-    return value.length() + ":" + value;
   }
 }

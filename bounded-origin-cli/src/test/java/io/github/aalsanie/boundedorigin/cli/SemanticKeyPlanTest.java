@@ -102,7 +102,8 @@ class SemanticKeyPlanTest {
     ConfigurationModel.KeyConfiguration key =
         new ConfigurationModel.KeyConfiguration(
             List.of("id"),
-            Optional.of(new ConfigurationModel.QueryKeyConfiguration(List.of(), false)));
+            Optional.of(new ConfigurationModel.QueryKeyConfiguration(List.of(), false)),
+            List.of());
     ConfigurationModel.RouteConfiguration route = withKey(base, Optional.of(key));
     SemanticKeyPlan plan = compile(route);
 
@@ -121,7 +122,8 @@ class SemanticKeyPlanTest {
         new ConfigurationModel.KeyConfiguration(
             List.of("id"),
             Optional.of(
-                new ConfigurationModel.QueryKeyConfiguration(List.of("variant", "format"), false)));
+                new ConfigurationModel.QueryKeyConfiguration(List.of("variant", "format"), false)),
+            List.of());
     SemanticKeyPlan plan = compile(withKey(base, Optional.of(key)));
 
     String first =
@@ -172,7 +174,7 @@ class SemanticKeyPlanTest {
         new ConfigurationModel.MatchConfiguration(
             Optional.of("GET"), Optional.of("example.com"), "/render/**", Optional.empty());
     ConfigurationModel.KeyConfiguration key =
-        new ConfigurationModel.KeyConfiguration(List.of(), Optional.empty());
+        new ConfigurationModel.KeyConfiguration(List.of(), Optional.empty(), List.of());
     SemanticKeyPlan plan = compile(withKey(withMatch(base, catchAll), Optional.of(key)));
 
     String first = identity(plan, request("GET", "example.com", "/render/a", null), Map.of());
@@ -216,9 +218,9 @@ class SemanticKeyPlanTest {
   void rejectsIncompletePathIdentityAtStartup() throws ConfigurationException {
     ConfigurationModel.RouteConfiguration base = renderRoute();
     ConfigurationModel.KeyConfiguration missing =
-        new ConfigurationModel.KeyConfiguration(List.of(), Optional.empty());
+        new ConfigurationModel.KeyConfiguration(List.of(), Optional.empty(), List.of());
     ConfigurationModel.KeyConfiguration unknown =
-        new ConfigurationModel.KeyConfiguration(List.of("other"), Optional.empty());
+        new ConfigurationModel.KeyConfiguration(List.of("other"), Optional.empty(), List.of());
 
     ConfigurationException missingFailure =
         assertThrows(
@@ -237,7 +239,8 @@ class SemanticKeyPlanTest {
     ConfigurationModel.KeyConfiguration aliased =
         new ConfigurationModel.KeyConfiguration(
             List.of("id"),
-            Optional.of(new ConfigurationModel.QueryKeyConfiguration(List.of("a", "%61"), true)));
+            Optional.of(new ConfigurationModel.QueryKeyConfiguration(List.of("a", "%61"), true)),
+            List.of());
 
     ConfigurationException missing =
         assertThrows(ConfigurationException.class, () -> compile(withKey(base, Optional.empty())));
@@ -255,7 +258,8 @@ class SemanticKeyPlanTest {
     ConfigurationModel.KeyConfiguration invalid =
         new ConfigurationModel.KeyConfiguration(
             List.of("id"),
-            Optional.of(new ConfigurationModel.QueryKeyConfiguration(List.of("a&b"), true)));
+            Optional.of(new ConfigurationModel.QueryKeyConfiguration(List.of("a&b"), true)),
+            List.of());
 
     ConfigurationException selector =
         assertThrows(
@@ -317,7 +321,8 @@ class SemanticKeyPlanTest {
         key,
         route.materializerVersion(),
         route.budget(),
-        route.clientComputation());
+        route.clientComputation(),
+        route.representation());
   }
 
   private static ConfigurationModel.RouteConfiguration withMatch(
@@ -331,7 +336,8 @@ class SemanticKeyPlanTest {
         route.key(),
         route.materializerVersion(),
         route.budget(),
-        route.clientComputation());
+        route.clientComputation(),
+        route.representation());
   }
 
   private static RequestDescriptor request(String method, String host, String path, String query) {

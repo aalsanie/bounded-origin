@@ -31,7 +31,7 @@ class SemanticKeyPlanBoundaryTest {
                     base,
                     Optional.of(
                         new ConfigurationModel.KeyConfiguration(
-                            List.of("id", "id"), Optional.empty()))),
+                            List.of("id", "id"), Optional.empty(), List.of()))),
                 Set.of("id"),
                 path),
         "duplicate capture names");
@@ -154,7 +154,9 @@ class SemanticKeyPlanBoundaryTest {
         withMatch(
             withKey(
                 base,
-                Optional.of(new ConfigurationModel.KeyConfiguration(List.of(), Optional.empty()))),
+                Optional.of(
+                    new ConfigurationModel.KeyConfiguration(
+                        List.of(), Optional.empty(), List.of()))),
             new ConfigurationModel.MatchConfiguration(
                 Optional.of("GET"), Optional.of("example.com"), "/**", Optional.empty()));
     SemanticKeyPlan plan = SemanticKeyPlan.compile(catchAll, Set.of(), "configuration.routes[0]");
@@ -185,7 +187,8 @@ class SemanticKeyPlanBoundaryTest {
     ConfigurationModel.KeyConfiguration key =
         new ConfigurationModel.KeyConfiguration(
             List.of("id"),
-            Optional.of(new ConfigurationModel.QueryKeyConfiguration(List.of(selector), false)));
+            Optional.of(new ConfigurationModel.QueryKeyConfiguration(List.of(selector), false)),
+            List.of());
     assertFailure(
         () ->
             SemanticKeyPlan.compile(
@@ -221,7 +224,8 @@ class SemanticKeyPlanBoundaryTest {
         key,
         route.materializerVersion(),
         route.budget(),
-        route.clientComputation());
+        route.clientComputation(),
+        route.representation());
   }
 
   private static ConfigurationModel.RouteConfiguration withMatch(
@@ -235,7 +239,8 @@ class SemanticKeyPlanBoundaryTest {
         route.key(),
         route.materializerVersion(),
         route.budget(),
-        route.clientComputation());
+        route.clientComputation(),
+        route.representation());
   }
 
   private static RequestDescriptor request(

@@ -165,13 +165,28 @@ final class PolicyConfigurationCompiler {
     if (route.key() == null
         || route.materializerVersion() == null
         || route.budget() == null
-        || route.clientComputation() == null) {
+        || route.clientComputation() == null
+        || route.representation() == null) {
       throw new ConfigurationException(path + " optional policy fields must not be null");
     }
   }
 
   private static void validateStrategyFields(
       ConfigurationModel.RouteConfiguration route, String path) throws ConfigurationException {
+    switch (route.strategy()) {
+      case ARTIFACT_ONLY, MATERIALIZE -> {
+        requirePresent(route.representation(), path + ".representation", route.strategy());
+        if (route.representation().orElseThrow()
+            != io.github.aalsanie.boundedorigin.proxy.RepresentationContract.PUBLIC_IMMUTABLE) {
+          throw new ConfigurationException(
+              path + ".representation must be PUBLIC_IMMUTABLE for artifact reuse");
+        }
+      }
+      case BOUNDED_COMPUTE ->
+          requirePresent(route.representation(), path + ".representation", route.strategy());
+      case CLIENT_COMPUTE, DENY ->
+          requireAbsent(route.representation(), path + ".representation", route.strategy());
+    }
     switch (route.strategy()) {
       case ARTIFACT_ONLY -> {
         requireKeyed(route, path);

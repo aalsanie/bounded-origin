@@ -17,7 +17,7 @@ class OriginExchangeAdditionalBoundaryTest {
       origin.respond(
           "/implicit-close",
           (request, socket) -> {
-            TestOriginServer.write(socket, "HTTP/1.1 200 OK\r\n\r\nvalue");
+            TestOriginServer.write(socket, "HTTP/1.1 200 OK\r\nCache-Control: public\r\n\r\nvalue");
             return false;
           });
 
@@ -60,7 +60,9 @@ class OriginExchangeAdditionalBoundaryTest {
       origin.respond(
           "/head-no-length",
           (request, socket) -> {
-            TestOriginServer.write(socket, "HTTP/1.1 200 OK\r\nConnection: keep-alive\r\n\r\n");
+            TestOriginServer.write(
+                socket,
+                "HTTP/1.1 200 OK\r\nCache-Control: public\r\nConnection: keep-alive\r\n\r\n");
             return true;
           });
 

@@ -50,6 +50,7 @@ final class io.github.aalsanie.boundedorigin.cli.ConfigurationModel$KeyConfigura
   public final boolean equals(java.lang.Object);
   public java.util.List<java.lang.String> path();
   public java.util.Optional<io.github.aalsanie.boundedorigin.cli.ConfigurationModel$QueryKeyConfiguration> query();
+  public java.util.List<java.lang.String> headers();
 }
 final class io.github.aalsanie.boundedorigin.cli.ConfigurationModel$MatchConfiguration extends java.lang.Record {
   public final java.lang.String toString();
@@ -80,6 +81,7 @@ final class io.github.aalsanie.boundedorigin.cli.ConfigurationModel$RouteConfigu
   public java.util.Optional<java.lang.String> materializerVersion();
   public java.util.Optional<io.github.aalsanie.boundedorigin.cli.ConfigurationModel$BudgetConfiguration> budget();
   public java.util.Optional<io.github.aalsanie.boundedorigin.cli.ConfigurationModel$ClientComputationConfiguration> clientComputation();
+  public java.util.Optional<io.github.aalsanie.boundedorigin.proxy.RepresentationContract> representation();
 }
 final class io.github.aalsanie.boundedorigin.cli.ConfigurationModel$RuntimeConfiguration extends java.lang.Record {
   public final java.lang.String toString();

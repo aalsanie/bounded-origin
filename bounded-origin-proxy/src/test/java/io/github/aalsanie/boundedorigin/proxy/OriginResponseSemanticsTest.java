@@ -19,7 +19,8 @@ class OriginResponseSemanticsTest {
           "/head",
           (request, socket) -> {
             TestOriginServer.write(
-                socket, "HTTP/1.1 200 OK\r\nContent-Length: 9\r\nConnection: keep-alive\r\n\r\n");
+                socket,
+                "HTTP/1.1 200 OK\r\nCache-Control: public\r\nContent-Length: 9\r\nConnection: keep-alive\r\n\r\n");
             return true;
           });
       try (BoundedOriginGateway gateway = gateway(origin)) {
@@ -39,14 +40,14 @@ class OriginResponseSemanticsTest {
   }
 
   @Test
-  void notModifiedPreservesRepresentationLengthWithoutBodyFraming() throws Exception {
+  void notModifiedCannotBeUsedAsACompleteSharedRepresentation() throws Exception {
     try (TestOriginServer origin = new TestOriginServer()) {
       origin.respond(
           "/not-modified",
           (request, socket) -> {
             TestOriginServer.write(
                 socket,
-                "HTTP/1.1 304 Not Modified\r\nContent-Length: 17\r\nConnection: keep-alive\r\n\r\n");
+                "HTTP/1.1 304 Not Modified\r\nCache-Control: public\r\nContent-Length: 17\r\nConnection: keep-alive\r\n\r\n");
             return true;
           });
       try (BoundedOriginGateway gateway = gateway(origin)) {
@@ -57,9 +58,9 @@ class OriginResponseSemanticsTest {
                   "/not-modified",
                   Map.of("Host", "example.test", "Connection", "close"),
                   new byte[0]);
-          assertEquals(304, response.status());
-          assertEquals("17", response.header("content-length"));
-          assertEquals(0, response.body().length);
+          assertEquals(502, response.status());
+          assertEquals("origin request failed\n", response.bodyText());
+          assertEquals(Integer.toString(response.body().length), response.header("content-length"));
         }
       }
     }
@@ -74,7 +75,7 @@ class OriginResponseSemanticsTest {
             TestOriginServer.write(
                 socket,
                 "HTTP/1.1 100 Continue\r\n\r\n"
-                    + "HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: keep-alive\r\n\r\nok");
+                    + "HTTP/1.1 200 OK\r\nCache-Control: public\r\nContent-Length: 2\r\nConnection: keep-alive\r\n\r\nok");
             return true;
           });
       try (BoundedOriginGateway gateway = gateway(origin)) {
@@ -91,7 +92,9 @@ class OriginResponseSemanticsTest {
       origin.respond(
           "/close-delimited",
           (request, socket) -> {
-            TestOriginServer.write(socket, "HTTP/1.1 200 OK\r\nConnection: close\r\n\r\nvalue");
+            TestOriginServer.write(
+                socket,
+                "HTTP/1.1 200 OK\r\nCache-Control: public\r\nConnection: close\r\n\r\nvalue");
             return false;
           });
       try (BoundedOriginGateway gateway = gateway(origin)) {
@@ -112,7 +115,7 @@ class OriginResponseSemanticsTest {
           (request, socket) -> {
             TestOriginServer.write(
                 socket,
-                "HTTP/1.1 200 OK\r\n"
+                "HTTP/1.1 200 OK\r\nCache-Control: public\r\n"
                     + "Transfer-Encoding: chunked\r\n"
                     + "Connection: keep-alive\r\n\r\n"
                     + "5\r\nvalue\r\n"
@@ -146,7 +149,8 @@ class OriginResponseSemanticsTest {
           "/empty",
           (request, socket) -> {
             TestOriginServer.write(
-                socket, "HTTP/1.1 204 No Content\r\nConnection: keep-alive\r\n\r\n");
+                socket,
+                "HTTP/1.1 204 No Content\r\nCache-Control: public\r\nConnection: keep-alive\r\n\r\n");
             return true;
           });
       try (BoundedOriginGateway gateway = gateway(origin)) {

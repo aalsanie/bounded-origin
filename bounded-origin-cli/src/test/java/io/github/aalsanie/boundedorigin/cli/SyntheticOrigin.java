@@ -78,7 +78,7 @@ final class SyntheticOrigin implements AutoCloseable {
   }
 
   private void handle(HttpExchange exchange) throws IOException {
-    int sequence = requests.incrementAndGet();
+    requests.incrementAndGet();
     int currentActive = active.incrementAndGet();
     maxActive.accumulateAndGet(currentActive, Math::max);
     String target = exchange.getRequestURI().toString();
@@ -89,7 +89,7 @@ final class SyntheticOrigin implements AutoCloseable {
         respond(exchange, 504, "origin gate timed out\n");
         return;
       }
-      respond(exchange, 200, "origin:" + target + ":" + sequence + "\n");
+      respond(exchange, 200, "origin:" + target + "\n");
     } finally {
       active.decrementAndGet();
       exchange.close();
@@ -108,6 +108,7 @@ final class SyntheticOrigin implements AutoCloseable {
   private static void respond(HttpExchange exchange, int status, String body) throws IOException {
     byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
     exchange.getResponseHeaders().set("content-type", "text/plain; charset=utf-8");
+    exchange.getResponseHeaders().set("cache-control", "public");
     exchange.sendResponseHeaders(status, bytes.length);
     exchange.getResponseBody().write(bytes);
   }

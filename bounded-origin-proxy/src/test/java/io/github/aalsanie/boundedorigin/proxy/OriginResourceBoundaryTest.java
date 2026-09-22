@@ -19,7 +19,7 @@ class OriginResourceBoundaryTest {
           (request, socket) -> {
             TestOriginServer.write(
                 socket,
-                "HTTP/1.1 205 Reset Content\r\n"
+                "HTTP/1.1 205 Reset Content\r\nCache-Control: public\r\n"
                     + "Content-Length: 0\r\n"
                     + "Connection: keep-alive\r\n\r\n");
             return true;
@@ -44,7 +44,9 @@ class OriginResourceBoundaryTest {
       origin.respond(
           "/large-close-delimited",
           (request, socket) -> {
-            TestOriginServer.write(socket, "HTTP/1.1 200 OK\r\nConnection: close\r\n\r\n12345");
+            TestOriginServer.write(
+                socket,
+                "HTTP/1.1 200 OK\r\nCache-Control: public\r\nConnection: close\r\n\r\n12345");
             return false;
           });
 

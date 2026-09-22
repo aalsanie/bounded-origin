@@ -50,10 +50,16 @@ final class NettyOriginClient implements AutoCloseable {
   }
 
   Artifact execute(OriginRequest request) throws MaterializationException {
-    return execute(request, () -> null);
+    return executeResponse(request, () -> null).artifact();
   }
 
   Artifact execute(OriginRequest request, Supplier<OriginWorkRegistry.Permit> admission)
+      throws MaterializationException {
+    return executeResponse(request, admission).artifact();
+  }
+
+  OriginResponse executeResponse(
+      OriginRequest request, Supplier<OriginWorkRegistry.Permit> admission)
       throws MaterializationException {
     Objects.requireNonNull(request, "request");
     Objects.requireNonNull(admission, "admission");
@@ -65,7 +71,7 @@ final class NettyOriginClient implements AutoCloseable {
     }
   }
 
-  private Artifact executeTimed(
+  private OriginResponse executeTimed(
       OriginRequest request, Supplier<OriginWorkRegistry.Permit> admission)
       throws MaterializationException {
     CompletableFuture<OriginConnectionPool.Lease> acquisition =
@@ -111,7 +117,7 @@ final class NettyOriginClient implements AutoCloseable {
           if (permit != null && !exchange.closeDelimited) {
             permit.completed();
           }
-          return artifact;
+          return new OriginResponse(artifact, exchange.responseHeaders, exchange.hasTrailers);
         } catch (RuntimeException | Error exception) {
           discard(artifact);
           throw exception;
@@ -236,6 +242,8 @@ final class NettyOriginClient implements AutoCloseable {
     private StreamingSpool spool;
     private int statusCode;
     private Map<String, String> metadata = Map.of();
+    private Map<String, String> responseHeaders = Map.of();
+    private boolean hasTrailers;
     private boolean reusable = true;
     private long declaredLength = -1;
     private boolean bodyForbidden;
@@ -361,6 +369,16 @@ final class NettyOriginClient implements AutoCloseable {
       }
       declaredLength = bodyForbidden ? 0 : headerLength;
       statusCode = code;
+      Map<String, String> rawHeaders = new LinkedHashMap<>();
+      response
+          .headers()
+          .forEach(
+              header ->
+                  rawHeaders.merge(
+                      header.getKey().toLowerCase(java.util.Locale.ROOT),
+                      header.getValue(),
+                      (left, right) -> left + ", " + right));
+      responseHeaders = Map.copyOf(rawHeaders);
       Map<String, String> safeMetadata = HttpRequestSecurity.artifactMetadata(response.headers());
       if (("HEAD".equals(request.method()) || code == 304) && headerLength >= 0) {
         LinkedHashMap<String, String> withRepresentationLength = new LinkedHashMap<>(safeMetadata);
@@ -418,6 +436,7 @@ final class NettyOriginClient implements AutoCloseable {
       boolean last = content instanceof LastHttpContent;
       if (last) {
         lastContentReceived = true;
+        hasTrailers = !((LastHttpContent) content).trailingHeaders().isEmpty();
       }
       try {
         spool

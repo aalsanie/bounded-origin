@@ -5,11 +5,9 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.github.aalsanie.boundedorigin.api.Budget;
-import io.github.aalsanie.boundedorigin.api.Canonicalizers;
 import io.github.aalsanie.boundedorigin.api.OriginPolicy;
 import java.nio.file.Path;
 import java.time.Duration;
-import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -32,7 +30,8 @@ class PolicyCapacityIsolationTest {
             firstEntered.countDown();
             assertTrue(TestOriginServer.await(releaseFirst, Duration.ofSeconds(5)));
             TestOriginServer.write(
-                socket, "HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: keep-alive\r\n\r\nok");
+                socket,
+                "HTTP/1.1 200 OK\r\nCache-Control: public\r\nContent-Length: 2\r\nConnection: keep-alive\r\n\r\nok");
             return true;
           });
       origin.fixed("/second", 200, "second");
@@ -54,13 +53,7 @@ class PolicyCapacityIsolationTest {
           new Budget(1, 0, config.globalBudget().timeout(), config.globalBudget().maxResultBytes());
       OriginPolicy policy =
           OriginPolicy.boundedCompute(
-              "bounded",
-              1,
-              100,
-              "origin-v1",
-              Canonicalizers.byDimensions(
-                  List.of("method", "host", "path", "query", "body-sha256")),
-              policyBudget);
+              "bounded", 1, 100, "origin-v1", HttpOperation.canonicalizer(), policyBudget);
 
       AtomicReference<RawHttpClient.Response> firstResponse = new AtomicReference<>();
       AtomicReference<Throwable> firstFailure = new AtomicReference<>();

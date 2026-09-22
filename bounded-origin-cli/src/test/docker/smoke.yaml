@@ -28,6 +28,7 @@ routes:
       path: /smoke
       trust: UNTRUSTED
     strategy: MATERIALIZE
+    representation: PUBLIC_IMMUTABLE
     key:
       path: []
       query:

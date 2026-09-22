@@ -35,6 +35,15 @@ final class HttpRequestSecurity {
           "upgrade");
   private static final Set<String> FORWARDED =
       Set.of("forwarded", "x-forwarded-for", "x-forwarded-host", "x-forwarded-proto", "x-real-ip");
+  private static final Set<String> CALLER_SPECIFIC =
+      Set.of(
+          "authorization",
+          "cookie",
+          "cookie2",
+          "proxy-authorization",
+          "range",
+          "cache-control",
+          "pragma");
   private static final Set<String> UNSAFE_RESPONSE =
       Set.of(
           "connection",
@@ -146,6 +155,12 @@ final class HttpRequestSecurity {
       chunked = true;
     }
 
+    for (String name : headers.names()) {
+      String lower = name.toLowerCase(Locale.ROOT);
+      if (CALLER_SPECIFIC.contains(lower) || lower.startsWith("if-")) {
+        throw new HttpContractException(403, "caller-specific HTTP semantics are unsupported");
+      }
+    }
     return new ValidatedRequest(
         request.method().name(), target, path, query, host, declaredLength, chunked);
   }
@@ -165,6 +180,13 @@ final class HttpRequestSecurity {
     attributes.put("body-length", List.of(Long.toString(body.length())));
     attributes.put("body-sha256", List.of(body.sha256()));
     return new RequestDescriptor("http.request", attributes, trustLevel);
+  }
+
+  static RequestDescriptor descriptor(GatewayRequest request, TrustLevel trustLevel) {
+    RequestDescriptor base = descriptor(request.validated(), request.body(), trustLevel);
+    Map<String, List<String>> attributes = new LinkedHashMap<>(base.attributes());
+    request.originHeaders().forEach((name, values) -> attributes.put("header:" + name, values));
+    return new RequestDescriptor(base.name(), attributes, trustLevel);
   }
 
   static Map<String, List<String>> originRequestHeaders(

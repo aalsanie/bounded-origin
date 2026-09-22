@@ -1,5 +1,6 @@
 package io.github.aalsanie.boundedorigin.cli;
 
+import io.github.aalsanie.boundedorigin.proxy.RepresentationContract;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
@@ -45,15 +46,18 @@ final class ConfigurationModel {
       Optional<KeyConfiguration> key,
       Optional<String> materializerVersion,
       Optional<BudgetConfiguration> budget,
-      Optional<ClientComputationConfiguration> clientComputation) {}
+      Optional<ClientComputationConfiguration> clientComputation,
+      Optional<RepresentationContract> representation) {}
 
   record MatchConfiguration(
       Optional<String> method, Optional<String> host, String path, Optional<Trust> trust) {}
 
-  record KeyConfiguration(List<String> path, Optional<QueryKeyConfiguration> query) {
+  record KeyConfiguration(
+      List<String> path, Optional<QueryKeyConfiguration> query, List<String> headers) {
     KeyConfiguration {
       path = List.copyOf(path);
       query = Objects.requireNonNull(query, "query");
+      headers = List.copyOf(headers);
     }
   }
 

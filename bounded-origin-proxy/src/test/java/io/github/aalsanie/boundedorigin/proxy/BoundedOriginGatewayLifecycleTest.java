@@ -108,7 +108,7 @@ class BoundedOriginGatewayLifecycleTest {
             }
             TestOriginServer.write(
                 socket,
-                "HTTP/1.1 200 OK\r\n"
+                "HTTP/1.1 200 OK\r\nCache-Control: public\r\n"
                     + "Content-Type: text/plain\r\n"
                     + "Content-Length: 2\r\n"
                     + "Connection: keep-alive\r\n"

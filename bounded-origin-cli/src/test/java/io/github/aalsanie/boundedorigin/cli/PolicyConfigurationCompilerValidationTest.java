@@ -68,7 +68,9 @@ class PolicyConfigurationCompilerValidationTest {
         key(),
         Optional.of("v1"),
         Optional.of(budget),
-        Optional.empty());
+        Optional.empty(),
+        Optional.of(
+            io.github.aalsanie.boundedorigin.proxy.RepresentationContract.PUBLIC_IMMUTABLE));
   }
 
   private static ConfigurationModel.RouteConfiguration clientRoute(
@@ -82,7 +84,8 @@ class PolicyConfigurationCompilerValidationTest {
         key(),
         Optional.of("v1"),
         Optional.empty(),
-        Optional.of(clientComputation));
+        Optional.of(clientComputation),
+        Optional.empty());
   }
 
   private static ConfigurationModel.MatchConfiguration match(String path) {
@@ -94,6 +97,7 @@ class PolicyConfigurationCompilerValidationTest {
   }
 
   private static Optional<ConfigurationModel.KeyConfiguration> key() {
-    return Optional.of(new ConfigurationModel.KeyConfiguration(List.of("id"), Optional.empty()));
+    return Optional.of(
+        new ConfigurationModel.KeyConfiguration(List.of("id"), Optional.empty(), List.of()));
   }
 }

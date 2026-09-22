@@ -45,6 +45,7 @@ final class ZeroCodeTestConfiguration {
                   path: /health
                   trust: UNTRUSTED
                 strategy: BOUNDED_COMPUTE
+                representation: PUBLIC
                 key:
                   path: []
                   query:
@@ -99,6 +100,7 @@ final class ZeroCodeTestConfiguration {
               path: /render/{id}
               trust: UNTRUSTED
             strategy: MATERIALIZE
+            representation: PUBLIC_IMMUTABLE
             key:
               path: [id]
               query:
@@ -126,6 +128,7 @@ final class ZeroCodeTestConfiguration {
               path: /unsafe/allowed
               trust: UNTRUSTED
             strategy: BOUNDED_COMPUTE
+            representation: PUBLIC
             key:
               path: []
               query:

@@ -62,7 +62,7 @@ final class TestOriginServer implements AutoCloseable {
               socket,
               "HTTP/1.1 "
                   + status
-                  + " Test\r\nContent-Type: text/plain\r\nContent-Length: "
+                  + " Test\r\nCache-Control: public\r\nContent-Type: text/plain\r\nContent-Length: "
                   + bytes.length
                   + "\r\nConnection: keep-alive\r\n\r\n");
           socket.getOutputStream().write(bytes);
