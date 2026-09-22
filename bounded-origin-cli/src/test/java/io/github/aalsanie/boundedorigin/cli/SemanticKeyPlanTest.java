@@ -11,15 +11,18 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 class SemanticKeyPlanTest {
   private static final String BODY_A = "a".repeat(64);
   private static final String BODY_B = "b".repeat(64);
 
-  @Test
-  void canonicalizesSelectedQueryPairsAndPreservesMultiplicity() throws ConfigurationException {
-    ConfigurationModel.RouteConfiguration route = renderRoute();
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  void canonicalizesSelectedQueryPairsAndPreservesMultiplicity(boolean clientCompute)
+      throws ConfigurationException {
+    ConfigurationModel.RouteConfiguration route = renderRoute(clientCompute);
     SemanticKeyPlan plan = compile(route);
 
     String first =
@@ -43,9 +46,11 @@ class SemanticKeyPlanTest {
     assertNotEquals(first, fewer);
   }
 
-  @Test
-  void distinguishesMissingAndEmptySelectedQueryValues() throws ConfigurationException {
-    SemanticKeyPlan plan = compile(renderRoute());
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  void distinguishesMissingAndEmptySelectedQueryValues(boolean clientCompute)
+      throws ConfigurationException {
+    SemanticKeyPlan plan = compile(renderRoute(clientCompute));
 
     String missingEquals =
         identity(plan, request("GET", "example.com", "/render/a", "variant"), Map.of("id", "a"));
@@ -55,10 +60,11 @@ class SemanticKeyPlanTest {
     assertNotEquals(missingEquals, emptyValue);
   }
 
-  @Test
-  void treatsPlusAsLiteralAndNormalizesOnlyUnreservedPercentEncodings()
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  void treatsPlusAsLiteralAndNormalizesOnlyUnreservedPercentEncodings(boolean clientCompute)
       throws ConfigurationException {
-    SemanticKeyPlan plan = compile(renderRoute());
+    SemanticKeyPlan plan = compile(renderRoute(clientCompute));
 
     String plus =
         identity(
@@ -77,9 +83,12 @@ class SemanticKeyPlanTest {
     assertEquals(encodedSlashLower, encodedSlashUpper);
   }
 
-  @Test
-  void preservesRawQueryWhenSelectedModeIsAbsent() throws ConfigurationException {
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  void preservesRawQueryWhenSelectedModeIsAbsent(boolean clientCompute)
+      throws ConfigurationException {
     var fixture = ConfigurationTestSupport.objectFixture();
+    useClientComputation(fixture, clientCompute);
     fixture.renderKey().remove("query");
     ConfigurationModel.RouteConfiguration route =
         ConfigurationDecoder.decode(fixture.root()).routes().getFirst();
@@ -96,9 +105,10 @@ class SemanticKeyPlanTest {
     assertNotEquals(first, normalizedAlias);
   }
 
-  @Test
-  void explicitEmptySelectedQueryIgnoresQuery() throws ConfigurationException {
-    ConfigurationModel.RouteConfiguration base = renderRoute();
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  void explicitEmptySelectedQueryIgnoresQuery(boolean clientCompute) throws ConfigurationException {
+    ConfigurationModel.RouteConfiguration base = renderRoute(clientCompute);
     ConfigurationModel.KeyConfiguration key =
         new ConfigurationModel.KeyConfiguration(
             List.of("id"),
@@ -115,9 +125,10 @@ class SemanticKeyPlanTest {
     assertEquals(first, second);
   }
 
-  @Test
-  void orderedSelectedQueryPreservesPairOrder() throws ConfigurationException {
-    ConfigurationModel.RouteConfiguration base = renderRoute();
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  void orderedSelectedQueryPreservesPairOrder(boolean clientCompute) throws ConfigurationException {
+    ConfigurationModel.RouteConfiguration base = renderRoute(clientCompute);
     ConfigurationModel.KeyConfiguration key =
         new ConfigurationModel.KeyConfiguration(
             List.of("id"),
@@ -140,9 +151,11 @@ class SemanticKeyPlanTest {
     assertNotEquals(first, second);
   }
 
-  @Test
-  void wildcardRouteConstraintsParticipateInIdentity() throws ConfigurationException {
-    ConfigurationModel.RouteConfiguration base = renderRoute();
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  void wildcardRouteConstraintsParticipateInIdentity(boolean clientCompute)
+      throws ConfigurationException {
+    ConfigurationModel.RouteConfiguration base = renderRoute(clientCompute);
     ConfigurationModel.MatchConfiguration wildcard =
         new ConfigurationModel.MatchConfiguration(
             Optional.empty(), Optional.empty(), "/render/{id}", Optional.empty());
@@ -167,9 +180,10 @@ class SemanticKeyPlanTest {
     assertNotEquals(baseline, trust);
   }
 
-  @Test
-  void catchAllRouteIncludesFullPath() throws ConfigurationException {
-    ConfigurationModel.RouteConfiguration base = renderRoute();
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  void catchAllRouteIncludesFullPath(boolean clientCompute) throws ConfigurationException {
+    ConfigurationModel.RouteConfiguration base = renderRoute(clientCompute);
     ConfigurationModel.MatchConfiguration catchAll =
         new ConfigurationModel.MatchConfiguration(
             Optional.of("GET"), Optional.of("example.com"), "/render/**", Optional.empty());
@@ -183,9 +197,11 @@ class SemanticKeyPlanTest {
     assertNotEquals(first, second);
   }
 
-  @Test
-  void bodyDigestAlwaysParticipatesAndIsCaseNormalized() throws ConfigurationException {
-    SemanticKeyPlan plan = compile(renderRoute());
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  void bodyDigestAlwaysParticipatesAndIsCaseNormalized(boolean clientCompute)
+      throws ConfigurationException {
+    SemanticKeyPlan plan = compile(renderRoute(clientCompute));
     Map<String, String> captures = Map.of("id", "a");
 
     String lower =
@@ -212,11 +228,24 @@ class SemanticKeyPlanTest {
 
     assertEquals(lower, upper);
     assertNotEquals(lower, other);
+    assertNotEquals(
+        lower,
+        identity(
+            plan,
+            request(
+                "GET",
+                "example.com",
+                "/render/a",
+                "variant=x",
+                "0".repeat(64),
+                TrustLevel.UNTRUSTED),
+            captures));
   }
 
-  @Test
-  void rejectsIncompletePathIdentityAtStartup() throws ConfigurationException {
-    ConfigurationModel.RouteConfiguration base = renderRoute();
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  void rejectsIncompletePathIdentityAtStartup(boolean clientCompute) throws ConfigurationException {
+    ConfigurationModel.RouteConfiguration base = renderRoute(clientCompute);
     ConfigurationModel.KeyConfiguration missing =
         new ConfigurationModel.KeyConfiguration(List.of(), Optional.empty(), List.of());
     ConfigurationModel.KeyConfiguration unknown =
@@ -233,9 +262,11 @@ class SemanticKeyPlanTest {
     assertTrue(unknownFailure.getMessage().contains("references unknown capture 'other'"));
   }
 
-  @Test
-  void rejectsMissingKeyAndSemanticQueryAliasesAtStartup() throws ConfigurationException {
-    ConfigurationModel.RouteConfiguration base = renderRoute();
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  void rejectsMissingKeyAndSemanticQueryAliasesAtStartup(boolean clientCompute)
+      throws ConfigurationException {
+    ConfigurationModel.RouteConfiguration base = renderRoute(clientCompute);
     ConfigurationModel.KeyConfiguration aliased =
         new ConfigurationModel.KeyConfiguration(
             List.of("id"),
@@ -252,9 +283,11 @@ class SemanticKeyPlanTest {
     assertTrue(duplicate.getMessage().contains("semantically duplicate"));
   }
 
-  @Test
-  void rejectsInvalidQuerySelectorsAndRuntimeIdentityInputs() throws ConfigurationException {
-    ConfigurationModel.RouteConfiguration base = renderRoute();
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  void rejectsInvalidQuerySelectorsAndRuntimeIdentityInputs(boolean clientCompute)
+      throws ConfigurationException {
+    ConfigurationModel.RouteConfiguration base = renderRoute(clientCompute);
     ConfigurationModel.KeyConfiguration invalid =
         new ConfigurationModel.KeyConfiguration(
             List.of("id"),
@@ -289,6 +322,54 @@ class SemanticKeyPlanTest {
     assertTrue(selector.getMessage().contains("invalid query name"));
     assertTrue(digest.getMessage().contains("64 hexadecimal"));
     assertTrue(capture.getMessage().contains("forbidden encoded value"));
+    assertThrows(
+        IllegalArgumentException.class,
+        () ->
+            plan.operation(
+                request(
+                    "GET",
+                    "example.com",
+                    "/render/a",
+                    "variant=x",
+                    "g".repeat(64),
+                    TrustLevel.UNTRUSTED),
+                Map.of("id", "a")));
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  void queryNormalizationPreservesReservedEscapesAndEveryUnreservedBoundary(boolean clientCompute)
+      throws ConfigurationException {
+    SemanticKeyPlan plan = compile(renderRoute(clientCompute));
+    Map<String, String> captures = Map.of("id", "a");
+    String encoded = "variant=%61%7a%41%5a%30%39%2d%2e%5f%7e%40%5b%60%7b%0a";
+    String canonical = "variant=azAZ09-._~%40%5B%60%7B%0A";
+    assertEquals(
+        identity(plan, request("GET", "example.com", "/render/a", encoded), captures),
+        identity(plan, request("GET", "example.com", "/render/a", canonical), captures));
+    assertNotEquals(
+        identity(plan, request("GET", "example.com", "/render/a", canonical), captures),
+        identity(
+            plan,
+            request("GET", "example.com", "/render/a", "variant=azAZ09-._~@[`{%0A"),
+            captures));
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  void selectedQueryNamesAndValuesAcceptVisibleAsciiEndpoints(boolean clientCompute)
+      throws ConfigurationException {
+    var key =
+        new ConfigurationModel.KeyConfiguration(
+            List.of("id"),
+            Optional.of(new ConfigurationModel.QueryKeyConfiguration(List.of("!", "~"), true)),
+            List.of());
+    SemanticKeyPlan plan = compile(withKey(renderRoute(clientCompute), Optional.of(key)));
+    Map<String, String> captures = Map.of("id", "a");
+    assertEquals(
+        identity(plan, request("GET", "example.com", "/render/a", "!=!&~=~"), captures),
+        identity(
+            plan, request("GET", "example.com", "/render/a", "~=%7e&noise=ignored&!=!"), captures));
   }
 
   private static SemanticKeyPlan compile(ConfigurationModel.RouteConfiguration route)
@@ -303,10 +384,21 @@ class SemanticKeyPlanTest {
     return plan.canonicalizer().canonicalize(plan.operation(request, captures));
   }
 
-  private static ConfigurationModel.RouteConfiguration renderRoute() throws ConfigurationException {
-    return ConfigurationDecoder.decode(ConfigurationTestSupport.objectFixture().root())
-        .routes()
-        .getFirst();
+  private static ConfigurationModel.RouteConfiguration renderRoute(boolean clientCompute)
+      throws ConfigurationException {
+    var fixture = ConfigurationTestSupport.objectFixture();
+    useClientComputation(fixture, clientCompute);
+    return ConfigurationDecoder.decode(fixture.root()).routes().getFirst();
+  }
+
+  private static void useClientComputation(
+      ConfigurationTestSupport.ObjectFixture fixture, boolean clientCompute) {
+    if (clientCompute) {
+      fixture.render().put("strategy", "CLIENT_COMPUTE");
+      fixture.render().remove("representation");
+      fixture.render().remove("budget");
+      fixture.render().put("client-computation", fixture.clientComputation());
+    }
   }
 
   private static ConfigurationModel.RouteConfiguration withKey(

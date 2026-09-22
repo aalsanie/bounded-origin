@@ -56,6 +56,8 @@ class RepresentationConfigurationTest {
   void publicTransientOperationsDoNotPromisePersistentReuse() throws ConfigurationException {
     var fixture = ConfigurationTestSupport.objectFixture();
     fixture.render().put("strategy", "BOUNDED_COMPUTE");
+    fixture.render().remove("representation");
+    assertThrows(ConfigurationException.class, () -> compile(fixture));
     fixture.render().put("representation", "PUBLIC");
     assertEquals(
         RepresentationContract.PUBLIC,
