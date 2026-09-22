@@ -10,8 +10,9 @@ public final class io.github.aalsanie.boundedorigin.api.Artifact extends java.la
   public long contentLength();
   public io.github.aalsanie.boundedorigin.api.ArtifactBody body();
 }
-public interface io.github.aalsanie.boundedorigin.api.ArtifactBody {
+public interface io.github.aalsanie.boundedorigin.api.ArtifactBody extends java.lang.AutoCloseable {
   public abstract java.io.InputStream openStream() throws java.io.IOException;
+  public default void close() throws java.io.IOException;
 }
 public interface io.github.aalsanie.boundedorigin.api.ArtifactStore {
   public abstract java.util.Optional<io.github.aalsanie.boundedorigin.api.Artifact> get(io.github.aalsanie.boundedorigin.api.OperationKey) throws java.io.IOException;

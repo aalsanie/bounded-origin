@@ -179,6 +179,34 @@ class OriginExchangeFailureContractTest {
     }
   }
 
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
+  void abandonedWaiterDisposesResultWhenCompletionWinsTheCancellationRace(boolean completeFirst)
+      throws Exception {
+    try (ExchangeFixture fixture = fixture()) {
+      HttpResponse response = response(200);
+      response.headers().set(HttpHeaderNames.CONTENT_LENGTH, "1");
+      fixture.send(response);
+      Field finished = fixture.type.getDeclaredField("finished");
+      finished.setAccessible(true);
+      ((java.util.concurrent.atomic.AtomicBoolean) finished.get(fixture.handler)).set(true);
+      StreamingSpool.Result completed = fixture.completedBody(new byte[] {1});
+      Method abandon = fixture.type.getDeclaredMethod("abandon", Throwable.class);
+      abandon.setAccessible(true);
+      if (completeFirst) {
+        fixture.completeResponse(completed, null);
+      }
+      abandon.invoke(fixture.handler, new InterruptedException("waiter stopped"));
+      if (!completeFirst) {
+        fixture.completeResponse(completed, null);
+      }
+      fixture.leaseChannel.runPendingTasks();
+      assertTrue(completed.released());
+      assertTrue(Files.notExists(completed.path()));
+      assertTrue(((TemporaryArtifactBody) fixture.result.join().body()).deleted());
+    }
+  }
+
   private ExchangeFixture fixture() throws Exception {
     GatewayConfig config =
         GatewayTestFixtures.config(GatewayTestFixtures.unusedPort(), temporaryDirectory);

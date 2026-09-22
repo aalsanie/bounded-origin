@@ -9,6 +9,7 @@ import java.time.format.DateTimeParseException;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 
 public final class GatewayConfig {
@@ -20,6 +21,8 @@ public final class GatewayConfig {
           "admin.port",
           "origin.host",
           "origin.port",
+          "origin.completion-contract",
+          "origin.ownership-directory",
           "temporary.directory",
           "ingress.trust",
           "forwarded.trust",
@@ -55,6 +58,8 @@ public final class GatewayConfig {
   private final InetSocketAddress listenAddress;
   private final InetSocketAddress adminAddress;
   private final InetSocketAddress originAddress;
+  private final OriginCompletionContract originCompletionContract;
+  private final Path originOwnershipDirectory;
   private final Path temporaryDirectory;
   private final Budget globalBudget;
   private final Duration failureCooldown;
@@ -91,6 +96,17 @@ public final class GatewayConfig {
       throw new IllegalArgumentException("listenAddress and adminAddress must be distinct");
     }
     originAddress = requireOriginAddress(builder.originAddress);
+    originCompletionContract =
+        Objects.requireNonNull(builder.originCompletionContract, "originCompletionContract");
+    originOwnershipDirectory =
+        builder.originOwnershipDirectory == null
+            ? null
+            : builder.originOwnershipDirectory.toAbsolutePath().normalize();
+    if (originCompletionContract != OriginCompletionContract.DISABLED
+        && originOwnershipDirectory == null) {
+      throw new IllegalArgumentException(
+          "origin computation requires a persistent ownership directory");
+    }
     temporaryDirectory =
         Objects.requireNonNull(builder.temporaryDirectory, "temporaryDirectory")
             .toAbsolutePath()
@@ -228,6 +244,13 @@ public final class GatewayConfig {
                 port(copy.getOrDefault("admin.port", "8081"), "admin.port", true),
                 "admin.host"))
         .originAddress(address(originHost, originPort, "origin.host"))
+        .originCompletionContract(
+            OriginCompletionContract.valueOf(
+                copy.getOrDefault("origin.completion-contract", "DISABLED")))
+        .originOwnershipDirectory(
+            copy.containsKey("origin.ownership-directory")
+                ? Path.of(required(copy, "origin.ownership-directory"))
+                : null)
         .temporaryDirectory(Path.of(temporary))
         .globalBudget(budget)
         .failureCooldown(
@@ -315,6 +338,18 @@ public final class GatewayConfig {
 
   public static Builder builder() {
     return new Builder();
+  }
+
+  public OriginCompletionContract originCompletionContract() {
+    return originCompletionContract;
+  }
+
+  /**
+   * The directory must survive restarts and must not be reset while admitted origin work may
+   * remain.
+   */
+  public Optional<Path> originOwnershipDirectory() {
+    return Optional.ofNullable(originOwnershipDirectory);
   }
 
   public InetSocketAddress listenAddress() {
@@ -591,6 +626,8 @@ public final class GatewayConfig {
   }
 
   public static final class Builder {
+    private OriginCompletionContract originCompletionContract = OriginCompletionContract.DISABLED;
+    private Path originOwnershipDirectory;
     private InetSocketAddress listenAddress;
     private InetSocketAddress adminAddress;
     private InetSocketAddress originAddress;
@@ -624,6 +661,16 @@ public final class GatewayConfig {
     private long chunkedResponseThresholdBytes;
 
     private Builder() {}
+
+    public Builder originCompletionContract(OriginCompletionContract value) {
+      originCompletionContract = value;
+      return this;
+    }
+
+    public Builder originOwnershipDirectory(Path value) {
+      originOwnershipDirectory = value;
+      return this;
+    }
 
     public Builder listenAddress(InetSocketAddress value) {
       listenAddress = value;

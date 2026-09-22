@@ -225,7 +225,8 @@ class GatewayHandlerLifecycleTest {
             executor,
             originClient,
             metrics,
-            flights);
+            flights,
+            new OriginWorkRegistry(config, metrics));
     GatewayRequestHandler handler =
         new GatewayRequestHandler(
             config,

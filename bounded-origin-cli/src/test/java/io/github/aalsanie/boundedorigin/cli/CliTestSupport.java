@@ -32,6 +32,10 @@ final class CliTestSupport {
         .replace("gateway:\n", gatewayPrefix)
         .replace("origin.host: origin.internal", "origin.host: 127.0.0.1")
         .replace("origin.port: 8080", "origin.port: 65534")
+        .replace(
+            "origin.ownership-directory: /var/lib/origin-ownership",
+            "origin.ownership-directory: "
+                + yamlScalar(directory.resolve("ownership").toAbsolutePath().toString()))
         .replace("temporary.directory: /tmp/bounded-origin", "temporary.directory: " + temporary)
         .replace("directory: /var/lib/bounded-origin", "directory: " + store);
   }

@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
@@ -26,6 +27,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.LockSupport;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -470,16 +472,19 @@ class ZeroCodeEndToEndTest {
 
   private record PortPair(int listen, int admin) {}
 
-  private static final class RunningCli implements AutoCloseable {
+  static final class RunningCli implements AutoCloseable {
     private final Process process;
     private final int adminPort;
     private final Path log;
+    private final AtomicReference<IOException> logFailure = new AtomicReference<>();
+    private final Thread logReader;
     private List<ProcessHandle> capturedDescendants = List.of();
 
     private RunningCli(Process process, int adminPort, Path log) {
       this.process = process;
       this.adminPort = adminPort;
       this.log = log;
+      logReader = Thread.ofPlatform().daemon(true).start(this::copyOutput);
     }
 
     static RunningCli start(Path configuration, int listenPort, int adminPort, Path logDirectory)
@@ -499,11 +504,7 @@ class ZeroCodeEndToEndTest {
       command.add(configuration.toString());
 
       Path log = Files.createTempFile(logDirectory, "bounded-origin-", ".log");
-      Process process =
-          new ProcessBuilder(command)
-              .redirectErrorStream(true)
-              .redirectOutput(log.toFile())
-              .start();
+      Process process = new ProcessBuilder(command).redirectErrorStream(true).start();
       RunningCli running = new RunningCli(process, adminPort, log);
       try {
         running.awaitReady(WAIT);
@@ -518,6 +519,23 @@ class ZeroCodeEndToEndTest {
 
     boolean isAlive() {
       return process.isAlive();
+    }
+
+    private void copyOutput() {
+      // The fixture owns the file handle; killed Windows descendants inherit only the pipe.
+      try (OutputStream output = Files.newOutputStream(log)) {
+        process.getInputStream().transferTo(output);
+      } catch (IOException exception) {
+        logFailure.set(exception);
+      }
+    }
+
+    private void awaitOutputClosed() throws InterruptedException {
+      assertTrue(logReader.join(Duration.ofSeconds(10)), "process output reader did not terminate");
+      IOException failure = logFailure.get();
+      if (failure != null) {
+        throw new AssertionError("failed to capture packaged CLI output", failure);
+      }
     }
 
     private void captureDescendants() {
@@ -561,24 +579,35 @@ class ZeroCodeEndToEndTest {
     @Override
     public void close() {
       List<ProcessHandle> descendants = managedDescendants();
-      if (!process.isAlive() && descendants.stream().noneMatch(ProcessHandle::isAlive)) {
-        return;
-      }
-      if (isWindows()) {
-        descendants.stream().filter(ProcessHandle::isAlive).forEach(ProcessHandle::destroyForcibly);
-      }
-      process.destroy();
       try {
-        if (!process.waitFor(10, TimeUnit.SECONDS)) {
-          process.destroyForcibly();
-          process.waitFor(10, TimeUnit.SECONDS);
+        if (!process.isAlive() && descendants.stream().noneMatch(ProcessHandle::isAlive)) {
+          awaitOutputClosed();
+        } else if (isWindows()) {
+          crash();
+        } else {
+          // Process.destroy closes stdout on Unix before the output reader has drained it.
+          process.toHandle().destroy();
+          if (!process.waitFor(10, TimeUnit.SECONDS)) {
+            process.toHandle().destroyForcibly();
+            assertTrue(process.waitFor(10, TimeUnit.SECONDS));
+          }
+          awaitDescendantsExit(descendants);
+          awaitOutputClosed();
         }
-        awaitDescendantsExit(descendants);
       } catch (InterruptedException exception) {
         Thread.currentThread().interrupt();
         descendants.stream().filter(ProcessHandle::isAlive).forEach(ProcessHandle::destroyForcibly);
-        process.destroyForcibly();
+        process.toHandle().destroyForcibly();
       }
+    }
+
+    void crash() throws InterruptedException {
+      List<ProcessHandle> descendants = managedDescendants();
+      // Stop the launcher first: after Java exits the Windows script can spawn an exit-code shell.
+      process.toHandle().destroyForcibly();
+      assertTrue(process.waitFor(10, TimeUnit.SECONDS));
+      awaitDescendantsExit(descendants);
+      awaitOutputClosed();
     }
 
     private List<ProcessHandle> managedDescendants() {
@@ -638,7 +667,7 @@ class ZeroCodeEndToEndTest {
     private static Path launcherDirectory() {
       String configured = System.getProperty("boundedOrigin.launcherDir");
       if (configured == null || configured.isBlank()) {
-        throw new IllegalStateException("boundedOrigin.launcherDir is not configured");
+        return Path.of("build", "install", "bounded-origin", "bin").toAbsolutePath();
       }
       return Path.of(configured);
     }

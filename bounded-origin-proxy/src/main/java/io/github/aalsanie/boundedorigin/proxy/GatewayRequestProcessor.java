@@ -22,6 +22,7 @@ final class GatewayRequestProcessor {
   private final NettyOriginClient originClient;
   private final GatewayMetrics metrics;
   private final FlightLeaseRegistry flights;
+  private final OriginWorkRegistry originWork;
 
   GatewayRequestProcessor(
       GatewayConfig config,
@@ -30,7 +31,8 @@ final class GatewayRequestProcessor {
       BoundedOriginExecutor executor,
       NettyOriginClient originClient,
       GatewayMetrics metrics,
-      FlightLeaseRegistry flights) {
+      FlightLeaseRegistry flights,
+      OriginWorkRegistry originWork) {
     this.config = Objects.requireNonNull(config, "config");
     this.policyEngine = Objects.requireNonNull(policyEngine, "policyEngine");
     this.artifactStore = Objects.requireNonNull(artifactStore, "artifactStore");
@@ -38,6 +40,7 @@ final class GatewayRequestProcessor {
     this.originClient = Objects.requireNonNull(originClient, "originClient");
     this.metrics = Objects.requireNonNull(metrics, "metrics");
     this.flights = Objects.requireNonNull(flights, "flights");
+    this.originWork = Objects.requireNonNull(originWork, "originWork");
   }
 
   Outcome process(GatewayRequest request) {
@@ -102,7 +105,6 @@ final class GatewayRequestProcessor {
         executor.execute(
             selected,
             ignored -> {
-              metrics.originExecution();
               Artifact generated = executeOrigin(request, selected);
               if (!persist) {
                 return generated;
@@ -151,7 +153,15 @@ final class GatewayRequestProcessor {
             request.originHeaders(),
             request.body(),
             maxResponseBytes);
-    return originClient.execute(originRequest);
+    return originClient.execute(
+        originRequest,
+        () -> {
+          OriginWorkRegistry.Permit permit =
+              originWork.reserve(
+                  selected.operationKey(), selected.policy().budget().orElseThrow().maxActive());
+          metrics.originExecution();
+          return permit;
+        });
   }
 
   private Optional<Artifact> getStored(OriginDecision.Selected selected) {

@@ -244,6 +244,7 @@ subprojects {
     tasks.withType<Test>().configureEach {
         useJUnitPlatform()
         failFast = false
+        testLogging.exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
         jvmArgs("-Dfile.encoding=UTF-8")
         reports.junitXml.required.set(true)
         reports.html.required.set(true)

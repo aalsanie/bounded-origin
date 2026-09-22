@@ -23,6 +23,10 @@ final class StructuredLog {
     LOGGER.log(Level.INFO, "{\"event\":\"gateway_stopped\"}");
   }
 
+  static void originWorkRetained(int count) {
+    LOGGER.log(Level.INFO, "{\"event\":\"origin_work_retained\",\"outstanding\":" + count + '}');
+  }
+
   static void request(
       long requestId, String method, String path, String policyId, int status, long durationNanos) {
     LOGGER.log(

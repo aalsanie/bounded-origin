@@ -22,6 +22,11 @@ final class TemporaryArtifactBody implements ArtifactBody {
     return spool.openStream();
   }
 
+  @Override
+  public void close() {
+    delete();
+  }
+
   void delete() {
     if (deleted.compareAndSet(false, true)) {
       spool.close();

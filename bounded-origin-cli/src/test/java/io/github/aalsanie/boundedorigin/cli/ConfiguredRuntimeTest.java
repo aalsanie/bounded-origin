@@ -19,6 +19,40 @@ class ConfiguredRuntimeTest {
   @TempDir Path temporaryDirectory;
 
   @Test
+  void legacyComputationConfigurationIsRejectedBeforeAcquiringResources()
+      throws ConfigurationException {
+    var base = ConfigurationTestSupport.runtimeConfiguration(temporaryDirectory);
+    Map<String, String> gateway = new LinkedHashMap<>(base.gateway());
+    gateway.remove("origin.completion-contract");
+    gateway.remove("origin.ownership-directory");
+    var legacy =
+        new ConfigurationModel.RuntimeConfiguration(
+            base.schema(), gateway, base.store(), base.routes(), base.fallback());
+    ConfigurationException validation =
+        assertThrows(ConfigurationException.class, () -> ConfiguredRuntime.validate(legacy));
+    assertTrue(validation.getMessage().contains("computation routes require"));
+    assertThrows(ConfigurationException.class, () -> ConfiguredRuntime.assemble(legacy));
+    assertFalse(java.nio.file.Files.exists(temporaryDirectory.resolve("store")));
+    var clientOnly =
+        new ConfigurationModel.RuntimeConfiguration(
+            base.schema(),
+            gateway,
+            base.store(),
+            base.routes().stream()
+                .filter(route -> route.strategy() == ConfigurationModel.Strategy.CLIENT_COMPUTE)
+                .toList(),
+            base.fallback());
+    ConfiguredRuntime.validate(clientOnly);
+    gateway.put("origin.completion-contract", "DISABLED");
+    assertThrows(
+        ConfigurationException.class,
+        () ->
+            ConfiguredRuntime.validate(
+                new ConfigurationModel.RuntimeConfiguration(
+                    base.schema(), gateway, base.store(), base.routes(), base.fallback())));
+  }
+
+  @Test
   void assemblesStartsAndClosesConfiguredRuntime() throws IOException, ConfigurationException {
     ConfigurationModel.RuntimeConfiguration configuration =
         ConfigurationTestSupport.runtimeConfiguration(temporaryDirectory);
@@ -42,6 +76,27 @@ class ConfiguredRuntimeTest {
     assertThrows(IllegalStateException.class, runtime::adminAddress);
     assertThrows(IllegalStateException.class, runtime::start);
     runtime.close();
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(
+      strings = {"", "tmp/ownership", "entries/ownership", "objects/ownership", ".."})
+  void ownershipCannotBeDeletedByArtifactStoreRecovery(String suffix)
+      throws IOException, ConfigurationException {
+    var base = ConfigurationTestSupport.runtimeConfiguration(temporaryDirectory);
+    Path ownership = Path.of(base.store().directory()).resolve(suffix).normalize();
+    java.nio.file.Files.createDirectories(ownership);
+    Path evidence = ownership.resolve("ownership.bin");
+    java.nio.file.Files.writeString(evidence, "existing ownership must survive validation");
+    Map<String, String> gateway = new LinkedHashMap<>(base.gateway());
+    gateway.put("origin.ownership-directory", ownership.toString());
+    var unsafe =
+        new ConfigurationModel.RuntimeConfiguration(
+            base.schema(), gateway, base.store(), base.routes(), base.fallback());
+    assertThrows(ConfigurationException.class, () -> ConfiguredRuntime.validate(unsafe));
+    assertThrows(ConfigurationException.class, () -> ConfiguredRuntime.assemble(unsafe));
+    org.junit.jupiter.api.Assertions.assertEquals(
+        "existing ownership must survive validation", java.nio.file.Files.readString(evidence));
   }
 
   @Test

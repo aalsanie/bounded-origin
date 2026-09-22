@@ -96,7 +96,9 @@ class OriginResponseSemanticsTest {
           });
       try (BoundedOriginGateway gateway = gateway(origin)) {
         assertEquals("value", request(gateway, "/close-delimited").bodyText());
-        assertEquals("value", request(gateway, "/close-delimited").bodyText());
+        assertEquals(503, request(gateway, "/close-delimited").status());
+        origin.fixed("/framed", 200, "value");
+        assertEquals("value", request(gateway, "/framed").bodyText());
         assertEquals(2, origin.connections());
       }
     }

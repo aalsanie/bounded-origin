@@ -470,7 +470,8 @@ final class GatewayRequestHandler extends ChannelInboundHandlerAdapter {
           } else if (containsCause(execution, StreamingSpool.BodyLimitExceededException.class)) {
             respondError(
                 context, state, 502, "origin response exceeds configured limit\n", false, false);
-          } else if (containsCause(execution, OriginConnectionPool.PoolExhaustedException.class)
+          } else if (containsCause(execution, OriginWorkRegistry.UnavailableException.class)
+              || containsCause(execution, OriginConnectionPool.PoolExhaustedException.class)
               || containsCause(execution, OriginConnectionPool.PoolClosedException.class)
               || containsCause(execution, StreamingSpool.SpoolCapacityExceededException.class)
               || containsCause(execution, SpoolQuota.SpoolLimitExceededException.class)) {

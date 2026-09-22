@@ -8,6 +8,7 @@ import io.github.aalsanie.boundedorigin.api.Materializer;
 import io.github.aalsanie.boundedorigin.api.OperationKey;
 import io.github.aalsanie.boundedorigin.api.OriginDecision;
 import io.github.aalsanie.boundedorigin.api.OriginPolicy;
+import java.io.IOException;
 import java.time.Duration;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -286,6 +287,7 @@ public final class BoundedOriginExecutor implements AutoCloseable {
           Objects.requireNonNull(
               job.materializer.materialize(job.decision.operation()), "materializer result");
       if (artifact.contentLength() > job.maxResultBytes) {
+        discard(artifact);
         outcome = WorkOutcome.failed(failure(OriginExecutionFailure.RESULT_TOO_LARGE));
       } else {
         outcome = WorkOutcome.succeeded(artifact);
@@ -319,8 +321,20 @@ public final class BoundedOriginExecutor implements AutoCloseable {
     List<Job> starts = finishActive(job, recordCooldown);
     interrupt(job.timeoutThread);
     startJobs(starts);
+    if (outcome.artifact != null) {
+      discard(outcome.artifact);
+    }
     if (outcome.fatal != null) {
       throw outcome.fatal;
+    }
+  }
+
+  private static void discard(Artifact artifact) {
+    try {
+      artifact.body().close();
+    } catch (IOException | RuntimeException exception) {
+      System.getLogger(BoundedOriginExecutor.class.getName())
+          .log(System.Logger.Level.WARNING, "failed to release discarded artifact", exception);
     }
   }
 
