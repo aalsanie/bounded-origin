@@ -585,9 +585,10 @@ class ZeroCodeEndToEndTest {
         } else if (isWindows()) {
           crash();
         } else {
-          process.destroy();
+          // Process.destroy closes stdout on Unix before the output reader has drained it.
+          process.toHandle().destroy();
           if (!process.waitFor(10, TimeUnit.SECONDS)) {
-            process.destroyForcibly();
+            process.toHandle().destroyForcibly();
             assertTrue(process.waitFor(10, TimeUnit.SECONDS));
           }
           awaitDescendantsExit(descendants);
@@ -596,14 +597,14 @@ class ZeroCodeEndToEndTest {
       } catch (InterruptedException exception) {
         Thread.currentThread().interrupt();
         descendants.stream().filter(ProcessHandle::isAlive).forEach(ProcessHandle::destroyForcibly);
-        process.destroyForcibly();
+        process.toHandle().destroyForcibly();
       }
     }
 
     void crash() throws InterruptedException {
       List<ProcessHandle> descendants = managedDescendants();
       // Stop the launcher first: after Java exits the Windows script can spawn an exit-code shell.
-      process.destroyForcibly();
+      process.toHandle().destroyForcibly();
       assertTrue(process.waitFor(10, TimeUnit.SECONDS));
       awaitDescendantsExit(descendants);
       awaitOutputClosed();
