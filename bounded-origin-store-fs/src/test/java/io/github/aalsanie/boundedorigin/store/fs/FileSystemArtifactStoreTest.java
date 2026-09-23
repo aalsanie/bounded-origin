@@ -7,7 +7,6 @@ import static io.github.aalsanie.boundedorigin.store.fs.StoreTestSupport.read;
 import static io.github.aalsanie.boundedorigin.store.fs.StoreTestSupport.regularFiles;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -178,10 +177,10 @@ class FileSystemArtifactStoreTest {
       store.put(key("a"), artifact(first));
       store.put(key("b"), artifact(second));
       Artifact pinnedArtifact = store.get(key("a")).orElseThrow();
-      try (InputStream pinned = pinnedArtifact.body().openStream()) {
+      try (InputStream pinned = StoreTestSupport.open(pinnedArtifact)) {
         store.put(key("c"), artifact(third));
         assertTrue(store.get(key("b")).isEmpty());
-        assertFalse(store.get(key("a")).isEmpty());
+        assertTrue(StoreTestSupport.contains(store, key("a")));
         assertArrayEquals(first, pinned.readAllBytes());
       }
       assertArrayEquals(third, read(store.get(key("c")).orElseThrow()));
@@ -238,7 +237,7 @@ class FileSystemArtifactStoreTest {
     FileSystemArtifactStore store = new FileSystemArtifactStore(root, 10_000, 1_000);
     store.put(key("x"), artifact(body));
     Artifact stored = store.get(key("x")).orElseThrow();
-    InputStream pinned = stored.body().openStream();
+    InputStream pinned = StoreTestSupport.open(stored);
 
     store.close();
     store.close();
@@ -288,7 +287,7 @@ class FileSystemArtifactStoreTest {
       store.put(key("large"), large);
       assertTrue(bulkReads.get() > 1_000);
       Artifact stored = store.get(key("large")).orElseThrow();
-      try (InputStream input = stored.body().openStream()) {
+      try (InputStream input = StoreTestSupport.open(stored)) {
         assertEquals(length, input.transferTo(OutputStream.nullOutputStream()));
       }
     }

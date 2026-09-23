@@ -43,7 +43,7 @@ class FileSystemArtifactStorePerformanceTest {
   }
 
   private static long readFully(Artifact artifact) throws IOException {
-    try (InputStream input = artifact.body().openStream()) {
+    try (InputStream input = StoreTestSupport.open(artifact)) {
       return input.transferTo(OutputStream.nullOutputStream());
     }
   }

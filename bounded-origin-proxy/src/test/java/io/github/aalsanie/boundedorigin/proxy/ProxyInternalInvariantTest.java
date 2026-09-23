@@ -8,7 +8,6 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import io.github.aalsanie.boundedorigin.api.Artifact;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
@@ -18,7 +17,6 @@ import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.time.Duration;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.ExecutionException;
 import org.junit.jupiter.api.Test;
@@ -225,8 +223,8 @@ class ProxyInternalInvariantTest {
   @Test
   void flightLeaseRejectsReferenceUnderflow() throws Exception {
     FlightLeaseRegistry registry = new FlightLeaseRegistry(new GatewayMetrics());
-    CompletableFuture<Artifact> stage = new CompletableFuture<>();
-    FlightLeaseRegistry.Lease lease = registry.acquire(stage);
+    FlightLeaseRegistry.Lease lease = registry.acquire(ResponseArtifacts.text(200, "ok"));
+    var stage = lease.result();
 
     Field flightsField = FlightLeaseRegistry.class.getDeclaredField("flights");
     flightsField.setAccessible(true);

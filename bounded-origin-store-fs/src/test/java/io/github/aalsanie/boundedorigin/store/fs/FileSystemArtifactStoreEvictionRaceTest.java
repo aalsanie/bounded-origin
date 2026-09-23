@@ -32,7 +32,7 @@ class FileSystemArtifactStoreEvictionRaceTest {
     try (FileSystemArtifactStore store = new FileSystemArtifactStore(root, 600, 100)) {
       store.put(key("pinned"), artifact(bytes(100, 1)));
       store.put(key("initial"), artifact(bytes(100, 2)));
-      InputStream pinned = store.get(key("pinned")).orElseThrow().body().openStream();
+      InputStream pinned = StoreTestSupport.open(store.get(key("pinned")).orElseThrow());
       try {
         List<Thread> threads = new ArrayList<>();
         for (int index = 0; index < writers; index++) {
@@ -61,7 +61,7 @@ class FileSystemArtifactStoreEvictionRaceTest {
         }
 
         assertTrue(failures.isEmpty(), failures::toString);
-        assertTrue(store.get(key("pinned")).isPresent());
+        assertTrue(StoreTestSupport.contains(store, key("pinned")));
         assertTrue(store.stats().storedBytes() <= 600);
         assertTrue(regularFiles(root.resolve("tmp")).isEmpty());
       } finally {
@@ -70,7 +70,7 @@ class FileSystemArtifactStoreEvictionRaceTest {
 
       store.put(key("after-unpin"), artifact(bytes(100, 99)));
       assertTrue(store.get(key("pinned")).isEmpty());
-      assertTrue(store.get(key("after-unpin")).isPresent());
+      assertTrue(StoreTestSupport.contains(store, key("after-unpin")));
       assertTrue(store.stats().storedBytes() <= 600);
     }
   }

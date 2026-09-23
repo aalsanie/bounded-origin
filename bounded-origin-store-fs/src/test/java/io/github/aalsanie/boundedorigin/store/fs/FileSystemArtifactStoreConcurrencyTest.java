@@ -182,6 +182,7 @@ class FileSystemArtifactStoreConcurrencyTest {
     java.nio.file.Files.delete(StoreTestSupport.onlyObject(root));
 
     assertThrows(IOException.class, stored.body()::openStream);
+    stored.body().close();
     store.close();
     try (FileSystemArtifactStore reopened = new FileSystemArtifactStore(root, 10_000, 1_000)) {
       assertTrue(reopened.get(key("x")).isEmpty());
@@ -194,7 +195,7 @@ class FileSystemArtifactStoreConcurrencyTest {
     byte[] body = bytes(16, 5);
     FileSystemArtifactStore store = new FileSystemArtifactStore(root, 10_000, 1_000);
     store.put(key("x"), artifact(body));
-    InputStream input = store.get(key("x")).orElseThrow().body().openStream();
+    InputStream input = StoreTestSupport.open(store.get(key("x")).orElseThrow());
     input.close();
     input.close();
     store.close();

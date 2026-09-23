@@ -13,6 +13,7 @@ dependencies {
     implementation(libs.netty.handler)
     implementation(libs.netty.resolver)
     implementation(libs.netty.transport)
+    testImplementation(project(":bounded-origin-store-fs"))
 }
 
 extensions.configure<PitestPluginExtension> {

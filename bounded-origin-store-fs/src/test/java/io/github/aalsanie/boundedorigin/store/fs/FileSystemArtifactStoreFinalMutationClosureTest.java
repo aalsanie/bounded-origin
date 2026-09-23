@@ -62,7 +62,7 @@ class FileSystemArtifactStoreFinalMutationClosureTest {
       invoke(removeEntriesForObject, store, target.contentDigest(), true);
 
       assertTrue(store.get(targetKey).isEmpty());
-      assertTrue(store.get(unrelatedKey).isPresent());
+      assertTrue(StoreTestSupport.contains(store, unrelatedKey));
       assertTrue(Files.isRegularFile(targetObject));
       assertTrue(Files.isRegularFile(unrelatedObject));
       assertEquals(1L, store.stats().entryCount());

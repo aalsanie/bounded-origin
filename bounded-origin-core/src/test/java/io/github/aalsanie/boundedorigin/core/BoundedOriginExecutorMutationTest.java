@@ -18,7 +18,6 @@ import io.github.aalsanie.boundedorigin.api.Canonicalizers;
 import io.github.aalsanie.boundedorigin.api.MaterializationException;
 import io.github.aalsanie.boundedorigin.api.OriginPolicy;
 import java.time.Duration;
-import java.util.concurrent.CompletionStage;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
@@ -37,9 +36,9 @@ class BoundedOriginExecutorMutationTest {
     Artifact secondArtifact = artifact(2);
 
     try (BoundedOriginExecutor executor = executor(budget, workers, timeouts)) {
-      CompletionStage<Artifact> first =
+      OriginExecution first =
           executor.execute(decision(selectedPolicy, "first"), ignored -> firstArtifact);
-      CompletionStage<Artifact> second =
+      OriginExecution second =
           executor.execute(decision(selectedPolicy, "second"), ignored -> secondArtifact);
 
       assertEquals(1, executor.activeJobs());
@@ -51,12 +50,12 @@ class BoundedOriginExecutorMutationTest {
       assertEquals(1, timeouts.created());
       assertTrue(workers.started(0));
       assertTrue(timeouts.started(0));
-      assertFalse(first.toCompletableFuture().isDone());
-      assertFalse(second.toCompletableFuture().isDone());
+      assertFalse(first.result().toCompletableFuture().isDone());
+      assertFalse(second.result().toCompletableFuture().isDone());
 
       workers.run(0);
 
-      assertTrue(first.toCompletableFuture().isDone());
+      assertTrue(first.result().toCompletableFuture().isDone());
       assertSame(firstArtifact, join(first));
       assertTrue(timeouts.interrupted(0));
       assertEquals(1, executor.activeJobs());
@@ -69,7 +68,7 @@ class BoundedOriginExecutorMutationTest {
 
       workers.run(1);
 
-      assertTrue(second.toCompletableFuture().isDone());
+      assertTrue(second.result().toCompletableFuture().isDone());
       assertSame(secondArtifact, join(second));
       assertTrue(timeouts.interrupted(1));
       assertEquals(0, executor.activeJobs());
@@ -91,14 +90,14 @@ class BoundedOriginExecutorMutationTest {
     var selected = decision(selectedPolicy, "same");
 
     try (BoundedOriginExecutor executor = executor(budget, workers, timeouts)) {
-      CompletionStage<Artifact> first =
+      OriginExecution first =
           executor.execute(
               selected,
               ignored -> {
                 invocations.incrementAndGet();
                 return expected;
               });
-      CompletionStage<Artifact> second =
+      OriginExecution second =
           executor.execute(
               selected,
               ignored -> {
@@ -106,7 +105,7 @@ class BoundedOriginExecutorMutationTest {
                 return artifact(4);
               });
 
-      assertSame(first, second);
+      assertSame(first.result(), second.result());
       assertEquals(1, executor.activeJobs());
       assertEquals(0, executor.queuedJobs());
       assertEquals(1, executor.inFlightJobs());
@@ -114,7 +113,7 @@ class BoundedOriginExecutorMutationTest {
 
       workers.run(0);
 
-      assertTrue(first.toCompletableFuture().isDone());
+      assertTrue(first.result().toCompletableFuture().isDone());
       assertSame(expected, join(first));
       assertEquals(1, invocations.get());
       assertEquals(0, executor.inFlightJobs());
@@ -130,15 +129,15 @@ class BoundedOriginExecutorMutationTest {
     ManualThreadFactory timeouts = new ManualThreadFactory();
 
     try (BoundedOriginExecutor executor = executor(global, workers, timeouts)) {
-      CompletionStage<Artifact> active =
+      OriginExecution active =
           executor.execute(decision(limited, "active"), ignored -> artifact(1));
-      CompletionStage<Artifact> limitedQueued =
+      OriginExecution limitedQueued =
           executor.execute(decision(limited, "limited-queued"), ignored -> artifact(1));
-      CompletionStage<Artifact> policyRejected =
+      OriginExecution policyRejected =
           executor.execute(decision(limited, "policy-rejected"), ignored -> artifact(1));
-      CompletionStage<Artifact> otherQueued =
+      OriginExecution otherQueued =
           executor.execute(decision(other, "other-queued"), ignored -> artifact(1));
-      CompletionStage<Artifact> globalRejected =
+      OriginExecution globalRejected =
           executor.execute(decision(other, "global-rejected"), ignored -> artifact(1));
 
       assertFailure(policyRejected, OriginExecutionFailure.POLICY_QUEUE_LIMIT);
@@ -150,13 +149,13 @@ class BoundedOriginExecutorMutationTest {
       assertEquals(3, executor.inFlightJobs());
 
       workers.run(0);
-      assertTrue(active.toCompletableFuture().isDone());
+      assertTrue(active.result().toCompletableFuture().isDone());
       assertEquals(2, workers.created());
       workers.run(1);
-      assertTrue(limitedQueued.toCompletableFuture().isDone());
+      assertTrue(limitedQueued.result().toCompletableFuture().isDone());
       assertEquals(3, workers.created());
       workers.run(2);
-      assertTrue(otherQueued.toCompletableFuture().isDone());
+      assertTrue(otherQueued.result().toCompletableFuture().isDone());
       assertEquals(0, executor.activeJobs());
       assertEquals(0, executor.queuedJobs());
       assertEquals(0, executor.inFlightJobs());
@@ -172,40 +171,40 @@ class BoundedOriginExecutorMutationTest {
     ManualThreadFactory timeouts = new ManualThreadFactory();
 
     try (BoundedOriginExecutor executor = executor(global, workers, timeouts)) {
-      CompletionStage<Artifact> firstActive =
+      OriginExecution firstActive =
           executor.execute(decision(first, "first-active"), ignored -> artifact(1));
-      CompletionStage<Artifact> secondActive =
+      OriginExecution secondActive =
           executor.execute(decision(second, "second-active"), ignored -> artifact(1));
-      CompletionStage<Artifact> firstQueued =
+      OriginExecution firstQueued =
           executor.execute(decision(first, "first-queued"), ignored -> artifact(1));
-      CompletionStage<Artifact> secondQueued =
+      OriginExecution secondQueued =
           executor.execute(decision(second, "second-queued"), ignored -> artifact(1));
 
       assertEquals(2, executor.activeJobs());
       assertEquals(2, executor.queuedJobs());
       workers.run(1);
 
-      assertTrue(secondActive.toCompletableFuture().isDone());
+      assertTrue(secondActive.result().toCompletableFuture().isDone());
       assertEquals(3, workers.created());
       assertEquals(2, executor.activeJobs());
       assertEquals(1, executor.queuedJobs());
       assertEquals(1, executor.queuedJobs("first"));
-      assertFalse(firstQueued.toCompletableFuture().isDone());
+      assertFalse(firstQueued.result().toCompletableFuture().isDone());
 
       workers.run(2);
-      assertTrue(secondQueued.toCompletableFuture().isDone());
+      assertTrue(secondQueued.result().toCompletableFuture().isDone());
       assertEquals(3, workers.created());
       assertEquals(1, executor.activeJobs());
       assertEquals(1, executor.queuedJobs());
 
       workers.run(0);
-      assertTrue(firstActive.toCompletableFuture().isDone());
+      assertTrue(firstActive.result().toCompletableFuture().isDone());
       assertEquals(4, workers.created());
       assertEquals(1, executor.activeJobs());
       assertEquals(0, executor.queuedJobs());
 
       workers.run(3);
-      assertTrue(firstQueued.toCompletableFuture().isDone());
+      assertTrue(firstQueued.result().toCompletableFuture().isDone());
       assertEquals(0, executor.activeJobs());
       assertEquals(0, executor.inFlightJobs());
     }
@@ -226,7 +225,7 @@ class BoundedOriginExecutorMutationTest {
     try (BoundedOriginExecutor executor =
         new BoundedOriginExecutor(
             global, Duration.ofSeconds(1), 8, System::nanoTime, workers, timeouts)) {
-      CompletionStage<Artifact> first =
+      OriginExecution first =
           executor.execute(
               decision(selectedPolicy, "first"),
               ignored -> {
@@ -275,7 +274,7 @@ class BoundedOriginExecutorMutationTest {
     AtomicInteger invocations = new AtomicInteger();
 
     try (BoundedOriginExecutor executor = executor(budget, workers, timeouts)) {
-      CompletionStage<Artifact> stage =
+      OriginExecution stage =
           executor.execute(
               decision(selectedPolicy, "timeout"),
               ignored -> {
@@ -304,7 +303,7 @@ class BoundedOriginExecutorMutationTest {
     MaterializationException cause = new MaterializationException("origin failed");
 
     try (BoundedOriginExecutor executor = executor(budget, workers, timeouts)) {
-      CompletionStage<Artifact> stage =
+      OriginExecution stage =
           executor.execute(
               decision(selectedPolicy, "failed"),
               ignored -> {
@@ -334,7 +333,7 @@ class BoundedOriginExecutorMutationTest {
     AssertionError fatal = new AssertionError("fatal");
 
     try (BoundedOriginExecutor executor = executor(budget, workers, timeouts)) {
-      CompletionStage<Artifact> stage =
+      OriginExecution stage =
           executor.execute(
               decision(selectedPolicy, "fatal"),
               ignored -> {
@@ -360,9 +359,9 @@ class BoundedOriginExecutorMutationTest {
     ManualThreadFactory timeouts = new ManualThreadFactory();
     BoundedOriginExecutor executor = executor(budget, workers, timeouts);
 
-    CompletionStage<Artifact> active =
+    OriginExecution active =
         executor.execute(decision(selectedPolicy, "active"), ignored -> artifact(1));
-    CompletionStage<Artifact> queued =
+    OriginExecution queued =
         executor.execute(decision(selectedPolicy, "queued"), ignored -> artifact(1));
 
     executor.close();
@@ -393,7 +392,7 @@ class BoundedOriginExecutorMutationTest {
     ManualThreadFactory timeouts = new ManualThreadFactory();
     BoundedOriginExecutor executor = executor(budget, workers, timeouts);
 
-    CompletionStage<Artifact> failed =
+    OriginExecution failed =
         executor.execute(
             decision(selectedPolicy, "failed"),
             ignored -> {
@@ -425,8 +424,7 @@ class BoundedOriginExecutorMutationTest {
       failMaterialization(executor, workers, selectedPolicy, "c", 2);
 
       assertEquals(2, executor.cooldownEntries());
-      CompletionStage<Artifact> a =
-          executor.execute(decision(selectedPolicy, "a"), ignored -> artifact(1));
+      OriginExecution a = executor.execute(decision(selectedPolicy, "a"), ignored -> artifact(1));
       workers.run(3);
       assertEquals(1L, join(a).contentLength());
       assertFailure(
@@ -507,7 +505,7 @@ class BoundedOriginExecutorMutationTest {
     AssertionError startFailure = new AssertionError("timeout-start");
     ManualThreadFactory failingTimeouts = new ManualThreadFactory(0, startFailure);
     try (BoundedOriginExecutor executor = executor(budget, secondWorkers, failingTimeouts)) {
-      CompletionStage<Artifact> stage =
+      OriginExecution stage =
           executor.execute(decision(selectedPolicy, "start"), ignored -> artifact(1));
       OriginExecutionException failure =
           assertFailure(stage, OriginExecutionFailure.INTERNAL_ERROR);
@@ -531,19 +529,19 @@ class BoundedOriginExecutorMutationTest {
     ManualThreadFactory timeouts = new ManualThreadFactory();
 
     try (BoundedOriginExecutor executor = executor(budget, workers, timeouts)) {
-      CompletionStage<Artifact> first =
+      OriginExecution first =
           executor.execute(decision(selectedPolicy, "first"), ignored -> artifact(1));
-      CompletionStage<Artifact> second =
+      OriginExecution second =
           executor.execute(decision(selectedPolicy, "second"), ignored -> artifact(1));
 
       assertEquals(2, executor.activeJobs());
       assertEquals(2, executor.activeJobs("p"));
       workers.run(0);
-      assertTrue(first.toCompletableFuture().isDone());
+      assertTrue(first.result().toCompletableFuture().isDone());
       assertEquals(1, executor.activeJobs());
       assertEquals(1, executor.activeJobs("p"));
       workers.run(1);
-      assertTrue(second.toCompletableFuture().isDone());
+      assertTrue(second.result().toCompletableFuture().isDone());
       assertEquals(0, executor.activeJobs());
       assertEquals(0, executor.activeJobs("p"));
     }
@@ -567,7 +565,7 @@ class BoundedOriginExecutorMutationTest {
             budget, Duration.ofSeconds(1), 4, System::nanoTime, workers, closingTimeouts);
     executorRef.set(executor);
 
-    CompletionStage<Artifact> stage =
+    OriginExecution stage =
         executor.execute(decision(selectedPolicy, "close"), ignored -> artifact(1));
 
     assertFailure(stage, OriginExecutionFailure.CLOSED);
@@ -599,7 +597,7 @@ class BoundedOriginExecutorMutationTest {
     try (BoundedOriginExecutor executor =
         new BoundedOriginExecutor(
             budget, Duration.ofSeconds(1), 4, System::nanoTime, inlineWorkers, failingTimeouts)) {
-      CompletionStage<Artifact> stage =
+      OriginExecution stage =
           executor.execute(
               decision(selectedPolicy, "fast"),
               ignored -> {
@@ -607,7 +605,7 @@ class BoundedOriginExecutorMutationTest {
                 return expected;
               });
 
-      assertTrue(stage.toCompletableFuture().isDone());
+      assertTrue(stage.result().toCompletableFuture().isDone());
       assertSame(expected, join(stage));
       assertEquals(1, invocations.get());
       assertEquals(0, executor.activeJobs());
@@ -684,7 +682,7 @@ class BoundedOriginExecutorMutationTest {
     IllegalStateException runtime = new IllegalStateException("runtime");
 
     try (BoundedOriginExecutor executor = executor(budget, workers, timeouts)) {
-      CompletionStage<Artifact> runtimeStage =
+      OriginExecution runtimeStage =
           executor.execute(
               decision(selectedPolicy, "runtime"),
               ignored -> {
@@ -696,7 +694,7 @@ class BoundedOriginExecutorMutationTest {
       assertSame(runtime, runtimeFailure.getCause());
       assertEquals(0, executor.activeJobs());
 
-      CompletionStage<Artifact> nullStage =
+      OriginExecution nullStage =
           executor.execute(decision(selectedPolicy, "null-result"), ignored -> null);
       workers.run(1);
       OriginExecutionException nullFailure =
@@ -721,12 +719,12 @@ class BoundedOriginExecutorMutationTest {
             "artifact", 1, 1, "materializer-1", Canonicalizers.byDimensions());
 
     try (BoundedOriginExecutor executor = executor(budget, workers, timeouts)) {
-      CompletionStage<Artifact> first =
+      OriginExecution first =
           executor.execute(decision(bounded, "bounded"), ignored -> artifact(1));
       workers.run(0);
       assertEquals(1L, join(first).contentLength());
 
-      CompletionStage<Artifact> second =
+      OriginExecution second =
           executor.execute(decision(materialize, "materialize"), ignored -> artifact(2));
       workers.run(1);
       assertEquals(2L, join(second).contentLength());
@@ -746,13 +744,11 @@ class BoundedOriginExecutorMutationTest {
     ManualThreadFactory timeouts = new ManualThreadFactory();
 
     try (BoundedOriginExecutor executor = executor(global, workers, timeouts)) {
-      CompletionStage<Artifact> exact =
-          executor.execute(decision(policy, "exact"), ignored -> artifact(5));
+      OriginExecution exact = executor.execute(decision(policy, "exact"), ignored -> artifact(5));
       workers.run(0);
       assertEquals(5L, join(exact).contentLength());
 
-      CompletionStage<Artifact> over =
-          executor.execute(decision(policy, "over"), ignored -> artifact(6));
+      OriginExecution over = executor.execute(decision(policy, "over"), ignored -> artifact(6));
       workers.run(1);
       assertFailure(over, OriginExecutionFailure.RESULT_TOO_LARGE);
     }
@@ -762,7 +758,7 @@ class BoundedOriginExecutorMutationTest {
     ManualThreadFactory secondWorkers = new ManualThreadFactory();
     ManualThreadFactory secondTimeouts = new ManualThreadFactory();
     try (BoundedOriginExecutor executor = executor(strictGlobal, secondWorkers, secondTimeouts)) {
-      CompletionStage<Artifact> over =
+      OriginExecution over =
           executor.execute(decision(loosePolicy, "global-over"), ignored -> artifact(6));
       secondWorkers.run(0);
       assertFailure(over, OriginExecutionFailure.RESULT_TOO_LARGE);
@@ -777,11 +773,11 @@ class BoundedOriginExecutorMutationTest {
     ManualThreadFactory timeouts = new ManualThreadFactory();
 
     try (BoundedOriginExecutor executor = executor(budget, workers, timeouts)) {
-      CompletionStage<Artifact> active =
+      OriginExecution active =
           executor.execute(decision(selectedPolicy, "active"), ignored -> artifact(1));
-      CompletionStage<Artifact> queuedOne =
+      OriginExecution queuedOne =
           executor.execute(decision(selectedPolicy, "queued-1"), ignored -> artifact(2));
-      CompletionStage<Artifact> queuedTwo =
+      OriginExecution queuedTwo =
           executor.execute(decision(selectedPolicy, "queued-2"), ignored -> artifact(3));
 
       assertEquals(1, workers.created());
@@ -812,7 +808,7 @@ class BoundedOriginExecutorMutationTest {
     AssertionError fatal = new AssertionError("fatal-after-timeout");
 
     try (BoundedOriginExecutor executor = executor(budget, workers, timeouts)) {
-      CompletionStage<Artifact> stage =
+      OriginExecution stage =
           executor.execute(
               decision(selectedPolicy, "fatal-timeout"),
               ignored -> {
@@ -837,8 +833,8 @@ class BoundedOriginExecutorMutationTest {
   }
 
   private static OriginExecutionException assertFailure(
-      CompletionStage<Artifact> stage, OriginExecutionFailure expected) {
-    assertTrue(stage.toCompletableFuture().isDone());
+      OriginExecution stage, OriginExecutionFailure expected) {
+    assertTrue(stage.result().toCompletableFuture().isDone());
     OriginExecutionException exception = failure(stage);
     assertEquals(expected, exception.failure());
     assertTrue(exception.getMessage() != null && !exception.getMessage().isBlank());
@@ -851,7 +847,7 @@ class BoundedOriginExecutorMutationTest {
       OriginPolicy selectedPolicy,
       String identity,
       int workerIndex) {
-    CompletionStage<Artifact> stage =
+    OriginExecution stage =
         executor.execute(
             decision(selectedPolicy, identity),
             ignored -> {

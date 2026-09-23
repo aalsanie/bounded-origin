@@ -1,6 +1,7 @@
 package io.github.aalsanie.boundedorigin.store.fs;
 
 import io.github.aalsanie.boundedorigin.api.Artifact;
+import io.github.aalsanie.boundedorigin.api.ArtifactStore;
 import io.github.aalsanie.boundedorigin.api.OperationKey;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
@@ -35,9 +36,24 @@ final class StoreTestSupport {
   }
 
   static byte[] read(Artifact artifact) throws IOException {
-    try (InputStream input = artifact.body().openStream()) {
+    try (InputStream input = open(artifact)) {
       return input.readAllBytes();
     }
+  }
+
+  static InputStream open(Artifact artifact) throws IOException {
+    try (var body = artifact.body()) {
+      return body.openStream();
+    }
+  }
+
+  static boolean contains(ArtifactStore store, OperationKey key) throws IOException {
+    var found = store.get(key);
+    if (found.isEmpty()) {
+      return false;
+    }
+    found.orElseThrow().body().close();
+    return true;
   }
 
   static List<Path> regularFiles(Path directory) throws IOException {

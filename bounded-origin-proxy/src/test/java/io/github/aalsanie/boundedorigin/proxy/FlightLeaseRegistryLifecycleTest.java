@@ -5,21 +5,62 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.github.aalsanie.boundedorigin.api.Artifact;
+import io.github.aalsanie.boundedorigin.api.ArtifactBody;
+import java.io.IOException;
+import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 class FlightLeaseRegistryLifecycleTest {
   @TempDir Path temporaryDirectory;
 
+  @ParameterizedTest
+  @ValueSource(strings = {"none", "io", "runtime"})
+  void ownedImmediateResultsReleaseOnceEvenWhenCleanupFails(String failure) {
+    AtomicInteger closes = new AtomicInteger();
+    Artifact artifact =
+        new Artifact(
+            0,
+            Map.of(),
+            new ArtifactBody() {
+              @Override
+              public InputStream openStream() {
+                return InputStream.nullInputStream();
+              }
+
+              @Override
+              public void close() throws IOException {
+                closes.incrementAndGet();
+                if (failure.equals("io")) {
+                  throw new IOException("cleanup");
+                }
+                if (failure.equals("runtime")) {
+                  throw new IllegalStateException("cleanup");
+                }
+              }
+            });
+    FlightLeaseRegistry registry = new FlightLeaseRegistry(new GatewayMetrics());
+    var lease = registry.acquire(artifact);
+    assertEquals(artifact, lease.result().toCompletableFuture().join());
+    assertEquals(1, registry.trackedFlights());
+    lease.close();
+    lease.close();
+    assertEquals(1, closes.get());
+    assertEquals(0, registry.trackedFlights());
+  }
+
   @Test
   void completionAfterLastLeaseReleaseDeletesTemporaryArtifact() throws Exception {
     FlightLeaseRegistry registry = new FlightLeaseRegistry(new GatewayMetrics());
-    CompletableFuture<Artifact> stage = new CompletableFuture<>();
-    FlightLeaseRegistry.Lease lease = registry.acquire(stage);
+    SharedExecutionFixture fixture = new SharedExecutionFixture();
+    var execution = fixture.join();
+    FlightLeaseRegistry.Lease lease = registry.acquire(execution);
     TemporaryArtifactBody body = temporaryBody("payload");
     Artifact artifact = new Artifact(7, Map.of(), body);
 
@@ -27,23 +68,28 @@ class FlightLeaseRegistryLifecycleTest {
     assertEquals(1, registry.trackedFlights());
     assertFalse(body.deleted());
 
-    stage.complete(artifact);
+    fixture.produced.complete(artifact);
+    execution.result().toCompletableFuture().join();
 
     assertTrue(body.deleted());
-    assertEquals(0, registry.trackedFlights());
+    SharedExecutionFixture.awaitUntracked(registry);
+    fixture.close();
   }
 
   @Test
-  void completionAfterLastLeaseReleaseDoesNotTreatOrdinaryArtifactAsTemporary() {
+  void completionAfterLastLeaseReleaseDoesNotTreatOrdinaryArtifactAsTemporary() throws Exception {
     FlightLeaseRegistry registry = new FlightLeaseRegistry(new GatewayMetrics());
-    CompletableFuture<Artifact> stage = new CompletableFuture<>();
-    FlightLeaseRegistry.Lease lease = registry.acquire(stage);
+    SharedExecutionFixture fixture = new SharedExecutionFixture();
+    var execution = fixture.join();
+    FlightLeaseRegistry.Lease lease = registry.acquire(execution);
     Artifact artifact = ResponseArtifacts.text(200, "ok");
 
     lease.close();
-    stage.complete(artifact);
+    fixture.produced.complete(artifact);
+    execution.result().toCompletableFuture().join();
 
-    assertEquals(0, registry.trackedFlights());
+    SharedExecutionFixture.awaitUntracked(registry);
+    fixture.close();
   }
 
   private TemporaryArtifactBody temporaryBody(String value) throws Exception {

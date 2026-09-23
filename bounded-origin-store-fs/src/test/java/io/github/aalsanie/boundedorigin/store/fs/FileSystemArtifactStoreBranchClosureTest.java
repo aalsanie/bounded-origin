@@ -54,7 +54,9 @@ class FileSystemArtifactStoreBranchClosureTest {
 
     try (FileSystemArtifactStore store = new FileSystemArtifactStore(root, 100_000, 100)) {
       store.put(key("exact"), artifact(200, bytes(1, 1), exact));
-      assertEquals(exact, store.get(key("exact")).orElseThrow().metadata());
+      var stored = store.get(key("exact")).orElseThrow();
+      assertEquals(exact, stored.metadata());
+      stored.body().close();
 
       assertThrows(
           IOException.class, () -> store.put(key("too-many"), artifact(200, bytes(1, 2), tooMany)));
@@ -99,7 +101,7 @@ class FileSystemArtifactStoreBranchClosureTest {
     try (FileSystemArtifactStore store = new FileSystemArtifactStore(root, 10_000, 100)) {
       store.put(key("first"), artifact(body));
       Path object = onlyObject(root);
-      InputStream reader = store.get(key("first")).orElseThrow().body().openStream();
+      InputStream reader = StoreTestSupport.open(store.get(key("first")).orElseThrow());
       try {
         Files.write(object, bytes(body.length, 9), StandardOpenOption.TRUNCATE_EXISTING);
 
@@ -112,7 +114,7 @@ class FileSystemArtifactStoreBranchClosureTest {
 
       assertFalse(Files.exists(object));
       store.put(key("second"), artifact(body));
-      assertTrue(store.get(key("second")).isPresent());
+      assertTrue(StoreTestSupport.contains(store, key("second")));
     }
   }
 

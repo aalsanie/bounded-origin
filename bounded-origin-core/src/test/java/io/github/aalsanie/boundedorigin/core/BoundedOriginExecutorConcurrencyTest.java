@@ -17,7 +17,6 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionStage;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -37,7 +36,7 @@ class BoundedOriginExecutorConcurrencyTest {
 
     try (BoundedOriginExecutor executor =
         new BoundedOriginExecutor(budget, Duration.ofSeconds(1), 64)) {
-      CompletionStage<Artifact> first =
+      OriginExecution first =
           executor.execute(
               selected,
               op -> {
@@ -48,13 +47,13 @@ class BoundedOriginExecutorConcurrencyTest {
               });
       assertTrue(started.await(2, TimeUnit.SECONDS));
 
-      List<CompletionStage<Artifact>> followers = new ArrayList<>();
+      List<OriginExecution> followers = new ArrayList<>();
       for (int index = 0; index < 10_000; index++) {
         followers.add(executor.execute(selected, op -> artifact(2)));
       }
 
-      for (CompletionStage<Artifact> follower : followers) {
-        assertSame(first, follower);
+      for (OriginExecution follower : followers) {
+        assertSame(first.result(), follower.result());
       }
       assertEquals(1, invocations.get());
       assertEquals(1, executor.activeJobs());
@@ -62,7 +61,7 @@ class BoundedOriginExecutorConcurrencyTest {
 
       release.countDown();
       assertSame(expected, join(first));
-      for (CompletionStage<Artifact> follower : followers) {
+      for (OriginExecution follower : followers) {
         assertSame(expected, join(follower));
       }
       assertEquals(1, invocations.get());
@@ -81,7 +80,7 @@ class BoundedOriginExecutorConcurrencyTest {
 
     try (BoundedOriginExecutor executor =
         new BoundedOriginExecutor(budget, Duration.ofSeconds(1), 8)) {
-      CompletionStage<Artifact> shared =
+      OriginExecution shared =
           executor.execute(
               selected,
               op -> {
@@ -92,11 +91,11 @@ class BoundedOriginExecutorConcurrencyTest {
               });
       assertTrue(started.await(2, TimeUnit.SECONDS));
 
-      var callerFuture = shared.toCompletableFuture();
+      var callerFuture = shared.result().toCompletableFuture();
       assertTrue(callerFuture.cancel(true));
       assertThrowsReadOnly(shared);
-      CompletionStage<Artifact> follower = executor.execute(selected, op -> artifact(2));
-      assertFalse(follower.toCompletableFuture().isDone());
+      OriginExecution follower = executor.execute(selected, op -> artifact(2));
+      assertFalse(follower.result().toCompletableFuture().isDone());
 
       release.countDown();
       assertSame(expected, join(follower));
@@ -110,7 +109,7 @@ class BoundedOriginExecutorConcurrencyTest {
     OriginPolicy policy = policy("p", new Budget(3, 512, Duration.ofSeconds(5), 16));
     AtomicInteger active = new AtomicInteger();
     AtomicInteger observedMaximum = new AtomicInteger();
-    List<CompletionStage<Artifact>> stages = new ArrayList<>();
+    List<OriginExecution> stages = new ArrayList<>();
 
     try (BoundedOriginExecutor executor =
         new BoundedOriginExecutor(global, Duration.ofSeconds(1), 64)) {
@@ -132,7 +131,7 @@ class BoundedOriginExecutorConcurrencyTest {
                 }));
       }
 
-      for (CompletionStage<Artifact> stage : stages) {
+      for (OriginExecution stage : stages) {
         join(stage);
       }
 
@@ -154,7 +153,7 @@ class BoundedOriginExecutorConcurrencyTest {
 
     try (BoundedOriginExecutor executor =
         new BoundedOriginExecutor(global, Duration.ofSeconds(1), 8)) {
-      CompletionStage<Artifact> first =
+      OriginExecution first =
           executor.execute(
               decision(policy, "first"),
               op -> {
@@ -171,7 +170,7 @@ class BoundedOriginExecutorConcurrencyTest {
               });
       assertTrue(firstStarted.await(2, TimeUnit.SECONDS));
 
-      CompletionStage<Artifact> second =
+      OriginExecution second =
           executor.execute(
               decision(policy, "second"),
               op -> {
@@ -247,9 +246,9 @@ class BoundedOriginExecutorConcurrencyTest {
     }
   }
 
-  private static void assertThrowsReadOnly(CompletionStage<Artifact> stage) {
+  private static void assertThrowsReadOnly(OriginExecution stage) {
     try {
-      ((CompletableFuture<Artifact>) stage).cancel(true);
+      ((CompletableFuture<Artifact>) stage.result()).cancel(true);
       throw new AssertionError("shared stage must be read-only");
     } catch (UnsupportedOperationException expected) {
     }

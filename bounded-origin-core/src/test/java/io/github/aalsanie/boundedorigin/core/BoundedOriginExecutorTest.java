@@ -18,7 +18,6 @@ import io.github.aalsanie.boundedorigin.api.MaterializationException;
 import io.github.aalsanie.boundedorigin.api.OriginPolicy;
 import java.time.Duration;
 import java.util.Map;
-import java.util.concurrent.CompletionStage;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
@@ -293,8 +292,7 @@ class BoundedOriginExecutorTest {
           ExecutionTestSupport.await(releaseFactory);
           return null;
         };
-    AtomicReference<CompletionStage<io.github.aalsanie.boundedorigin.api.Artifact>> stage =
-        new AtomicReference<>();
+    AtomicReference<OriginExecution> stage = new AtomicReference<>();
 
     BoundedOriginExecutor executor =
         new BoundedOriginExecutor(
@@ -373,14 +371,14 @@ class BoundedOriginExecutorTest {
       assertEquals(1, executor.activeJobs());
 
       var second = executor.execute(decision(policy, "second"), op -> artifact(1));
-      assertFalse(second.toCompletableFuture().isDone());
+      assertFalse(second.result().toCompletableFuture().isDone());
       release.countDown();
 
       long deadline = System.nanoTime() + Duration.ofSeconds(2).toNanos();
-      while (!second.toCompletableFuture().isDone() && System.nanoTime() < deadline) {
+      while (!second.result().toCompletableFuture().isDone() && System.nanoTime() < deadline) {
         Thread.onSpinWait();
       }
-      assertTrue(second.toCompletableFuture().isDone());
+      assertTrue(second.result().toCompletableFuture().isDone());
     }
   }
 }

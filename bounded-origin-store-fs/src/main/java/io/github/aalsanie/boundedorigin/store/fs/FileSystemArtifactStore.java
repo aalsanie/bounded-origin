@@ -152,8 +152,8 @@ public final class FileSystemArtifactStore implements ArtifactStore, AutoCloseab
           corruption = new CorruptStoreException("entry changed after recovery", false);
         } else {
           verifyObject(entry);
-          StoreEntry artifactEntry = entry;
-          ArtifactBody body = () -> openBody(artifactEntry);
+          ArtifactBody body = new StoredBody(entry);
+          reserveReader(entry.contentDigest());
           return Optional.of(
               new Artifact(entry.statusCode(), entry.contentLength(), entry.metadata(), body));
         }
@@ -750,20 +750,24 @@ public final class FileSystemArtifactStore implements ArtifactStore, AutoCloseab
     return toHex(digest.digest());
   }
 
-  private InputStream openBody(StoreEntry entry) throws IOException {
+  private void reserveReader(String digest) {
+    openReaders.computeIfAbsent(digest, ignored -> new AtomicInteger()).incrementAndGet();
+    totalOpenReaders.incrementAndGet();
+  }
+
+  private InputStream openBody(StoredBody body) throws IOException {
+    StoreEntry entry = body.entry;
     boolean readerReserved = false;
     try {
       stateLock.readLock().lock();
       try {
-        ensureOpen();
-        StoreEntry current = entries.get(entry.keyHash());
-        if (current == null || current.generation() != entry.generation()) {
-          throw new IOException("artifact was evicted before its body was opened");
+        if (body.released) {
+          throw new IOException("artifact body ownership was released");
         }
-        AtomicInteger readers =
-            openReaders.computeIfAbsent(entry.contentDigest(), ignored -> new AtomicInteger());
-        readers.incrementAndGet();
-        totalOpenReaders.incrementAndGet();
+        if (pendingObjectDeletes.contains(entry.contentDigest())) {
+          throw new IOException("artifact object is corrupt");
+        }
+        reserveReader(entry.contentDigest());
         readerReserved = true;
 
         Path path = objectPath(entry.contentDigest());
@@ -1044,6 +1048,34 @@ public final class FileSystemArtifactStore implements ArtifactStore, AutoCloseab
   }
 
   private record StagedBody(Path path, String digest, long length) {}
+
+  private final class StoredBody implements ArtifactBody {
+    private final StoreEntry entry;
+    private boolean released;
+
+    private StoredBody(StoreEntry entry) {
+      this.entry = entry;
+    }
+
+    @Override
+    public InputStream openStream() throws IOException {
+      return openBody(this);
+    }
+
+    @Override
+    public void close() throws IOException {
+      stateLock.writeLock().lock();
+      try {
+        if (released) {
+          return;
+        }
+        released = true;
+      } finally {
+        stateLock.writeLock().unlock();
+      }
+      releaseReader(entry.contentDigest());
+    }
+  }
 
   private final class ReaderInputStream extends FilterInputStream {
     private final String digest;

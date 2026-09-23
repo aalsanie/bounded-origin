@@ -137,7 +137,7 @@ class FileSystemArtifactStoreBoundaryTest {
       store.put(key("reader"), artifact(bytes(8, 4)));
       String storedDigest = objectName(root);
       assertEquals(0, invoke(readerCount, store, storedDigest));
-      InputStream input = store.get(key("reader")).orElseThrow().body().openStream();
+      InputStream input = StoreTestSupport.open(store.get(key("reader")).orElseThrow());
       try {
         assertEquals(1, invoke(readerCount, store, storedDigest));
       } finally {
@@ -160,14 +160,14 @@ class FileSystemArtifactStoreBoundaryTest {
     Path root = tempDirectory.resolve("reader-close");
     FileSystemArtifactStore store = new FileSystemArtifactStore(root, 10_000, 100);
     store.put(key("reader-close"), artifact(bytes(8, 5)));
-    InputStream input = store.get(key("reader-close")).orElseThrow().body().openStream();
+    InputStream input = StoreTestSupport.open(store.get(key("reader-close")).orElseThrow());
     assertEquals(5, input.read());
     store.close();
     input.close();
     assertThrows(IOException.class, input::read);
 
     try (FileSystemArtifactStore reopened = new FileSystemArtifactStore(root, 10_000, 100)) {
-      assertTrue(reopened.get(key("reader-close")).isPresent());
+      assertTrue(StoreTestSupport.contains(reopened, key("reader-close")));
     }
   }
 

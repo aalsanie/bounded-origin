@@ -153,7 +153,7 @@ class FileSystemArtifactStoreInvariantTest {
       Method removeEntry =
           method(FileSystemArtifactStore.class, "removeEntry", StoreEntry.class, String.class);
       invoke(removeEntry, store, differentGeneration, null);
-      assertTrue(store.get(operationKey).isPresent());
+      assertTrue(StoreTestSupport.contains(store, operationKey));
     }
 
     Path sharedRoot = tempDirectory.resolve("shared");
@@ -168,7 +168,7 @@ class FileSystemArtifactStoreInvariantTest {
           method(FileSystemArtifactStore.class, "removeEntry", StoreEntry.class, String.class);
       invoke(removeEntry, store, first, null);
       assertTrue(store.get(firstKey).isEmpty());
-      assertTrue(store.get(secondKey).isPresent());
+      assertTrue(StoreTestSupport.contains(store, secondKey));
       assertTrue(Files.isRegularFile(onlyObject(sharedRoot)));
     }
 
@@ -187,11 +187,12 @@ class FileSystemArtifactStoreInvariantTest {
   }
 
   @Test
-  void artifactBodyCannotBeOpenedAfterItsGenerationWasEvicted() throws IOException {
+  void releasedArtifactBodyCannotBeOpenedAfterItsGenerationWasEvicted() throws IOException {
     Path root = tempDirectory.resolve("stale-body");
     try (FileSystemArtifactStore store = new FileSystemArtifactStore(root, 500, 100)) {
       store.put(key("a"), artifact(bytes(100, 1)));
       Artifact stale = store.get(key("a")).orElseThrow();
+      stale.body().close();
       store.put(key("b"), artifact(bytes(100, 2)));
       store.put(key("c"), artifact(bytes(100, 3)));
 
@@ -233,13 +234,13 @@ class FileSystemArtifactStoreInvariantTest {
     Path root = tempDirectory.resolve("double-close");
     FileSystemArtifactStore store = new FileSystemArtifactStore(root, 10_000, 100);
     store.put(key("reader"), artifact(bytes(8, 5)));
-    InputStream input = store.get(key("reader")).orElseThrow().body().openStream();
+    InputStream input = StoreTestSupport.open(store.get(key("reader")).orElseThrow());
     store.close();
     input.close();
     input.close();
 
     try (FileSystemArtifactStore reopened = new FileSystemArtifactStore(root, 10_000, 100)) {
-      assertTrue(reopened.get(key("reader")).isPresent());
+      assertTrue(StoreTestSupport.contains(reopened, key("reader")));
     }
   }
 

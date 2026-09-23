@@ -15,7 +15,6 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.concurrent.CompletionStage;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -35,7 +34,7 @@ class BoundedOriginExecutorRaceTest {
     CountDownLatch returned = new CountDownLatch(callers);
     CountDownLatch producerStarted = new CountDownLatch(1);
     CountDownLatch releaseProducer = new CountDownLatch(1);
-    List<CompletionStage<Artifact>> stages = Collections.synchronizedList(new ArrayList<>());
+    List<OriginExecution> stages = Collections.synchronizedList(new ArrayList<>());
     List<Throwable> failures = Collections.synchronizedList(new ArrayList<>());
     List<Thread> threads = new ArrayList<>();
 
@@ -73,9 +72,9 @@ class BoundedOriginExecutorRaceTest {
       assertTrue(failures.isEmpty(), failures::toString);
       assertEquals(callers, stages.size());
 
-      CompletionStage<Artifact> shared = stages.getFirst();
-      for (CompletionStage<Artifact> stage : stages) {
-        assertSame(shared, stage);
+      OriginExecution shared = stages.getFirst();
+      for (OriginExecution stage : stages) {
+        assertSame(shared.result(), stage.result());
       }
       assertEquals(1, invocations.get());
       assertEquals(1, executor.activeJobs());

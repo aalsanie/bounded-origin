@@ -12,7 +12,6 @@ import io.github.aalsanie.boundedorigin.api.OriginPolicy;
 import java.io.InputStream;
 import java.util.Map;
 import java.util.concurrent.CompletionException;
-import java.util.concurrent.CompletionStage;
 import java.util.concurrent.CountDownLatch;
 
 final class ExecutionTestSupport {
@@ -40,11 +39,11 @@ final class ExecutionTestSupport {
             policy.id(), policy.version(), identity, policy.materializerVersion().orElseThrow()));
   }
 
-  static Artifact join(CompletionStage<Artifact> stage) {
-    return stage.toCompletableFuture().join();
+  static Artifact join(OriginExecution stage) {
+    return stage.result().toCompletableFuture().join();
   }
 
-  static OriginExecutionException failure(CompletionStage<Artifact> stage) {
+  static OriginExecutionException failure(OriginExecution stage) {
     try {
       join(stage);
       throw new AssertionError("expected exceptional completion");

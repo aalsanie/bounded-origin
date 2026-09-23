@@ -173,6 +173,7 @@ final class ArtifactResponseWriter {
       throws IOException, InterruptedException {
     byte[] buffer = new byte[config.maxChunkSize()];
     long remaining = artifact.contentLength();
+    byte[] lastChunk;
     try (InputStream input = artifact.body().openStream()) {
       while (true) {
         int maximum = (int) Math.min(buffer.length, remaining);
@@ -190,13 +191,13 @@ final class ArtifactResponseWriter {
             throw new IOException("artifact body exceeds its declared length");
           }
           metrics.bytesServed(artifact.contentLength());
-          writeFinal(
-              channel, new DefaultLastHttpContent(Unpooled.wrappedBuffer(chunk)), completion);
-          return;
+          lastChunk = chunk;
+          break;
         }
         sync(channel.writeAndFlush(new DefaultHttpContent(Unpooled.wrappedBuffer(chunk))));
       }
     }
+    writeFinal(channel, new DefaultLastHttpContent(Unpooled.wrappedBuffer(lastChunk)), completion);
   }
 
   private static void writeFinal(Channel channel, Object message, Consumer<Throwable> completion) {

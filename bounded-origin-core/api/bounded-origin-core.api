@@ -1,7 +1,7 @@
 # bounded-origin-core public API
 public final class io.github.aalsanie.boundedorigin.core.BoundedOriginExecutor implements java.lang.AutoCloseable {
   public io.github.aalsanie.boundedorigin.core.BoundedOriginExecutor(io.github.aalsanie.boundedorigin.api.Budget, java.time.Duration, int);
-  public java.util.concurrent.CompletionStage<io.github.aalsanie.boundedorigin.api.Artifact> execute(io.github.aalsanie.boundedorigin.api.OriginDecision$Selected, io.github.aalsanie.boundedorigin.api.Materializer);
+  public io.github.aalsanie.boundedorigin.core.OriginExecution execute(io.github.aalsanie.boundedorigin.api.OriginDecision$Selected, io.github.aalsanie.boundedorigin.api.Materializer);
   public void close();
 }
 class io.github.aalsanie.boundedorigin.core.BoundedOriginExecutor$1 {
@@ -18,6 +18,13 @@ final class io.github.aalsanie.boundedorigin.core.BoundedOriginExecutor$Terminat
   public static io.github.aalsanie.boundedorigin.core.BoundedOriginExecutor$Termination valueOf(java.lang.String);
 }
 final class io.github.aalsanie.boundedorigin.core.BoundedOriginExecutor$WorkOutcome {
+}
+public final class io.github.aalsanie.boundedorigin.core.OriginExecution implements java.lang.AutoCloseable {
+  public java.util.concurrent.CompletionStage<io.github.aalsanie.boundedorigin.api.Artifact> result();
+  public boolean joined();
+  public void close();
+}
+final class io.github.aalsanie.boundedorigin.core.OriginExecution$Shared {
 }
 public final class io.github.aalsanie.boundedorigin.core.OriginExecutionException extends java.lang.RuntimeException {
   public io.github.aalsanie.boundedorigin.core.OriginExecutionFailure failure();
