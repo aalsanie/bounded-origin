@@ -700,9 +700,7 @@ class GatewayNetworkTest {
   void idleKeepAliveConnectionIsClosed() throws Exception {
     try (TestOriginServer origin = new TestOriginServer()) {
       origin.fixed("/idle", 200, "ok");
-      GatewayConfig config =
-          GatewayTestFixtures.config(
-              origin.port(), temporaryDirectory, Map.of("idle.timeout", "PT0.15S"));
+      GatewayConfig config = GatewayTestFixtures.config(origin.port(), temporaryDirectory);
       try (BoundedOriginGateway gateway =
               GatewayTestFixtures.start(
                   config,
@@ -717,7 +715,7 @@ class GatewayNetworkTest {
                 Map.of("Host", "example.test", "Connection", "keep-alive"),
                 new byte[0]);
         assertEquals(200, response.status());
-        assertTrue(client.awaitClosed(Duration.ofSeconds(2)));
+        assertTrue(client.awaitClosed(config.idleTimeout().plusSeconds(2)));
       }
     }
   }
