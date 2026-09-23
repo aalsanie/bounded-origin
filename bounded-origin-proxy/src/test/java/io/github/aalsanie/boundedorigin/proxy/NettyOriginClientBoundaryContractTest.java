@@ -30,6 +30,63 @@ class NettyOriginClientBoundaryContractTest {
   @TempDir Path temporaryDirectory;
 
   @Test
+  void conditionalTransportPreservesRepresentationLengthButIsNotAShareableArtifact()
+      throws Exception {
+    try (TestOriginServer origin = new TestOriginServer()) {
+      origin.respond(
+          "/conditional",
+          (request, socket) -> {
+            TestOriginServer.write(
+                socket,
+                "HTTP/1.1 304 Not Modified\r\nCache-Control: public\r\nContent-Length: 17\r\n\r\n");
+            return true;
+          });
+      GatewayConfig config = GatewayTestFixtures.config(origin.port(), temporaryDirectory);
+      EventLoopGroup group = new MultiThreadIoEventLoopGroup(1, NioIoHandler.newFactory());
+      SpoolQuota quota = new SpoolQuota(config.maxSpoolBytes(), config.maxSpoolFiles());
+      try (NettyOriginClient client =
+              new NettyOriginClient(group, config, new GatewayMetrics(), quota);
+          StreamingSpool.Result body = body(new byte[0], 0)) {
+        OriginResponse response =
+            client.executeResponse(
+                new OriginRequest(
+                    "GET", "/conditional", Map.of("host", List.of("example.test")), body, 32),
+                () -> null);
+        try (var artifactBody = response.artifact().body()) {
+          assertEquals(304, response.artifact().statusCode());
+          assertEquals(0, response.artifact().contentLength());
+          try (InputStream input = artifactBody.openStream()) {
+            assertArrayEquals(new byte[0], input.readAllBytes());
+          }
+          assertEquals(
+              "17",
+              response
+                  .artifact()
+                  .metadata()
+                  .get(HttpRequestSecurity.REPRESENTATION_CONTENT_LENGTH));
+          HttpOperation operation =
+              new HttpOperation(
+                  "GET",
+                  "example.test",
+                  "/conditional",
+                  "a".repeat(64),
+                  io.github.aalsanie.boundedorigin.api.TrustLevel.UNTRUSTED,
+                  RepresentationContract.PUBLIC,
+                  Map.of());
+          assertThrows(
+              IllegalArgumentException.class,
+              () ->
+                  RepresentationBoundary.response(
+                      operation, response.artifact(), response.headers()));
+        }
+      } finally {
+        quota.close();
+        group.shutdownGracefully(0, 2, TimeUnit.SECONDS).syncUninterruptibly();
+      }
+    }
+  }
+
+  @Test
   void successfulExchangeRecordsElapsedDurationAndExactRequestFraming() throws Exception {
     byte[] requestBytes = new byte[] {1, 2, 3, 4, 5};
     AtomicReference<TestOriginServer.Request> observed = new AtomicReference<>();

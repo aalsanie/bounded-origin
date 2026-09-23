@@ -126,7 +126,8 @@ class OriginOwnershipLifecycleTest {
             } finally {
               active.decrementAndGet();
             }
-            TestOriginServer.write(socket, "HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok");
+            TestOriginServer.write(
+                socket, "HTTP/1.1 200 OK\r\nCache-Control: public\r\nContent-Length: 2\r\n\r\nok");
             return true;
           });
       GatewayConfig config = config(origin.port(), 0);

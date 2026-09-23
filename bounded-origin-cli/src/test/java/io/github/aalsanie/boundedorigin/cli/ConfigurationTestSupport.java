@@ -37,6 +37,7 @@ final class ConfigurationTestSupport {
           path: /render/{id}
           trust: UNTRUSTED
         strategy: MATERIALIZE
+        representation: PUBLIC_IMMUTABLE
         key:
           path: [id]
           query:
@@ -139,6 +140,7 @@ final class ConfigurationTestSupport {
     render.put("precedence", 100);
     render.put("match", renderMatch);
     render.put("strategy", "MATERIALIZE");
+    render.put("representation", "PUBLIC_IMMUTABLE");
     render.put("key", renderKey);
     render.put("materializer-version", "v1");
     render.put("budget", renderBudget);

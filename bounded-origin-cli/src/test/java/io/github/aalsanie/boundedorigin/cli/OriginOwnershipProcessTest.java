@@ -219,6 +219,7 @@ class OriginOwnershipProcessTest {
               path: /work/{id}
               method: GET
             strategy: %s
+            representation: PUBLIC_IMMUTABLE
             materializer-version: v1
             key:
               path: [id]

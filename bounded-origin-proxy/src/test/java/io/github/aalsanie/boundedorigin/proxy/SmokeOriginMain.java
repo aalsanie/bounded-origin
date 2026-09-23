@@ -11,6 +11,7 @@ import java.nio.charset.StandardCharsets;
 final class SmokeOriginMain {
   private static final byte[] RESPONSE =
       ("HTTP/1.1 200 OK\r\n"
+              + "Cache-Control: public\r\n"
               + "Content-Type: text/plain\r\n"
               + "Content-Length: 16\r\n"
               + "Connection: keep-alive\r\n"

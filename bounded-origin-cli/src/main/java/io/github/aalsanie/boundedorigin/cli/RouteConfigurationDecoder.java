@@ -15,9 +15,10 @@ final class RouteConfigurationDecoder {
           "key",
           "materializer-version",
           "budget",
-          "client-computation");
+          "client-computation",
+          "representation");
   private static final Set<String> MATCH_KEYS = Set.of("method", "host", "path", "trust");
-  private static final Set<String> KEY_KEYS = Set.of("path", "query");
+  private static final Set<String> KEY_KEYS = Set.of("path", "query", "headers");
   private static final Set<String> QUERY_KEYS = Set.of("include", "order-independent");
   private static final Set<String> BUDGET_KEYS =
       Set.of("max-active", "max-queued", "max-execution-duration", "max-result-bytes");
@@ -51,8 +52,25 @@ final class RouteConfigurationDecoder {
     Optional<ConfigurationModel.BudgetConfiguration> budget = optionalBudget(source, path);
     Optional<ConfigurationModel.ClientComputationConfiguration> client =
         optionalClient(source, path);
+    Optional<io.github.aalsanie.boundedorigin.proxy.RepresentationContract> representation =
+        source.containsKey("representation")
+            ? Optional.of(
+                ConfigurationValues.enumValue(
+                    ConfigurationValues.required(source, "representation", path),
+                    path + ".representation",
+                    io.github.aalsanie.boundedorigin.proxy.RepresentationContract.class))
+            : Optional.empty();
     return new ConfigurationModel.RouteConfiguration(
-        id, version, precedence, match, strategy, key, materializerVersion, budget, client);
+        id,
+        version,
+        precedence,
+        match,
+        strategy,
+        key,
+        materializerVersion,
+        budget,
+        client,
+        representation);
   }
 
   private static ConfigurationModel.MatchConfiguration parseMatch(Object value, String path)
@@ -98,7 +116,14 @@ final class RouteConfigurationDecoder {
                 parseQuery(
                     ConfigurationValues.required(source, "query", keyPath), keyPath + ".query"))
             : Optional.empty();
-    return Optional.of(new ConfigurationModel.KeyConfiguration(pathDimensions, query));
+    var headers =
+        source.containsKey("headers")
+            ? ConfigurationValues.uniqueStringList(
+                ConfigurationValues.required(source, "headers", keyPath),
+                keyPath + ".headers",
+                ConfigurationLimits.MAX_DIMENSIONS)
+            : java.util.List.<String>of();
+    return Optional.of(new ConfigurationModel.KeyConfiguration(pathDimensions, query, headers));
   }
 
   private static ConfigurationModel.QueryKeyConfiguration parseQuery(Object value, String path)

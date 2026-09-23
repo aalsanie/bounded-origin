@@ -18,7 +18,8 @@ class OriginResponseMutationBoundaryTest {
           "/599",
           (request, socket) -> {
             TestOriginServer.write(
-                socket, "HTTP/1.1 599 Edge\r\nContent-Length: 0\r\nConnection: keep-alive\r\n\r\n");
+                socket,
+                "HTTP/1.1 599 Edge\r\nCache-Control: public\r\nContent-Length: 0\r\nConnection: keep-alive\r\n\r\n");
             return true;
           });
       origin.respond(
@@ -46,7 +47,8 @@ class OriginResponseMutationBoundaryTest {
           "/exact",
           (request, socket) -> {
             TestOriginServer.write(
-                socket, "HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: keep-alive\r\n\r\nok");
+                socket,
+                "HTTP/1.1 200 OK\r\nCache-Control: public\r\nContent-Length: 2\r\nConnection: keep-alive\r\n\r\nok");
             return true;
           });
       origin.respond(
@@ -54,7 +56,7 @@ class OriginResponseMutationBoundaryTest {
           (request, socket) -> {
             TestOriginServer.write(
                 socket,
-                "HTTP/1.1 200 OK\r\nContent-Length: 3\r\nConnection: keep-alive\r\n\r\nbad");
+                "HTTP/1.1 200 OK\r\nCache-Control: public\r\nContent-Length: 3\r\nConnection: keep-alive\r\n\r\nbad");
             return true;
           });
 
@@ -77,7 +79,7 @@ class OriginResponseMutationBoundaryTest {
           (request, socket) -> {
             TestOriginServer.write(
                 socket,
-                "HTTP/1.1 204 No Content\r\nContent-Length: 0\r\nConnection: keep-alive\r\n\r\n");
+                "HTTP/1.1 204 No Content\r\nCache-Control: public\r\nContent-Length: 0\r\nConnection: keep-alive\r\n\r\n");
             return true;
           });
       origin.respond(
@@ -85,7 +87,7 @@ class OriginResponseMutationBoundaryTest {
           (request, socket) -> {
             TestOriginServer.write(
                 socket,
-                "HTTP/1.1 204 No Content\r\nContent-Length: 1\r\nConnection: keep-alive\r\n\r\nx");
+                "HTTP/1.1 204 No Content\r\nCache-Control: public\r\nContent-Length: 1\r\nConnection: keep-alive\r\n\r\nx");
             return true;
           });
 

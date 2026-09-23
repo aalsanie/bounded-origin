@@ -307,7 +307,8 @@ class PolicyConfigurationCompilerTest {
             null,
             base.materializerVersion(),
             base.budget(),
-            base.clientComputation()),
+            base.clientComputation(),
+            base.representation()),
         "optional policy fields must not be null");
   }
 
@@ -506,7 +507,11 @@ class PolicyConfigurationCompilerTest {
         keyedIdentity(),
         Optional.of("v1"),
         Optional.empty(),
-        Optional.empty());
+        Optional.empty(),
+        strategy == ConfigurationModel.Strategy.CLIENT_COMPUTE
+            ? Optional.empty()
+            : Optional.of(
+                io.github.aalsanie.boundedorigin.proxy.RepresentationContract.PUBLIC_IMMUTABLE));
   }
 
   private static ConfigurationModel.RouteConfiguration boundedRoute(
@@ -543,6 +548,7 @@ class PolicyConfigurationCompilerTest {
         Optional.empty(),
         Optional.empty(),
         Optional.empty(),
+        Optional.empty(),
         Optional.empty());
   }
 
@@ -561,7 +567,8 @@ class PolicyConfigurationCompilerTest {
         key,
         materializerVersion,
         budget,
-        clientComputation);
+        clientComputation,
+        route.representation());
   }
 
   private static ConfigurationModel.RouteConfiguration withIdentity(
@@ -578,7 +585,8 @@ class PolicyConfigurationCompilerTest {
         route.key(),
         route.materializerVersion(),
         route.budget(),
-        route.clientComputation());
+        route.clientComputation(),
+        route.representation());
   }
 
   private static ConfigurationModel.MatchConfiguration match(String path) {
@@ -593,7 +601,8 @@ class PolicyConfigurationCompilerTest {
     return Optional.of(
         new ConfigurationModel.KeyConfiguration(
             List.of("id"),
-            Optional.of(new ConfigurationModel.QueryKeyConfiguration(List.of("variant"), true))));
+            Optional.of(new ConfigurationModel.QueryKeyConfiguration(List.of("variant"), true)),
+            List.of()));
   }
 
   private static ConfigurationModel.BudgetConfiguration policyBudget() {

@@ -100,7 +100,8 @@ class GatewayMutationMetricsTest {
           (request, socket) -> {
             assertArrayEquals("abc".getBytes(StandardCharsets.UTF_8), request.body());
             TestOriginServer.write(
-                socket, "HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: keep-alive\r\n\r\nok");
+                socket,
+                "HTTP/1.1 200 OK\r\nCache-Control: public\r\nContent-Length: 2\r\nConnection: keep-alive\r\n\r\nok");
             return true;
           });
       GatewayConfig config = GatewayTestFixtures.config(origin.port(), temporaryDirectory);
@@ -136,7 +137,8 @@ class GatewayMutationMetricsTest {
           (request, socket) -> {
             assertArrayEquals("abc".getBytes(StandardCharsets.UTF_8), request.body());
             TestOriginServer.write(
-                socket, "HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: keep-alive\r\n\r\nok");
+                socket,
+                "HTTP/1.1 200 OK\r\nCache-Control: public\r\nContent-Length: 2\r\nConnection: keep-alive\r\n\r\nok");
             return true;
           });
       GatewayConfig config = GatewayTestFixtures.config(origin.port(), temporaryDirectory);

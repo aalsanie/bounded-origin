@@ -163,6 +163,23 @@ final class io.github.aalsanie.boundedorigin.proxy.GatewayRequestProcessor$Outco
 }
 final class io.github.aalsanie.boundedorigin.proxy.GatewayRuntimeState {
 }
+public final class io.github.aalsanie.boundedorigin.proxy.HttpOperation extends java.lang.Record {
+  public io.github.aalsanie.boundedorigin.proxy.HttpOperation(java.lang.String, java.lang.String, java.lang.String, java.lang.String, io.github.aalsanie.boundedorigin.api.TrustLevel, io.github.aalsanie.boundedorigin.proxy.RepresentationContract, java.util.Map<java.lang.String, java.util.List<java.lang.String>>);
+  public static void validateHeaderName(java.lang.String);
+  public io.github.aalsanie.boundedorigin.api.Operation operation();
+  public static io.github.aalsanie.boundedorigin.api.Canonicalizer canonicalizer();
+  public static io.github.aalsanie.boundedorigin.proxy.HttpOperation from(io.github.aalsanie.boundedorigin.api.Operation);
+  public final java.lang.String toString();
+  public final int hashCode();
+  public final boolean equals(java.lang.Object);
+  public java.lang.String method();
+  public java.lang.String authority();
+  public java.lang.String target();
+  public java.lang.String bodySha256();
+  public io.github.aalsanie.boundedorigin.api.TrustLevel trust();
+  public io.github.aalsanie.boundedorigin.proxy.RepresentationContract representation();
+  public java.util.Map<java.lang.String, java.util.List<java.lang.String>> headers();
+}
 final class io.github.aalsanie.boundedorigin.proxy.HttpRequestSecurity {
 }
 final class io.github.aalsanie.boundedorigin.proxy.HttpRequestSecurity$HttpContractException extends java.lang.RuntimeException {
@@ -220,6 +237,14 @@ final class io.github.aalsanie.boundedorigin.proxy.OriginRequest extends java.la
   public io.github.aalsanie.boundedorigin.proxy.StreamingSpool$Result body();
   public long maxResponseBytes();
 }
+final class io.github.aalsanie.boundedorigin.proxy.OriginResponse extends java.lang.Record {
+  public final java.lang.String toString();
+  public final int hashCode();
+  public final boolean equals(java.lang.Object);
+  public io.github.aalsanie.boundedorigin.api.Artifact artifact();
+  public java.util.Map<java.lang.String, java.lang.String> headers();
+  public boolean hasTrailers();
+}
 final class io.github.aalsanie.boundedorigin.proxy.OriginWorkRegistry implements java.lang.AutoCloseable {
   public synchronized void close();
 }
@@ -229,6 +254,16 @@ final class io.github.aalsanie.boundedorigin.proxy.OriginWorkRegistry$Permit imp
   public void close();
 }
 final class io.github.aalsanie.boundedorigin.proxy.OriginWorkRegistry$UnavailableException extends java.lang.RuntimeException {
+}
+final class io.github.aalsanie.boundedorigin.proxy.RepresentationBoundary {
+}
+final class io.github.aalsanie.boundedorigin.proxy.RepresentationBoundary$UnsupportedRequestException extends java.lang.RuntimeException {
+}
+public final class io.github.aalsanie.boundedorigin.proxy.RepresentationContract extends java.lang.Enum<io.github.aalsanie.boundedorigin.proxy.RepresentationContract> {
+  public static final io.github.aalsanie.boundedorigin.proxy.RepresentationContract PUBLIC;
+  public static final io.github.aalsanie.boundedorigin.proxy.RepresentationContract PUBLIC_IMMUTABLE;
+  public static io.github.aalsanie.boundedorigin.proxy.RepresentationContract[] values();
+  public static io.github.aalsanie.boundedorigin.proxy.RepresentationContract valueOf(java.lang.String);
 }
 final class io.github.aalsanie.boundedorigin.proxy.ResponseArtifacts {
 }

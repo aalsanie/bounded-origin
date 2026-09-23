@@ -106,7 +106,7 @@ final class DisconnectInsensitiveOrigin implements AutoCloseable {
         socket
             .getOutputStream()
             .write(
-                "HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nok"
+                "HTTP/1.1 200 OK\r\nCache-Control: public\r\nContent-Length: 2\r\nConnection: close\r\n\r\nok"
                     .getBytes(StandardCharsets.ISO_8859_1));
         socket.getOutputStream().flush();
       }

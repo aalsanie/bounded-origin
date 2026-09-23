@@ -29,6 +29,7 @@ final class RouteTemplateTestSupport {
         Optional.empty(),
         Optional.empty(),
         Optional.empty(),
+        Optional.empty(),
         Optional.empty());
   }
 
@@ -40,6 +41,7 @@ final class RouteTemplateTestSupport {
         precedence,
         match,
         ConfigurationModel.Strategy.DENY,
+        Optional.empty(),
         Optional.empty(),
         Optional.empty(),
         Optional.empty(),

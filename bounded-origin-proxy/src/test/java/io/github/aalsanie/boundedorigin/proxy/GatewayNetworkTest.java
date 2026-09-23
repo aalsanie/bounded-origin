@@ -43,7 +43,7 @@ class GatewayNetworkTest {
             byte[] body = request.body();
             TestOriginServer.write(
                 socket,
-                "HTTP/1.1 200 OK\r\nContent-Length: "
+                "HTTP/1.1 200 OK\r\nCache-Control: public\r\nContent-Length: "
                     + body.length
                     + "\r\nConnection: keep-alive\r\n\r\n");
             socket.getOutputStream().write(body);
@@ -180,7 +180,8 @@ class GatewayNetworkTest {
             captured.set(request);
             byte[] body = "ok".getBytes(StandardCharsets.UTF_8);
             TestOriginServer.write(
-                socket, "HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: keep-alive\r\n\r\n");
+                socket,
+                "HTTP/1.1 200 OK\r\nCache-Control: public\r\nContent-Length: 2\r\nConnection: keep-alive\r\n\r\n");
             socket.getOutputStream().write(body);
             socket.getOutputStream().flush();
             return true;
@@ -229,7 +230,8 @@ class GatewayNetworkTest {
           (request, socket) -> {
             captured.set(request);
             TestOriginServer.write(
-                socket, "HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: keep-alive\r\n\r\nok");
+                socket,
+                "HTTP/1.1 200 OK\r\nCache-Control: public\r\nContent-Length: 2\r\nConnection: keep-alive\r\n\r\nok");
             return true;
           });
       GatewayConfig config = GatewayTestFixtures.config(origin.port(), temporaryDirectory);
@@ -270,7 +272,7 @@ class GatewayNetworkTest {
             }
             TestOriginServer.write(
                 socket,
-                "HTTP/1.1 200 OK\r\nContent-Length: 6\r\nConnection: keep-alive\r\n\r\nshared");
+                "HTTP/1.1 200 OK\r\nCache-Control: public\r\nContent-Length: 6\r\nConnection: keep-alive\r\n\r\nshared");
             return true;
           });
       GatewayConfig config =
@@ -334,7 +336,8 @@ class GatewayNetworkTest {
             entered.countDown();
             assertTrue(TestOriginServer.await(release, Duration.ofSeconds(5)));
             TestOriginServer.write(
-                socket, "HTTP/1.1 200 OK\r\nContent-Length: 1\r\nConnection: keep-alive\r\n\r\na");
+                socket,
+                "HTTP/1.1 200 OK\r\nCache-Control: public\r\nContent-Length: 1\r\nConnection: keep-alive\r\n\r\na");
             return true;
           });
       origin.fixed("/b", 200, "b");
@@ -383,7 +386,8 @@ class GatewayNetworkTest {
             entered.countDown();
             assertTrue(TestOriginServer.await(release, Duration.ofSeconds(5)));
             TestOriginServer.write(
-                socket, "HTTP/1.1 200 OK\r\nContent-Length: 1\r\nConnection: keep-alive\r\n\r\na");
+                socket,
+                "HTTP/1.1 200 OK\r\nCache-Control: public\r\nContent-Length: 1\r\nConnection: keep-alive\r\n\r\na");
             return true;
           });
       origin.fixed("/b", 200, "b");
@@ -433,7 +437,8 @@ class GatewayNetworkTest {
             entered.countDown();
             assertTrue(TestOriginServer.await(release, Duration.ofSeconds(5)));
             TestOriginServer.write(
-                socket, "HTTP/1.1 200 OK\r\nContent-Length: 1\r\nConnection: keep-alive\r\n\r\na");
+                socket,
+                "HTTP/1.1 200 OK\r\nCache-Control: public\r\nContent-Length: 1\r\nConnection: keep-alive\r\n\r\na");
             return true;
           });
       origin.fixed("/b", 200, "b");
@@ -508,7 +513,8 @@ class GatewayNetworkTest {
           "/partial",
           (request, socket) -> {
             TestOriginServer.write(
-                socket, "HTTP/1.1 200 OK\r\nContent-Length: 10\r\nConnection: close\r\n\r\nabc");
+                socket,
+                "HTTP/1.1 200 OK\r\nCache-Control: public\r\nContent-Length: 10\r\nConnection: close\r\n\r\nabc");
             return false;
           });
       origin.respond(
@@ -521,7 +527,8 @@ class GatewayNetworkTest {
           "/large",
           (request, socket) -> {
             TestOriginServer.write(
-                socket, "HTTP/1.1 200 OK\r\nContent-Length: 100\r\nConnection: keep-alive\r\n\r\n");
+                socket,
+                "HTTP/1.1 200 OK\r\nCache-Control: public\r\nContent-Length: 100\r\nConnection: keep-alive\r\n\r\n");
             return true;
           });
       origin.respond(
@@ -570,7 +577,7 @@ class GatewayNetworkTest {
             TestOriginServer.write(
                 socket,
                 "HTTP/1.1 103 Early Hints\r\nLink: </style.css>; rel=preload\r\n\r\n"
-                    + "HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: keep-alive\r\n\r\nok");
+                    + "HTTP/1.1 200 OK\r\nCache-Control: public\r\nContent-Length: 2\r\nConnection: keep-alive\r\n\r\nok");
             return true;
           });
 
@@ -597,7 +604,7 @@ class GatewayNetworkTest {
           (request, socket) -> {
             TestOriginServer.write(
                 socket,
-                "HTTP/1.1 200 OK\r\nConnection: close\r\nContent-Type: text/plain\r\n\r\nclose");
+                "HTTP/1.1 200 OK\r\nCache-Control: public\r\nConnection: close\r\nContent-Type: text/plain\r\n\r\nclose");
             return false;
           });
 
@@ -617,14 +624,15 @@ class GatewayNetworkTest {
   }
 
   @Test
-  void headAndNotModifiedPreserveRepresentationLengthWithoutBodies() throws Exception {
+  void headPreservesRepresentationLengthAndUnsolicitedNotModifiedFailsClosed() throws Exception {
     try (TestOriginServer origin = new TestOriginServer()) {
       origin.respond(
           "/head",
           (request, socket) -> {
             assertEquals("HEAD", request.method());
             TestOriginServer.write(
-                socket, "HTTP/1.1 200 OK\r\nContent-Length: 123\r\nConnection: keep-alive\r\n\r\n");
+                socket,
+                "HTTP/1.1 200 OK\r\nCache-Control: public\r\nContent-Length: 123\r\nConnection: keep-alive\r\n\r\n");
             return true;
           });
       origin.respond(
@@ -632,7 +640,7 @@ class GatewayNetworkTest {
           (request, socket) -> {
             TestOriginServer.write(
                 socket,
-                "HTTP/1.1 304 Not Modified\r\nContent-Length: 456\r\nConnection: keep-alive\r\n\r\n");
+                "HTTP/1.1 304 Not Modified\r\nCache-Control: public\r\nContent-Length: 456\r\nConnection: keep-alive\r\n\r\n");
             return true;
           });
       GatewayConfig config = GatewayTestFixtures.config(origin.port(), temporaryDirectory);
@@ -647,9 +655,10 @@ class GatewayNetworkTest {
         assertEquals(0, head.body().length);
 
         RawHttpClient.Response notModified = request(gateway, "GET", "/not-modified");
-        assertEquals(304, notModified.status());
-        assertEquals("456", notModified.header("content-length"));
-        assertEquals(0, notModified.body().length);
+        assertEquals(502, notModified.status());
+        assertEquals("origin request failed\n", notModified.bodyText());
+        assertEquals(
+            Integer.toString(notModified.body().length), notModified.header("content-length"));
       }
     }
   }
@@ -724,7 +733,8 @@ class GatewayNetworkTest {
             entered.countDown();
             assertTrue(TestOriginServer.await(release, Duration.ofSeconds(5)));
             TestOriginServer.write(
-                socket, "HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: keep-alive\r\n\r\nok");
+                socket,
+                "HTTP/1.1 200 OK\r\nCache-Control: public\r\nContent-Length: 2\r\nConnection: keep-alive\r\n\r\nok");
             return true;
           });
       GatewayConfig config =

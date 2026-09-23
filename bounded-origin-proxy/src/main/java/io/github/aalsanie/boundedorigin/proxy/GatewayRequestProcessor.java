@@ -47,8 +47,7 @@ final class GatewayRequestProcessor {
     Objects.requireNonNull(request, "request");
     try {
       RequestDescriptor descriptor =
-          HttpRequestSecurity.descriptor(
-              request.validated(), request.body(), config.ingressTrustLevel());
+          HttpRequestSecurity.descriptor(request, config.ingressTrustLevel());
       OriginDecision decision = policyEngine.evaluate(descriptor);
       if (decision instanceof OriginDecision.Denied denied) {
         deleteRequestBody(request.body());
@@ -65,6 +64,17 @@ final class GatewayRequestProcessor {
 
       OriginDecision.Selected selected = (OriginDecision.Selected) decision;
       OriginPolicy policy = selected.policy();
+      if (policy.strategy()
+          != io.github.aalsanie.boundedorigin.api.ExecutionStrategy.CLIENT_COMPUTE) {
+        try {
+          RepresentationBoundary.operation(selected, request);
+        } catch (RepresentationBoundary.UnsupportedRequestException exception) {
+          deleteRequestBody(request.body());
+          return immediate(
+              ResponseArtifacts.text(403, "caller-specific HTTP semantics are unsupported\n"),
+              policy.id());
+        }
+      }
       return switch (policy.strategy()) {
         case ARTIFACT_ONLY -> artifactOnly(request, selected);
         case BOUNDED_COMPUTE -> bounded(request, selected, false);
@@ -80,7 +90,7 @@ final class GatewayRequestProcessor {
   }
 
   private Outcome artifactOnly(GatewayRequest request, OriginDecision.Selected selected) {
-    Optional<Artifact> stored = getStored(selected);
+    Optional<Artifact> stored = getStored(selected, HttpOperation.from(selected.operation()));
     deleteRequestBody(request.body());
     if (stored.isPresent()) {
       metrics.artifactHit();
@@ -93,7 +103,8 @@ final class GatewayRequestProcessor {
 
   private Outcome bounded(
       GatewayRequest request, OriginDecision.Selected selected, boolean persist) {
-    Optional<Artifact> stored = getStored(selected);
+    HttpOperation operation = HttpOperation.from(selected.operation());
+    Optional<Artifact> stored = getStored(selected, operation);
     if (stored.isPresent()) {
       metrics.artifactHit();
       deleteRequestBody(request.body());
@@ -104,8 +115,10 @@ final class GatewayRequestProcessor {
     CompletionStage<Artifact> stage =
         executor.execute(
             selected,
-            ignored -> {
-              Artifact generated = executeOrigin(request, selected);
+            materializedOperation -> {
+              Artifact generated =
+                  executeOrigin(
+                      request.body(), selected, HttpOperation.from(materializedOperation));
               if (!persist) {
                 return generated;
               }
@@ -113,12 +126,14 @@ final class GatewayRequestProcessor {
               try {
                 artifactStore.put(selected.operationKey(), generated);
                 metrics.bytesStored(generated.contentLength());
-                return artifactStore
-                    .get(selected.operationKey())
-                    .orElseThrow(
-                        () ->
-                            new GatewayStoreMaterializationException(
-                                "persisted artifact was not readable"));
+                Artifact published =
+                    artifactStore
+                        .get(selected.operationKey())
+                        .orElseThrow(
+                            () ->
+                                new GatewayStoreMaterializationException(
+                                    "persisted artifact was not readable"));
+                return validateStored(operation, published);
               } catch (IOException exception) {
                 metrics.storeFailure();
                 throw new GatewayStoreMaterializationException(
@@ -142,34 +157,69 @@ final class GatewayRequestProcessor {
         selected.policy().id());
   }
 
-  private Artifact executeOrigin(GatewayRequest request, OriginDecision.Selected selected)
+  private Artifact executeOrigin(
+      StreamingSpool.Result body, OriginDecision.Selected selected, HttpOperation operation)
       throws MaterializationException {
     long policyLimit = selected.policy().budget().orElseThrow().maxResultBytes();
     long maxResponseBytes = Math.min(config.globalBudget().maxResultBytes(), policyLimit);
     OriginRequest originRequest =
         new OriginRequest(
-            request.validated().method(),
-            request.validated().target(),
-            request.originHeaders(),
-            request.body(),
+            operation.method(),
+            operation.target(),
+            RepresentationBoundary.producerHeaders(operation),
+            body,
             maxResponseBytes);
-    return originClient.execute(
-        originRequest,
-        () -> {
-          OriginWorkRegistry.Permit permit =
-              originWork.reserve(
-                  selected.operationKey(), selected.policy().budget().orElseThrow().maxActive());
-          metrics.originExecution();
-          return permit;
-        });
+    OriginResponse response =
+        originClient.executeResponse(
+            originRequest,
+            () -> {
+              OriginWorkRegistry.Permit permit =
+                  originWork.reserve(
+                      selected.operationKey(),
+                      selected.policy().budget().orElseThrow().maxActive());
+              metrics.originExecution();
+              return permit;
+            });
+    try {
+      if (response.hasTrailers()) {
+        throw new IllegalArgumentException("response trailers are not supported for sharing");
+      }
+      RepresentationBoundary.response(operation, response.artifact(), response.headers());
+      return response.artifact();
+    } catch (RuntimeException | Error exception) {
+      deleteTemporaryArtifact(response.artifact());
+      throw exception;
+    }
   }
 
-  private Optional<Artifact> getStored(OriginDecision.Selected selected) {
+  private Optional<Artifact> getStored(OriginDecision.Selected selected, HttpOperation operation) {
+    if (operation.representation() != RepresentationContract.PUBLIC_IMMUTABLE) {
+      return Optional.empty();
+    }
     try {
-      return artifactStore.get(selected.operationKey());
+      Optional<Artifact> stored = artifactStore.get(selected.operationKey());
+      if (stored.isPresent()) {
+        validateStored(operation, stored.orElseThrow());
+      }
+      return stored;
     } catch (IOException exception) {
       metrics.storeFailure();
       throw new GatewayStoreException(exception);
+    }
+  }
+
+  private static Artifact validateStored(HttpOperation operation, Artifact artifact)
+      throws IOException {
+    try {
+      RepresentationBoundary.response(operation, artifact, artifact.metadata());
+      return artifact;
+    } catch (IllegalArgumentException exception) {
+      try {
+        artifact.body().close();
+      } catch (IOException cleanup) {
+        exception.addSuppressed(cleanup);
+      }
+      throw new IOException("stored representation is not eligible for sharing", exception);
     }
   }
 

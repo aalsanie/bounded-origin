@@ -84,17 +84,17 @@ final class GatewayTestFixtures {
 
   static OriginPolicy boundedPolicy(Budget budget) {
     return OriginPolicy.boundedCompute(
-        "bounded", 1, 100, "origin-v1", Canonicalizers.byDimensions(KEY_DIMENSIONS), budget);
+        "bounded", 1, 100, "origin-v1", HttpOperation.canonicalizer(), budget);
   }
 
   static OriginPolicy materializePolicy(Budget budget) {
     return OriginPolicy.materialize(
-        "materialize", 1, 100, "origin-v1", Canonicalizers.byDimensions(KEY_DIMENSIONS), budget);
+        "materialize", 1, 100, "origin-v1", HttpOperation.canonicalizer(), budget);
   }
 
   static OriginPolicy artifactOnlyPolicy() {
     return OriginPolicy.artifactOnly(
-        "artifact", 1, 100, "origin-v1", Canonicalizers.byDimensions(KEY_DIMENSIONS));
+        "artifact", 1, 100, "origin-v1", HttpOperation.canonicalizer());
   }
 
   static OriginPolicy clientComputePolicy() {
@@ -144,7 +144,7 @@ final class GatewayTestFixtures {
     return new Artifact(
         status,
         bytes.length,
-        Map.of("content-type", "text/plain"),
+        Map.of("content-type", "text/plain", "cache-control", "public"),
         () -> new ByteArrayInputStream(bytes));
   }
 
@@ -154,7 +154,22 @@ final class GatewayTestFixtures {
   }
 
   private static Operation operation(RequestDescriptor request) {
-    return new Operation("http.request", request.attributes());
+    String query = request.attributes().getOrDefault("query", List.of("")).getFirst();
+    Map<String, List<String>> headers = new LinkedHashMap<>();
+    for (String name : List.of("content-type", "content-encoding", "x-test", "x-app")) {
+      if (request.attributes().containsKey("header:" + name)) {
+        headers.put(name, request.attributes().get("header:" + name));
+      }
+    }
+    return new HttpOperation(
+            request.attributes().get("method").getFirst(),
+            request.attributes().get("host").getFirst(),
+            path(request) + (query.isEmpty() ? "" : "?" + query),
+            request.attributes().get("body-sha256").getFirst(),
+            request.trustLevel(),
+            RepresentationContract.PUBLIC_IMMUTABLE,
+            headers)
+        .operation();
   }
 
   private static OriginPolicy fallback() {

@@ -59,7 +59,8 @@ class GatewayFailureMappingTest {
           "/large",
           (request, socket) -> {
             TestOriginServer.write(
-                socket, "HTTP/1.1 200 OK\r\nContent-Length: 5\r\nConnection: close\r\n\r\n12345");
+                socket,
+                "HTTP/1.1 200 OK\r\nCache-Control: public\r\nContent-Length: 5\r\nConnection: close\r\n\r\n12345");
             return false;
           });
       GatewayConfig config =
@@ -88,7 +89,8 @@ class GatewayFailureMappingTest {
           "/broken",
           (request, socket) -> {
             TestOriginServer.write(
-                socket, "HTTP/1.1 200 OK\r\nContent-Length: 3\r\nConnection: close\r\n\r\nx");
+                socket,
+                "HTTP/1.1 200 OK\r\nCache-Control: public\r\nContent-Length: 3\r\nConnection: close\r\n\r\nx");
             return false;
           });
       GatewayConfig config =
@@ -177,7 +179,8 @@ class GatewayFailureMappingTest {
             firstEntered.countDown();
             assertTrue(TestOriginServer.await(releaseFirst, Duration.ofSeconds(5)));
             TestOriginServer.write(
-                socket, "HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: keep-alive\r\n\r\nok");
+                socket,
+                "HTTP/1.1 200 OK\r\nCache-Control: public\r\nContent-Length: 2\r\nConnection: keep-alive\r\n\r\nok");
             return true;
           });
       origin.fixed("/second", 200, "second");
