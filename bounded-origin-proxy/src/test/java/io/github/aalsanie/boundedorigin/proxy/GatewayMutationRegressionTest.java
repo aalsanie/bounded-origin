@@ -45,6 +45,7 @@ import java.util.Optional;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
@@ -52,6 +53,45 @@ import org.junit.jupiter.api.io.TempDir;
 
 class GatewayMutationRegressionTest {
   @TempDir Path temporaryDirectory;
+
+  @Test
+  void outcomeAttachedAfterTerminationReleasesItsUnopenedResult() throws Exception {
+    try (Fixture fixture = fixture(false, null)) {
+      fixture.channel().freezeTime();
+      DefaultHttpRequest request = request(HttpMethod.POST, "/terminal-before-outcome");
+      request.headers().set(HttpHeaderNames.CONTENT_LENGTH, "1");
+      fixture.channel().writeInbound(request);
+      Object state = currentState(fixture);
+
+      CountingBody body = new CountingBody();
+      var lease = fixture.flights().acquire(new Artifact(1, Map.of(), body));
+      var outcome = new GatewayRequestProcessor.Outcome(lease.result(), lease, "late");
+      assertEquals(1, fixture.flights().trackedFlights());
+      fixture.channel().close();
+      fixture.channel().runPendingTasks();
+      assertTrue(((AtomicBoolean) objectField(state, "terminal")).get());
+      assertEquals(0, fixture.runtime().activeRequests());
+      assertEquals(1, fixture.flights().trackedFlights());
+      assertEquals(0, body.opens.get());
+      assertEquals(0, body.closes.get());
+
+      handlerMethod(
+              "attachOutcome",
+              ChannelHandlerContext.class,
+              state.getClass(),
+              GatewayRequestProcessor.Outcome.class)
+          .invoke(fixture.handler(), fixture.handlerContext(), state, outcome);
+      fixture.channel().runPendingTasks();
+
+      assertEquals(0, body.opens.get());
+      assertEquals(1, body.closes.get());
+      assertEquals(0, fixture.flights().trackedFlights());
+      assertEquals(0, fixture.runtime().activeRequests());
+      assertEquals(0, fixture.quota().files());
+      lease.close();
+      assertEquals(1, body.closes.get());
+    }
+  }
 
   @Test
   void lateOutcomeRetainsOwnershipUntilPendingTimeoutResponseEnds() throws Exception {
