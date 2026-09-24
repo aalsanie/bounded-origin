@@ -7,6 +7,7 @@ final class SpoolQuota {
   private long bytes;
   private int files;
   private boolean closed;
+  private Runnable onReleased;
 
   SpoolQuota(long maxBytes, int maxFiles) {
     if (maxBytes <= 0) {
@@ -40,6 +41,15 @@ final class SpoolQuota {
     closed = true;
   }
 
+  synchronized void closeWhenReleased(Runnable cleanup) {
+    if (onReleased != null) {
+      throw new IllegalStateException("temporary spool cleanup is already registered");
+    }
+    onReleased = java.util.Objects.requireNonNull(cleanup, "cleanup");
+    closed = true;
+    releaseResources();
+  }
+
   private synchronized void reserve(Reservation reservation, long count) {
     requireOpen();
     if (count < 0) {
@@ -62,6 +72,15 @@ final class SpoolQuota {
     }
     bytes -= reservation.bytes;
     files--;
+    releaseResources();
+  }
+
+  private void releaseResources() {
+    if (files == 0 && onReleased != null) {
+      Runnable cleanup = onReleased;
+      onReleased = null;
+      cleanup.run();
+    }
   }
 
   private void requireOpen() {

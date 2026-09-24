@@ -26,18 +26,28 @@ final class StreamingSpool implements AutoCloseable {
   private final MessageDigest digest;
   private final ExecutorService writer;
   private final SpoolQuota.Reservation reservation;
+  private final FileDeleter deleter;
 
   private CompletableFuture<Void> tail = CompletableFuture.completedFuture(null);
   private long acceptedBytes;
   private boolean finishing;
   private boolean cleanupScheduled;
   private boolean discarded;
+  private boolean transferred;
+  private boolean cleaned;
 
   StreamingSpool(Path directory, String prefix, long maxBytes, SpoolQuota quota)
+      throws IOException {
+    this(directory, prefix, maxBytes, quota, Files::deleteIfExists);
+  }
+
+  StreamingSpool(
+      Path directory, String prefix, long maxBytes, SpoolQuota quota, FileDeleter deleter)
       throws IOException {
     Objects.requireNonNull(directory, "directory");
     Objects.requireNonNull(prefix, "prefix");
     Objects.requireNonNull(quota, "quota");
+    this.deleter = Objects.requireNonNull(deleter, "deleter");
     if (prefix.isBlank()) {
       throw new IllegalArgumentException("prefix must not be blank");
     }
@@ -72,12 +82,10 @@ final class StreamingSpool implements AutoCloseable {
           }
         }
         if (created != null) {
-          try {
-            Files.deleteIfExists(created);
-          } catch (IOException ignored) {
-          }
+          delete(created, reservation, deleter);
+        } else {
+          reservation.close();
         }
-        reservation.close();
       }
     }
   }
@@ -106,22 +114,31 @@ final class StreamingSpool implements AutoCloseable {
     CompletableFuture<Void> completion = tail;
     return completion.handle(
         (ignored, failure) -> {
-          IOException closeFailure = closeChannel();
-          writer.shutdown();
-          if (discarded) {
-            cleanupNow();
-            throw new CompletionException(new IOException("spool was discarded"));
+          synchronized (this) {
+            IOException closeFailure = closeChannel();
+            writer.shutdown();
+            if (discarded) {
+              cleanupNow();
+              throw new CompletionException(new IOException("spool was discarded"));
+            }
+            if (failure != null) {
+              cleanupNow();
+              throw asCompletionException(failure);
+            }
+            if (closeFailure != null) {
+              cleanupNow();
+              throw new CompletionException(closeFailure);
+            }
+            Result result =
+                new Result(
+                    path,
+                    finalLength,
+                    HexFormat.of().formatHex(digest.digest()),
+                    reservation,
+                    deleter);
+            transferred = true;
+            return result;
           }
-          if (failure != null) {
-            cleanupNow();
-            throw asCompletionException(failure);
-          }
-          if (closeFailure != null) {
-            cleanupNow();
-            throw new CompletionException(closeFailure);
-          }
-          return new Result(
-              path, finalLength, HexFormat.of().formatHex(digest.digest()), reservation);
         });
   }
 
@@ -131,7 +148,7 @@ final class StreamingSpool implements AutoCloseable {
 
   @Override
   public synchronized void close() {
-    if (cleanupScheduled) {
+    if (cleanupScheduled || transferred) {
       return;
     }
     finishing = true;
@@ -176,15 +193,28 @@ final class StreamingSpool implements AutoCloseable {
     }
   }
 
-  private void cleanupNow() {
+  private synchronized void cleanupNow() {
+    if (!cleaned) {
+      cleaned = delete(path, reservation, deleter);
+    }
+  }
+
+  private static boolean delete(
+      Path path, SpoolQuota.Reservation reservation, FileDeleter deleter) {
     try {
-      Files.deleteIfExists(path);
+      deleter.delete(path);
+      reservation.close();
+      return true;
     } catch (IOException exception) {
       System.getLogger(StreamingSpool.class.getName())
           .log(System.Logger.Level.WARNING, "failed to delete temporary spool", exception);
-    } finally {
-      reservation.close();
+      return false;
     }
+  }
+
+  @FunctionalInterface
+  interface FileDeleter {
+    void delete(Path path) throws IOException;
   }
 
   private static CompletionException asCompletionException(Throwable throwable) {
@@ -200,15 +230,26 @@ final class StreamingSpool implements AutoCloseable {
     private final long length;
     private final String sha256;
     private final SpoolQuota.Reservation reservation;
+    private final FileDeleter deleter;
 
     private boolean released;
     private boolean cleaned;
     private int openStreams;
 
     Result(Path path, long length, String sha256, SpoolQuota.Reservation reservation) {
+      this(path, length, sha256, reservation, Files::deleteIfExists);
+    }
+
+    Result(
+        Path path,
+        long length,
+        String sha256,
+        SpoolQuota.Reservation reservation,
+        FileDeleter deleter) {
       this.path = Objects.requireNonNull(path, "path");
       this.sha256 = Objects.requireNonNull(sha256, "sha256");
       this.reservation = Objects.requireNonNull(reservation, "reservation");
+      this.deleter = Objects.requireNonNull(deleter, "deleter");
       if (length < 0) {
         throw new IllegalArgumentException("length must be non-negative");
       }
@@ -278,22 +319,9 @@ final class StreamingSpool implements AutoCloseable {
       }
     }
 
-    private void cleanup() {
-      synchronized (this) {
-        if (cleaned) {
-          return;
-        }
-        cleaned = true;
-      }
-      try {
-        Files.deleteIfExists(path);
-        reservation.close();
-      } catch (IOException exception) {
-        synchronized (this) {
-          cleaned = false;
-        }
-        System.getLogger(StreamingSpool.class.getName())
-            .log(System.Logger.Level.WARNING, "failed to delete completed spool", exception);
+    private synchronized void cleanup() {
+      if (!cleaned) {
+        cleaned = delete(path, reservation, deleter);
       }
     }
 

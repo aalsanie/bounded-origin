@@ -21,7 +21,6 @@ import io.netty.handler.codec.http.HttpServerCodec;
 import io.netty.handler.timeout.IdleStateHandler;
 import java.io.IOException;
 import java.net.InetSocketAddress;
-import java.nio.file.Files;
 import java.time.Duration;
 import java.util.Objects;
 import java.util.concurrent.TimeUnit;
@@ -47,6 +46,7 @@ public final class BoundedOriginGateway implements AutoCloseable {
 
   private Channel clientServer;
   private Channel adminServer;
+  private SpoolDirectory spoolDirectory;
   private boolean started;
   private boolean closed;
 
@@ -90,7 +90,7 @@ public final class BoundedOriginGateway implements AutoCloseable {
         throw new IllegalStateException("gateway is already started");
       }
       try {
-        Files.createDirectories(config.temporaryDirectory());
+        spoolDirectory = new SpoolDirectory(config.temporaryDirectory());
         originWork.start();
         runtime.started();
         clientServer = bindClient();
@@ -300,7 +300,11 @@ public final class BoundedOriginGateway implements AutoCloseable {
     executor.close();
     originClient.close();
     originWork.close();
-    spoolQuota.close();
+    if (spoolDirectory != null) {
+      spoolQuota.closeWhenReleased(spoolDirectory::close);
+    } else {
+      spoolQuota.close();
+    }
     shutdown(originGroup);
     shutdown(clientGroup);
     shutdown(acceptorGroup);

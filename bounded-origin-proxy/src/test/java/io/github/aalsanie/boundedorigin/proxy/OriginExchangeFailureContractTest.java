@@ -7,6 +7,8 @@ import io.github.aalsanie.boundedorigin.api.Artifact;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelHandler;
+import io.netty.channel.ChannelHandlerContext;
+import io.netty.channel.EventLoop;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.MultiThreadIoEventLoopGroup;
 import io.netty.channel.embedded.EmbeddedChannel;
@@ -23,6 +25,7 @@ import java.io.IOException;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.lang.reflect.Proxy;
 import java.nio.channels.FileChannel;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -31,12 +34,123 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 class OriginExchangeFailureContractTest {
   @TempDir Path temporaryDirectory;
+
+  @Test
+  void responseSpoolCreatedAfterRejectedCancellationIsDisposedBeforeInstallation()
+      throws Exception {
+    try (ExchangeFixture fixture = fixture(true)) {
+      Method cancel = fixture.type.getDeclaredMethod("cancel", Throwable.class);
+      cancel.setAccessible(true);
+      cancel.invoke(fixture.handler, new InterruptedException("cancel before response"));
+      assertThrows(CompletionException.class, fixture.result::join);
+      HttpResponse response = response(200);
+      response.headers().set(HttpHeaderNames.CONTENT_LENGTH, "1");
+      fixture.send(response);
+      org.junit.jupiter.api.Assertions.assertEquals(1, fixture.quota.files());
+      org.junit.jupiter.api.Assertions.assertEquals(0, fixture.quota.bytes());
+    }
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
+  void abortRacingCompletedResponseDisposesOnlyAnUnpublishedBody(boolean publishedFirst)
+      throws Exception {
+    try (ExchangeFixture fixture = fixture()) {
+      HttpResponse response = response(200);
+      response.headers().set(HttpHeaderNames.CONTENT_LENGTH, "1");
+      fixture.send(response);
+      StreamingSpool spool = fixture.responseSpool();
+      spool.append(new byte[] {7}).toCompletableFuture().join();
+      StreamingSpool.Result completed = spool.finish().toCompletableFuture().join();
+      Field finished = fixture.type.getDeclaredField("finished");
+      finished.setAccessible(true);
+      ((java.util.concurrent.atomic.AtomicBoolean) finished.get(fixture.handler)).set(true);
+      if (publishedFirst) {
+        fixture.completeResponse(completed, null);
+      }
+      Method abort = fixture.type.getDeclaredMethod("abortDelivery", Throwable.class);
+      abort.setAccessible(true);
+      abort.invoke(fixture.handler, new RejectedExecutionException("late task rejection"));
+      if (publishedFirst) {
+        Artifact artifact = fixture.result.join();
+        assertTrue(Files.exists(completed.path()));
+        try (var input = artifact.body().openStream()) {
+          org.junit.jupiter.api.Assertions.assertEquals(7, input.read());
+          org.junit.jupiter.api.Assertions.assertEquals(-1, input.read());
+        }
+        artifact.body().close();
+      } else {
+        fixture.completeResponse(completed, null);
+        assertThrows(CompletionException.class, fixture.result::join);
+      }
+      assertTrue(completed.released());
+      assertTrue(Files.notExists(completed.path()));
+      org.junit.jupiter.api.Assertions.assertEquals(1, fixture.quota.files());
+      org.junit.jupiter.api.Assertions.assertEquals(0, fixture.quota.bytes());
+    }
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(strings = {"finish", "append", "cancel"})
+  void rejectedOriginSpoolHandoffFailsExchangeAndReleasesData(String handoff) throws Exception {
+    try (ExchangeFixture fixture = fixture(true)) {
+      HttpResponse response = response(200);
+      response.headers().set(HttpHeaderNames.CONTENT_LENGTH, "1");
+      fixture.send(response);
+      if (handoff.equals("append")) {
+        ChannelHandlerContext actual =
+            fixture.exchangeChannel.pipeline().context((ChannelHandler) fixture.handler);
+        EventLoop rejected = rejectingLoop(fixture.leaseChannel.eventLoop());
+        ChannelHandlerContext context =
+            (ChannelHandlerContext)
+                Proxy.newProxyInstance(
+                    getClass().getClassLoader(),
+                    new Class<?>[] {ChannelHandlerContext.class},
+                    (proxy, method, arguments) ->
+                        method.getName().equals("executor")
+                            ? rejected
+                            : method.invoke(actual, arguments));
+        Method contentHandler =
+            fixture.type.getDeclaredMethod(
+                "handleContent",
+                ChannelHandlerContext.class,
+                io.netty.handler.codec.http.HttpContent.class);
+        contentHandler.setAccessible(true);
+        var content = new DefaultLastHttpContent(Unpooled.wrappedBuffer(new byte[] {1}));
+        try {
+          contentHandler.invoke(fixture.handler, context, content);
+        } finally {
+          content.release();
+        }
+      } else {
+        fixture.responseSpool().append(new byte[] {1}).toCompletableFuture().join();
+        Method terminal =
+            handoff.equals("finish")
+                ? fixture.type.getDeclaredMethod("finishResponse")
+                : fixture.type.getDeclaredMethod("cancel", Throwable.class);
+        terminal.setAccessible(true);
+        if (handoff.equals("finish")) {
+          terminal.invoke(fixture.handler);
+        } else {
+          terminal.invoke(fixture.handler, new InterruptedException("caller gone"));
+        }
+      }
+      assertThrows(ExecutionException.class, () -> fixture.result.get(5, TimeUnit.SECONDS));
+      org.junit.jupiter.api.Assertions.assertEquals(1, fixture.quota.files());
+      org.junit.jupiter.api.Assertions.assertEquals(0, fixture.quota.bytes());
+      try (var files = Files.newDirectoryStream(temporaryDirectory, "origin-response-*.tmp")) {
+        org.junit.jupiter.api.Assertions.assertFalse(files.iterator().hasNext());
+      }
+    }
+  }
 
   @Test
   void decoderRejectedResponseFailsExchange() throws Exception {
@@ -208,6 +322,10 @@ class OriginExchangeFailureContractTest {
   }
 
   private ExchangeFixture fixture() throws Exception {
+    return fixture(false);
+  }
+
+  private ExchangeFixture fixture(boolean rejectDelivery) throws Exception {
     GatewayConfig config =
         GatewayTestFixtures.config(GatewayTestFixtures.unusedPort(), temporaryDirectory);
     GatewayMetrics metrics = new GatewayMetrics();
@@ -215,12 +333,25 @@ class OriginExchangeFailureContractTest {
     EventLoopGroup group = new MultiThreadIoEventLoopGroup(1, NioIoHandler.newFactory());
     OriginConnectionPool pool = new OriginConnectionPool(group, config, metrics);
     EmbeddedChannel leaseChannel = new EmbeddedChannel();
+    Channel leaseTransport = leaseChannel;
+    if (rejectDelivery) {
+      EventLoop rejected = rejectingLoop(leaseChannel.eventLoop());
+      leaseTransport =
+          (Channel)
+              Proxy.newProxyInstance(
+                  getClass().getClassLoader(),
+                  new Class<?>[] {Channel.class},
+                  (proxy, method, arguments) ->
+                      method.getName().equals("eventLoop")
+                          ? rejected
+                          : method.invoke(leaseChannel, arguments));
+    }
 
     Constructor<OriginConnectionPool.Lease> leaseConstructor =
         OriginConnectionPool.Lease.class.getDeclaredConstructor(
             OriginConnectionPool.class, Channel.class);
     leaseConstructor.setAccessible(true);
-    OriginConnectionPool.Lease lease = leaseConstructor.newInstance(pool, leaseChannel);
+    OriginConnectionPool.Lease lease = leaseConstructor.newInstance(pool, leaseTransport);
 
     StreamingSpool.Result requestBody = completedBody(quota, new byte[0], "request-");
     OriginRequest request =
@@ -260,6 +391,22 @@ class OriginExchangeFailureContractTest {
 
   private static HttpResponse response(int status) {
     return new DefaultHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.valueOf(status));
+  }
+
+  private static EventLoop rejectingLoop(EventLoop actual) {
+    return (EventLoop)
+        Proxy.newProxyInstance(
+            OriginExchangeFailureContractTest.class.getClassLoader(),
+            new Class<?>[] {EventLoop.class},
+            (proxy, method, arguments) -> {
+              if (method.getName().equals("inEventLoop")) {
+                return false;
+              }
+              if (method.getName().equals("execute")) {
+                throw new RejectedExecutionException("origin event loop terminated");
+              }
+              return method.invoke(actual, arguments);
+            });
   }
 
   private static FileChannel fileChannel(StreamingSpool spool) throws Exception {

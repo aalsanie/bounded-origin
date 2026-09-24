@@ -30,6 +30,7 @@ import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -246,7 +247,7 @@ final class NettyOriginClient implements AutoCloseable {
     private final CompletableFuture<Artifact> result = new CompletableFuture<>();
     private final AtomicBoolean finished = new AtomicBoolean();
 
-    private StreamingSpool spool;
+    private volatile StreamingSpool spool;
     private int statusCode;
     private Map<String, String> metadata = Map.of();
     private Map<String, String> responseHeaders = Map.of();
@@ -400,17 +401,25 @@ final class NettyOriginClient implements AutoCloseable {
       closeDelimited = !selfDelimited;
       reusable = HttpUtil.isKeepAlive(response) && selfDelimited;
       try {
-        spool =
+        installSpool(
             new StreamingSpool(
                 config.temporaryDirectory(),
                 "origin-response-",
                 request.maxResponseBytes(),
-                spoolQuota);
+                spoolQuota));
       } catch (IOException | RuntimeException exception) {
         fail(exception);
         return;
       }
       context.read();
+    }
+
+    private synchronized void installSpool(StreamingSpool created) {
+      if (finished.get()) {
+        created.close();
+      } else {
+        spool = created;
+      }
     }
 
     private void handleContent(ChannelHandlerContext context, HttpContent content) {
@@ -449,7 +458,8 @@ final class NettyOriginClient implements AutoCloseable {
         spool
             .append(bytes)
             .whenComplete(
-                (ignored, failure) ->
+                (ignored, failure) -> {
+                  try {
                     context
                         .executor()
                         .execute(
@@ -463,7 +473,11 @@ final class NettyOriginClient implements AutoCloseable {
                                   && context.channel().isActive()) {
                                 context.read();
                               }
-                            }));
+                            });
+                  } catch (RejectedExecutionException exception) {
+                    abortDelivery(exception);
+                  }
+                });
       } catch (RuntimeException exception) {
         fail(exception);
       }
@@ -483,7 +497,11 @@ final class NettyOriginClient implements AutoCloseable {
         return;
       }
       completion.whenComplete(
-          (spooled, failure) -> executeOnEventLoop(() -> completeResponse(spooled, failure)));
+          (spooled, failure) -> {
+            if (!executeOnEventLoop(() -> completeResponse(spooled, failure)) && spooled != null) {
+              spooled.close();
+            }
+          });
     }
 
     private void completeResponse(StreamingSpool.Result spooled, Throwable failure) {
@@ -501,7 +519,9 @@ final class NettyOriginClient implements AutoCloseable {
         Artifact artifact = new Artifact(statusCode, spooled.length(), metadata, body);
         metrics.originResponseBytes(spooled.length());
         detachAndRelease(reusable);
-        result.complete(artifact);
+        if (!result.complete(artifact)) {
+          spooled.close();
+        }
       } catch (RuntimeException | Error exception) {
         spooled.close();
         completeFailure(exception);
@@ -536,13 +556,32 @@ final class NettyOriginClient implements AutoCloseable {
       lease.close();
     }
 
-    private void executeOnEventLoop(Runnable action) {
+    private boolean executeOnEventLoop(Runnable action) {
       Channel channel = lease.channel();
-      if (channel.eventLoop().inEventLoop()) {
-        action.run();
-      } else {
-        channel.eventLoop().execute(action);
+      try {
+        if (channel.eventLoop().inEventLoop()) {
+          action.run();
+        } else {
+          channel.eventLoop().execute(action);
+        }
+        return true;
+      } catch (RejectedExecutionException exception) {
+        abortDelivery(exception);
+        return false;
       }
+    }
+
+    private synchronized void abortDelivery(Throwable cause) {
+      // A stopped event loop cannot accept cleanup. Dispose owned resources without its pipeline.
+      finished.set(true);
+      cancelTimeout();
+      StreamingSpool current = spool;
+      if (current != null) {
+        current.close();
+      }
+      lease.invalidate();
+      lease.close();
+      result.completeExceptionally(cause);
     }
 
     private void cancelTimeout() {

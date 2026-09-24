@@ -86,8 +86,10 @@ class StreamingSpoolStateTest {
     assertTrue(Files.exists(result.path()));
     first.close();
     first.close();
+    assertThrows(IOException.class, first::read);
     assertTrue(Files.exists(result.path()));
     second.close();
+    assertThrows(IOException.class, second::read);
 
     assertFalse(Files.exists(result.path()));
     assertEquals(0, quota.bytes());
