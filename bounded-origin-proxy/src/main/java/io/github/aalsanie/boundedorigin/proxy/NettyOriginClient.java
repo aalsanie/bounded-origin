@@ -80,12 +80,12 @@ final class NettyOriginClient implements AutoCloseable {
     try {
       lease = acquisition.get(config.originAcquireTimeout().toNanos(), TimeUnit.NANOSECONDS);
     } catch (InterruptedException exception) {
-      acquisition.cancel(false);
+      abandonAcquisition(acquisition);
       Thread.currentThread().interrupt();
       throw new MaterializationException(
           "interrupted while acquiring an origin connection", exception);
     } catch (TimeoutException exception) {
-      acquisition.cancel(false);
+      abandonAcquisition(acquisition);
       metrics.originPoolRejection();
       throw new MaterializationException("origin connection acquisition timed out", exception);
     } catch (ExecutionException exception) {
@@ -137,6 +137,13 @@ final class NettyOriginClient implements AutoCloseable {
         throw error;
       }
     }
+  }
+
+  private static void abandonAcquisition(
+      CompletableFuture<OriginConnectionPool.Lease> acquisition) {
+    acquisition.cancel(false);
+    // Delivery can win after get fails but before cancellation; that lease has no caller.
+    acquisition.thenAccept(OriginConnectionPool.Lease::close);
   }
 
   private static void discard(Artifact artifact) {
