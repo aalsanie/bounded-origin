@@ -1,9 +1,12 @@
 package io.github.aalsanie.boundedorigin.proxy;
 
 import io.github.aalsanie.boundedorigin.api.Artifact;
+import io.github.aalsanie.boundedorigin.core.OriginExecution;
+import java.io.IOException;
 import java.util.IdentityHashMap;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -15,8 +18,20 @@ final class FlightLeaseRegistry {
     this.metrics = Objects.requireNonNull(metrics, "metrics");
   }
 
-  Lease acquire(CompletionStage<Artifact> stage) {
-    Objects.requireNonNull(stage, "stage");
+  Lease acquire(OriginExecution execution) {
+    Objects.requireNonNull(execution, "execution");
+    if (execution.joined()) {
+      metrics.singleFlightJoin();
+    }
+    return track(execution.result(), execution::close);
+  }
+
+  Lease acquire(Artifact artifact) {
+    Objects.requireNonNull(artifact, "artifact");
+    return track(CompletableFuture.completedFuture(artifact), () -> closeBody(artifact));
+  }
+
+  private Lease track(CompletionStage<Artifact> stage, Runnable release) {
     synchronized (flights) {
       Flight flight = flights.get(stage);
       if (flight == null) {
@@ -24,12 +39,11 @@ final class FlightLeaseRegistry {
         flight.references = 1;
         flights.put(stage, flight);
         Flight captured = flight;
-        stage.whenComplete((artifact, failure) -> complete(stage, captured, artifact));
+        stage.whenComplete((artifact, failure) -> complete(stage, captured));
       } else {
         flight.references++;
-        metrics.singleFlightJoin();
       }
-      return new Lease(this, stage);
+      return new Lease(this, stage, release);
     }
   }
 
@@ -39,25 +53,20 @@ final class FlightLeaseRegistry {
     }
   }
 
-  private void complete(CompletionStage<Artifact> stage, Flight expected, Artifact artifact) {
-    Artifact cleanup = null;
+  private void complete(CompletionStage<Artifact> stage, Flight expected) {
     synchronized (flights) {
       Flight flight = flights.get(stage);
       if (flight != expected) {
         return;
       }
       flight.completed = true;
-      flight.artifact = artifact;
       if (flight.references == 0) {
         flights.remove(stage);
-        cleanup = artifact;
       }
     }
-    deleteTemporary(cleanup);
   }
 
   private void release(CompletionStage<Artifact> stage) {
-    Artifact cleanup = null;
     synchronized (flights) {
       Flight flight = flights.get(stage);
       if (flight == null) {
@@ -69,33 +78,43 @@ final class FlightLeaseRegistry {
       flight.references--;
       if (flight.references == 0 && flight.completed) {
         flights.remove(stage);
-        cleanup = flight.artifact;
       }
     }
-    deleteTemporary(cleanup);
   }
 
-  private static void deleteTemporary(Artifact artifact) {
-    if (artifact == null || !(artifact.body() instanceof TemporaryArtifactBody temporary)) {
-      return;
+  private static void closeBody(Artifact artifact) {
+    try {
+      artifact.body().close();
+    } catch (IOException | RuntimeException exception) {
+      System.getLogger(FlightLeaseRegistry.class.getName())
+          .log(System.Logger.Level.WARNING, "failed to release stored result", exception);
     }
-    temporary.delete();
   }
 
   static final class Lease implements AutoCloseable {
     private final FlightLeaseRegistry owner;
     private final CompletionStage<Artifact> stage;
+    private final Runnable release;
     private final AtomicBoolean released = new AtomicBoolean();
 
-    private Lease(FlightLeaseRegistry owner, CompletionStage<Artifact> stage) {
+    private Lease(FlightLeaseRegistry owner, CompletionStage<Artifact> stage, Runnable release) {
       this.owner = owner;
       this.stage = stage;
+      this.release = release;
+    }
+
+    CompletionStage<Artifact> result() {
+      return stage;
     }
 
     @Override
     public void close() {
       if (released.compareAndSet(false, true)) {
-        owner.release(stage);
+        try {
+          release.run();
+        } finally {
+          owner.release(stage);
+        }
       }
     }
   }
@@ -103,6 +122,5 @@ final class FlightLeaseRegistry {
   private static final class Flight {
     private int references;
     private boolean completed;
-    private Artifact artifact;
   }
 }

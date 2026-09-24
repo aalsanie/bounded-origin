@@ -10,7 +10,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import io.github.aalsanie.boundedorigin.api.Artifact;
 import io.github.aalsanie.boundedorigin.api.Budget;
 import java.time.Duration;
-import java.util.concurrent.CompletionStage;
 import java.util.concurrent.CountDownLatch;
 import org.junit.jupiter.api.Test;
 
@@ -25,7 +24,7 @@ class BoundedOriginExecutorPerformanceTest {
 
     try (BoundedOriginExecutor executor =
         new BoundedOriginExecutor(budget, Duration.ofSeconds(1), 64)) {
-      CompletionStage<Artifact> shared =
+      OriginExecution shared =
           executor.execute(
               selected,
               ignored -> {
@@ -35,8 +34,8 @@ class BoundedOriginExecutorPerformanceTest {
 
       long started = System.nanoTime();
       for (int index = 0; index < joins; index++) {
-        if (executor.execute(selected, ignored -> artifact(2)) != shared) {
-          throw new AssertionError("same-key join returned a different shared stage");
+        try (OriginExecution follower = executor.execute(selected, ignored -> artifact(2))) {
+          assertSame(shared.result(), follower.result());
         }
       }
       long elapsed = System.nanoTime() - started;

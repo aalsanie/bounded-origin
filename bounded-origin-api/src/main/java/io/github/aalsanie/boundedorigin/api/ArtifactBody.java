@@ -7,7 +7,10 @@ import java.io.InputStream;
 public interface ArtifactBody extends AutoCloseable {
   InputStream openStream() throws IOException;
 
-  /** Releases owned resources after all readers finish, or if the result is discarded. */
+  /**
+   * Releases resources owned by this body. Resource-owning implementations must prevent new streams
+   * and make close idempotent. Already-open streams retain their resources until closed.
+   */
   @Override
   default void close() throws IOException {}
 }

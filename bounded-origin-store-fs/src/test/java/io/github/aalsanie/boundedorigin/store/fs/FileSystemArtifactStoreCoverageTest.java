@@ -45,7 +45,9 @@ class FileSystemArtifactStoreCoverageTest {
 
     try (FileSystemArtifactStore store = new FileSystemArtifactStore(root, 10_000, 100)) {
       store.put(key("safe"), artifact(200, bytes(1, 1), metadata));
-      assertEquals(metadata, store.get(key("safe")).orElseThrow().metadata());
+      Artifact stored = store.get(key("safe")).orElseThrow();
+      assertEquals(metadata, stored.metadata());
+      stored.body().close();
       assertThrows(
           IOException.class,
           () -> store.put(key("unicode"), artifact(200, bytes(1, 1), Map.of("é", "value"))));
@@ -179,6 +181,7 @@ class FileSystemArtifactStoreCoverageTest {
     Artifact stored = store.get(key("x")).orElseThrow();
     InputStream first = stored.body().openStream();
     InputStream second = stored.body().openStream();
+    stored.body().close();
 
     store.close();
     first.close();
@@ -186,7 +189,7 @@ class FileSystemArtifactStoreCoverageTest {
     second.close();
 
     try (FileSystemArtifactStore reopened = new FileSystemArtifactStore(root, 10_000, 100)) {
-      assertTrue(reopened.get(key("x")).isPresent());
+      assertTrue(StoreTestSupport.contains(reopened, key("x")));
     }
   }
 
@@ -266,7 +269,7 @@ class FileSystemArtifactStoreCoverageTest {
 
     try (FileSystemArtifactStore store = new FileSystemArtifactStore(root, 10_000, 100)) {
       assertThrows(IOException.class, () -> store.put(key("next"), artifact(bytes(1, 8))));
-      assertTrue(store.get(key("existing")).isPresent());
+      assertTrue(StoreTestSupport.contains(store, key("existing")));
     }
 
     StoreEntry exhausted =
@@ -361,13 +364,13 @@ class FileSystemArtifactStoreCoverageTest {
       Artifact firstArtifact = store.get(key("a")).orElseThrow();
       Artifact secondArtifact = store.get(key("b")).orElseThrow();
 
-      try (InputStream first = firstArtifact.body().openStream();
-          InputStream second = secondArtifact.body().openStream()) {
+      try (InputStream first = StoreTestSupport.open(firstArtifact);
+          InputStream second = StoreTestSupport.open(secondArtifact)) {
         assertThrows(IOException.class, () -> store.put(key("c"), artifact(bytes(100, 3))));
         assertArrayEquals(firstBody, first.readAllBytes());
         assertArrayEquals(secondBody, second.readAllBytes());
-        assertTrue(store.get(key("a")).isPresent());
-        assertTrue(store.get(key("b")).isPresent());
+        assertTrue(StoreTestSupport.contains(store, key("a")));
+        assertTrue(StoreTestSupport.contains(store, key("b")));
         assertTrue(store.get(key("c")).isEmpty());
       }
     }

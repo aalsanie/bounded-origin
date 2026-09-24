@@ -11,7 +11,6 @@ import io.github.aalsanie.boundedorigin.api.Artifact;
 import io.github.aalsanie.boundedorigin.api.Budget;
 import io.github.aalsanie.boundedorigin.api.OriginPolicy;
 import java.time.Duration;
-import java.util.concurrent.CompletionStage;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -30,7 +29,7 @@ class BoundedOriginExecutorStressTest {
 
     try (BoundedOriginExecutor executor =
         new BoundedOriginExecutor(budget, Duration.ofSeconds(1), 64)) {
-      CompletionStage<Artifact> shared =
+      OriginExecution shared =
           executor.execute(
               selected,
               op -> {
@@ -42,7 +41,9 @@ class BoundedOriginExecutorStressTest {
       ExecutionTestSupport.await(started);
 
       for (int index = 0; index < 100_000; index++) {
-        assertSame(shared, executor.execute(selected, op -> artifact(2)));
+        try (OriginExecution follower = executor.execute(selected, op -> artifact(2))) {
+          assertSame(shared.result(), follower.result());
+        }
       }
 
       assertEquals(1, invocations.get());
@@ -85,9 +86,9 @@ class BoundedOriginExecutorStressTest {
       int queued = 0;
       int rejected = 0;
       for (int index = 1; index < 100_000; index++) {
-        CompletionStage<Artifact> stage =
+        OriginExecution stage =
             executor.execute(decision(policy, Integer.toString(index)), op -> artifact(1));
-        if (stage.toCompletableFuture().isCompletedExceptionally()) {
+        if (stage.result().toCompletableFuture().isCompletedExceptionally()) {
           rejected++;
         } else {
           queued++;

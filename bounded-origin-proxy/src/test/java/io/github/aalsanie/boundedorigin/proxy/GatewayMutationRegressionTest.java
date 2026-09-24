@@ -2,9 +2,14 @@ package io.github.aalsanie.boundedorigin.proxy;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import io.github.aalsanie.boundedorigin.api.Artifact;
+import io.github.aalsanie.boundedorigin.api.ArtifactBody;
+import io.github.aalsanie.boundedorigin.api.ArtifactStore;
+import io.github.aalsanie.boundedorigin.api.OperationKey;
 import io.github.aalsanie.boundedorigin.core.BoundedOriginExecutor;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.ChannelHandlerContext;
@@ -23,8 +28,12 @@ import io.netty.handler.codec.http.HttpHeaderValues;
 import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpResponse;
 import io.netty.handler.codec.http.HttpVersion;
+import io.netty.handler.codec.http.LastHttpContent;
 import io.netty.util.ReferenceCountUtil;
+import io.netty.util.concurrent.EventExecutor;
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
@@ -32,13 +41,159 @@ import java.lang.reflect.Proxy;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.Map;
+import java.util.Optional;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 class GatewayMutationRegressionTest {
   @TempDir Path temporaryDirectory;
+
+  @Test
+  void outcomeAttachedAfterTerminationReleasesItsUnopenedResult() throws Exception {
+    try (Fixture fixture = fixture(false, null)) {
+      fixture.channel().freezeTime();
+      DefaultHttpRequest request = request(HttpMethod.POST, "/terminal-before-outcome");
+      request.headers().set(HttpHeaderNames.CONTENT_LENGTH, "1");
+      fixture.channel().writeInbound(request);
+      Object state = currentState(fixture);
+
+      CountingBody body = new CountingBody();
+      var lease = fixture.flights().acquire(new Artifact(1, Map.of(), body));
+      var outcome = new GatewayRequestProcessor.Outcome(lease.result(), lease, "late");
+      assertEquals(1, fixture.flights().trackedFlights());
+      fixture.channel().close();
+      fixture.channel().runPendingTasks();
+      assertTrue(((AtomicBoolean) objectField(state, "terminal")).get());
+      assertEquals(0, fixture.runtime().activeRequests());
+      assertEquals(1, fixture.flights().trackedFlights());
+      assertEquals(0, body.opens.get());
+      assertEquals(0, body.closes.get());
+
+      handlerMethod(
+              "attachOutcome",
+              ChannelHandlerContext.class,
+              state.getClass(),
+              GatewayRequestProcessor.Outcome.class)
+          .invoke(fixture.handler(), fixture.handlerContext(), state, outcome);
+      fixture.channel().runPendingTasks();
+
+      assertEquals(0, body.opens.get());
+      assertEquals(1, body.closes.get());
+      assertEquals(0, fixture.flights().trackedFlights());
+      assertEquals(0, fixture.runtime().activeRequests());
+      assertEquals(0, fixture.quota().files());
+      lease.close();
+      assertEquals(1, body.closes.get());
+    }
+  }
+
+  @Test
+  void lateOutcomeRetainsOwnershipUntilPendingTimeoutResponseEnds() throws Exception {
+    ControlledOutbound outbound = new ControlledOutbound(Mode.DEFER_CONTENT);
+    try (Fixture fixture = fixture(false, outbound)) {
+      fixture.channel().freezeTime();
+      DefaultHttpRequest request = request(HttpMethod.POST, "/late-result");
+      request.headers().set(HttpHeaderNames.CONTENT_LENGTH, "1");
+      fixture.channel().writeInbound(request);
+      Object state = currentState(fixture);
+      advancePastRequestTimeout(fixture.channel());
+      assertTrue(outbound.awaitIntercept(fixture.channel()));
+
+      CountingBody body = new CountingBody();
+      Artifact artifact = new Artifact(1, Map.of(), body);
+      var lease = fixture.flights().acquire(artifact);
+      var outcome = new GatewayRequestProcessor.Outcome(lease.result(), lease, "late");
+      handlerMethod(
+              "attachOutcome",
+              ChannelHandlerContext.class,
+              state.getClass(),
+              GatewayRequestProcessor.Outcome.class)
+          .invoke(fixture.handler(), fixture.handlerContext(), state, outcome);
+      fixture.channel().runPendingTasks();
+
+      assertSame(lease, objectField(state, "flightLease"));
+      assertEquals(0, body.opens.get());
+      assertEquals(0, body.closes.get());
+      assertEquals(1, fixture.runtime().activeRequests());
+      outbound.succeedDeferred();
+      awaitNoActiveRequests(fixture);
+      assertEquals(0, body.opens.get());
+      assertEquals(1, body.closes.get());
+      assertEquals(0, fixture.flights().trackedFlights());
+    }
+  }
+
+  @Test
+  void rejectedOutcomeDeliveryReleasesTheResultBeforeFailureDelivery() throws Exception {
+    CountingBody body = new CountingBody();
+    ArtifactStore store =
+        new ArtifactStore() {
+          @Override
+          public Optional<Artifact> get(OperationKey key) {
+            return Optional.of(new Artifact(1, Map.of("cache-control", "public"), body));
+          }
+
+          @Override
+          public void put(OperationKey key, Artifact artifact) {
+            throw new AssertionError("unexpected publication");
+          }
+        };
+    try (Fixture fixture = fixture(store, null)) {
+      DefaultHttpRequest request = request(HttpMethod.GET, "/abandoned-delivery");
+      request.headers().set(HttpHeaderNames.CONTENT_LENGTH, "0");
+      fixture.channel().writeInbound(request);
+      Object state = currentState(fixture);
+      StreamingSpool spool = (StreamingSpool) objectField(state, "spool");
+      setObjectField(state, "body", spool.finish().toCompletableFuture().get(5, TimeUnit.SECONDS));
+      setBooleanField(state, "bodyOwnershipTransferred", true);
+
+      AtomicInteger deliveries = new AtomicInteger();
+      AtomicReference<Runnable> failureDelivery = new AtomicReference<>();
+      CountDownLatch captured = new CountDownLatch(1);
+      EventExecutor rejected =
+          (EventExecutor)
+              Proxy.newProxyInstance(
+                  getClass().getClassLoader(),
+                  new Class<?>[] {EventExecutor.class},
+                  (proxy, method, arguments) -> {
+                    if (method.getName().equals("execute")) {
+                      if (deliveries.incrementAndGet() == 1) {
+                        throw new RejectedExecutionException("controlled outcome rejection");
+                      }
+                      failureDelivery.set((Runnable) arguments[0]);
+                      captured.countDown();
+                      return null;
+                    }
+                    return method.invoke(fixture.handlerContext().executor(), arguments);
+                  });
+      ChannelHandlerContext context =
+          (ChannelHandlerContext)
+              Proxy.newProxyInstance(
+                  getClass().getClassLoader(),
+                  new Class<?>[] {ChannelHandlerContext.class},
+                  (proxy, method, arguments) ->
+                      method.getName().equals("executor")
+                          ? rejected
+                          : method.invoke(fixture.handlerContext(), arguments));
+      handlerMethod("dispatch", ChannelHandlerContext.class, state.getClass())
+          .invoke(fixture.handler(), context, state);
+      assertTrue(captured.await(5, TimeUnit.SECONDS));
+      assertEquals(0, body.opens.get());
+      assertEquals(1, body.closes.get());
+      assertEquals(0, fixture.flights().trackedFlights());
+      assertEquals(0, fixture.quota().files());
+      fixture.channel().close();
+      failureDelivery.get().run();
+      assertEquals(0, fixture.runtime().activeRequests());
+      assertEquals(1, body.closes.get());
+    }
+  }
 
   @Test
   void malformedBodyFailuresCountInputAndReleaseAllRequestState() throws Exception {
@@ -420,6 +575,14 @@ class GatewayMutationRegressionTest {
   }
 
   private Fixture fixture(boolean storedArtifact, ControlledOutbound outbound) throws Exception {
+    GatewayTestFixtures.MemoryArtifactStore store = new GatewayTestFixtures.MemoryArtifactStore();
+    if (storedArtifact) {
+      store.defaultArtifact(GatewayTestFixtures.artifact(200, "ok"));
+    }
+    return fixture(store, outbound);
+  }
+
+  private Fixture fixture(ArtifactStore store, ControlledOutbound outbound) throws Exception {
     GatewayConfig config =
         GatewayTestFixtures.config(
             GatewayTestFixtures.unusedPort(),
@@ -437,10 +600,6 @@ class GatewayMutationRegressionTest {
         new BoundedOriginExecutor(
             config.globalBudget(), config.failureCooldown(), config.maxCooldownEntries());
     NettyOriginClient originClient = new NettyOriginClient(originGroup, config, metrics, quota);
-    GatewayTestFixtures.MemoryArtifactStore store = new GatewayTestFixtures.MemoryArtifactStore();
-    if (storedArtifact) {
-      store.defaultArtifact(GatewayTestFixtures.artifact(200, "ok"));
-    }
     FlightLeaseRegistry flights = new FlightLeaseRegistry(metrics);
     GatewayRequestProcessor processor =
         new GatewayRequestProcessor(
@@ -476,7 +635,8 @@ class GatewayMutationRegressionTest {
         quota,
         executor,
         originClient,
-        originGroup);
+        originGroup,
+        flights);
   }
 
   private static DefaultHttpRequest request(HttpMethod method, String target) {
@@ -585,6 +745,20 @@ class GatewayMutationRegressionTest {
     field.setBoolean(target, value);
   }
 
+  private static Object objectField(Object target, String name)
+      throws ReflectiveOperationException {
+    Field field = target.getClass().getDeclaredField(name);
+    field.setAccessible(true);
+    return field.get(target);
+  }
+
+  private static void setObjectField(Object target, String name, Object value)
+      throws ReflectiveOperationException {
+    Field field = target.getClass().getDeclaredField(name);
+    field.setAccessible(true);
+    field.set(target, value);
+  }
+
   private static boolean booleanField(Object target, String name)
       throws ReflectiveOperationException {
     Field field = target.getClass().getDeclaredField(name);
@@ -620,7 +794,8 @@ class GatewayMutationRegressionTest {
     FAIL_CONTINUE,
     DEFER_CONTINUE,
     FAIL_FINAL,
-    DEFER_FINAL
+    DEFER_FINAL,
+    DEFER_CONTENT
   }
 
   private static final class ControlledOutbound extends ChannelOutboundHandlerAdapter {
@@ -634,6 +809,12 @@ class GatewayMutationRegressionTest {
 
     @Override
     public void write(ChannelHandlerContext context, Object message, ChannelPromise promise) {
+      if (mode == Mode.DEFER_CONTENT && message instanceof LastHttpContent) {
+        ReferenceCountUtil.release(message);
+        deferred = promise;
+        intercepted = true;
+        return;
+      }
       if (message instanceof HttpResponse response && shouldIntercept(response.status().code())) {
         ReferenceCountUtil.release(message);
         intercepted = true;
@@ -651,6 +832,7 @@ class GatewayMutationRegressionTest {
       return switch (mode) {
         case FAIL_CONTINUE, DEFER_CONTINUE -> status == 100;
         case FAIL_FINAL, DEFER_FINAL -> status != 100;
+        case DEFER_CONTENT -> false;
       };
     }
 
@@ -684,6 +866,22 @@ class GatewayMutationRegressionTest {
     }
   }
 
+  private static final class CountingBody implements ArtifactBody {
+    private final AtomicInteger opens = new AtomicInteger();
+    private final AtomicInteger closes = new AtomicInteger();
+
+    @Override
+    public InputStream openStream() {
+      opens.incrementAndGet();
+      return new ByteArrayInputStream(new byte[] {1});
+    }
+
+    @Override
+    public void close() {
+      closes.incrementAndGet();
+    }
+  }
+
   private record Fixture(
       EmbeddedChannel channel,
       ControlledOutbound outbound,
@@ -694,7 +892,8 @@ class GatewayMutationRegressionTest {
       SpoolQuota quota,
       BoundedOriginExecutor executor,
       NettyOriginClient originClient,
-      EventLoopGroup originGroup)
+      EventLoopGroup originGroup,
+      FlightLeaseRegistry flights)
       implements AutoCloseable {
     @Override
     public void close() {

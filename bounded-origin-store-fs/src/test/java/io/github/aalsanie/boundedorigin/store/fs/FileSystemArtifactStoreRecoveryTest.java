@@ -172,8 +172,8 @@ class FileSystemArtifactStoreRecoveryTest {
 
     try (FileSystemArtifactStore store = new FileSystemArtifactStore(root, 500, 100)) {
       assertTrue(store.get(key("a")).isEmpty());
-      assertTrue(store.get(key("b")).isPresent());
-      assertTrue(store.get(key("c")).isPresent());
+      assertTrue(StoreTestSupport.contains(store, key("b")));
+      assertTrue(StoreTestSupport.contains(store, key("c")));
       assertEquals(1, store.stats().evictionCount());
     }
   }

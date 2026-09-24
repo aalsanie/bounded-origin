@@ -7,7 +7,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import io.github.aalsanie.boundedorigin.api.Artifact;
 import java.nio.file.Path;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -18,9 +17,10 @@ class FlightLeaseRegistryTest {
   void sharedStageDeletesTemporaryArtifactOnlyAfterCompletionAndLastLease() throws Exception {
     GatewayMetrics metrics = new GatewayMetrics();
     FlightLeaseRegistry registry = new FlightLeaseRegistry(metrics);
-    CompletableFuture<Artifact> stage = new CompletableFuture<>();
-    FlightLeaseRegistry.Lease first = registry.acquire(stage);
-    FlightLeaseRegistry.Lease second = registry.acquire(stage);
+    SharedExecutionFixture fixture = new SharedExecutionFixture();
+    var execution = fixture.join();
+    FlightLeaseRegistry.Lease first = registry.acquire(execution);
+    FlightLeaseRegistry.Lease second = registry.acquire(fixture.join());
     StreamingSpool.Result result = temporary("payload");
     TemporaryArtifactBody body = new TemporaryArtifactBody(result);
     Artifact artifact = new Artifact(7, Map.of(), body);
@@ -31,23 +31,30 @@ class FlightLeaseRegistryTest {
     first.close();
     first.close();
     assertFalse(body.deleted());
-    stage.complete(artifact);
+    fixture.produced.complete(artifact);
+    execution.result().toCompletableFuture().join();
     assertFalse(body.deleted());
     second.close();
 
     assertTrue(body.deleted());
     assertEquals(0, registry.trackedFlights());
+    fixture.close();
   }
 
   @Test
-  void completedFailureNeedsNoTemporaryCleanup() {
+  void completedFailureNeedsNoTemporaryCleanup() throws Exception {
     GatewayMetrics metrics = new GatewayMetrics();
     FlightLeaseRegistry registry = new FlightLeaseRegistry(metrics);
-    CompletableFuture<Artifact> stage = new CompletableFuture<>();
-    FlightLeaseRegistry.Lease lease = registry.acquire(stage);
-    stage.completeExceptionally(new IllegalStateException("failed"));
-    lease.close();
-    assertEquals(0, registry.trackedFlights());
+    try (SharedExecutionFixture fixture = new SharedExecutionFixture()) {
+      var execution = fixture.join();
+      FlightLeaseRegistry.Lease lease = registry.acquire(execution);
+      fixture.produced.completeExceptionally(new IllegalStateException("failed"));
+      org.junit.jupiter.api.Assertions.assertThrows(
+          java.util.concurrent.CompletionException.class,
+          () -> execution.result().toCompletableFuture().join());
+      lease.close();
+      SharedExecutionFixture.awaitUntracked(registry);
+    }
   }
 
   private StreamingSpool.Result temporary(String value) throws Exception {

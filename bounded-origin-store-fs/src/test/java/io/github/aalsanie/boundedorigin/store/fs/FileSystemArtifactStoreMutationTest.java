@@ -180,8 +180,8 @@ class FileSystemArtifactStoreMutationTest {
       store.put(key("c"), artifact(bytes(100, 3)));
 
       assertTrue(store.get(key("a")).isEmpty());
-      assertTrue(store.get(key("b")).isPresent());
-      assertTrue(store.get(key("c")).isPresent());
+      assertTrue(StoreTestSupport.contains(store, key("b")));
+      assertTrue(StoreTestSupport.contains(store, key("c")));
       assertEquals(2, store.stats().entryCount());
       assertEquals(1, store.stats().evictionCount());
       assertEquals(2, regularFiles(root.resolve("objects")).size());
@@ -195,12 +195,12 @@ class FileSystemArtifactStoreMutationTest {
     try (FileSystemArtifactStore store = new FileSystemArtifactStore(root, 500, 100)) {
       store.put(key("a"), artifact(bytes(100, 1)));
       store.put(key("b"), artifact(bytes(100, 2)));
-      InputStream pinned = store.get(key("a")).orElseThrow().body().openStream();
+      InputStream pinned = StoreTestSupport.open(store.get(key("a")).orElseThrow());
       try {
         store.put(key("c"), artifact(bytes(100, 3)));
-        assertTrue(store.get(key("a")).isPresent());
+        assertTrue(StoreTestSupport.contains(store, key("a")));
         assertTrue(store.get(key("b")).isEmpty());
-        assertTrue(store.get(key("c")).isPresent());
+        assertTrue(StoreTestSupport.contains(store, key("c")));
       } finally {
         pinned.close();
       }
@@ -354,7 +354,7 @@ class FileSystemArtifactStoreMutationTest {
     Path root = tempDirectory.resolve("lock");
     FileSystemArtifactStore store = new FileSystemArtifactStore(root, 10_000, 100);
     store.put(key("x"), artifact(bytes(8, 1)));
-    InputStream reader = store.get(key("x")).orElseThrow().body().openStream();
+    InputStream reader = StoreTestSupport.open(store.get(key("x")).orElseThrow());
     assertThrows(IOException.class, () -> new FileSystemArtifactStore(root, 10_000, 100));
     store.close();
     assertThrows(IOException.class, () -> store.get(key("x")));
@@ -362,7 +362,7 @@ class FileSystemArtifactStoreMutationTest {
     reader.close();
 
     try (FileSystemArtifactStore reopened = new FileSystemArtifactStore(root, 10_000, 100)) {
-      assertTrue(reopened.get(key("x")).isPresent());
+      assertTrue(StoreTestSupport.contains(reopened, key("x")));
     }
   }
 

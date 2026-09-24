@@ -94,6 +94,8 @@ class DiscardedArtifactTest {
                 failure(stage).failure());
         default -> throw new AssertionError(outcome);
       }
+      stage.close();
+      assertEquals(1, closes.get());
     } finally {
       executor.close();
     }

@@ -8,7 +8,6 @@ import io.github.aalsanie.boundedorigin.api.Materializer;
 import io.github.aalsanie.boundedorigin.api.OperationKey;
 import io.github.aalsanie.boundedorigin.api.OriginDecision;
 import io.github.aalsanie.boundedorigin.api.OriginPolicy;
-import java.io.IOException;
 import java.time.Duration;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -18,8 +17,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.LongSupplier;
@@ -87,8 +84,7 @@ public final class BoundedOriginExecutor implements AutoCloseable {
     this.timeoutThreads = Objects.requireNonNull(timeoutThreads, "timeoutThreads");
   }
 
-  public CompletionStage<Artifact> execute(
-      OriginDecision.Selected decision, Materializer materializer) {
+  public OriginExecution execute(OriginDecision.Selected decision, Materializer materializer) {
     Objects.requireNonNull(decision, "decision");
     Objects.requireNonNull(materializer, "materializer");
 
@@ -108,7 +104,7 @@ public final class BoundedOriginExecutor implements AutoCloseable {
     String policyId = policy.id();
 
     Job startNow = null;
-    CompletionStage<Artifact> stage;
+    OriginExecution execution;
     synchronized (stateLock) {
       if (closed) {
         return failedStage(failure(OriginExecutionFailure.CLOSED));
@@ -116,7 +112,7 @@ public final class BoundedOriginExecutor implements AutoCloseable {
 
       Job existing = inFlight.get(key);
       if (existing != null) {
-        return existing.stage;
+        return existing.result.acquire(true);
       }
 
       pruneExpiredCooldownsLocked();
@@ -131,7 +127,7 @@ public final class BoundedOriginExecutor implements AutoCloseable {
         inFlight.put(key, job);
         reserveActiveLocked(job);
         startNow = job;
-        stage = job.stage;
+        execution = job.result.acquire(false);
       } else {
         OriginExecutionFailure queueFailure = queueFailureLocked(policyId, policyBudget);
         if (queueFailure != null) {
@@ -141,14 +137,14 @@ public final class BoundedOriginExecutor implements AutoCloseable {
         Job job = new Job(decision, materializer, policyBudget, timeout, maxResultBytes);
         inFlight.put(key, job);
         enqueueLocked(job);
-        stage = job.stage;
+        execution = job.result.acquire(false);
       }
     }
 
     if (startNow != null) {
       startJob(startNow);
     }
-    return stage;
+    return execution;
   }
 
   @Override
@@ -185,10 +181,10 @@ public final class BoundedOriginExecutor implements AutoCloseable {
       interrupt(job.timeoutThread);
     }
     for (Job job : queuedToFail) {
-      job.result.completeExceptionally(failure(OriginExecutionFailure.CLOSED));
+      job.result.future.completeExceptionally(failure(OriginExecutionFailure.CLOSED));
     }
     for (Job job : activeToStop) {
-      job.result.completeExceptionally(failure(OriginExecutionFailure.CLOSED));
+      job.result.future.completeExceptionally(failure(OriginExecutionFailure.CLOSED));
     }
   }
 
@@ -305,9 +301,9 @@ public final class BoundedOriginExecutor implements AutoCloseable {
       interrupt(job.timeoutThread);
       startJobs(starts);
       if (outcome.failure == null) {
-        job.result.complete(outcome.artifact);
+        job.result.future.complete(outcome.artifact);
       } else {
-        job.result.completeExceptionally(outcome.failure);
+        job.result.future.completeExceptionally(outcome.failure);
       }
       if (outcome.fatal != null) {
         throw outcome.fatal;
@@ -330,12 +326,7 @@ public final class BoundedOriginExecutor implements AutoCloseable {
   }
 
   private static void discard(Artifact artifact) {
-    try {
-      artifact.body().close();
-    } catch (IOException | RuntimeException exception) {
-      System.getLogger(BoundedOriginExecutor.class.getName())
-          .log(System.Logger.Level.WARNING, "failed to release discarded artifact", exception);
-    }
+    OriginExecution.discard(artifact);
   }
 
   private void watchTimeout(Job job) {
@@ -347,7 +338,7 @@ public final class BoundedOriginExecutor implements AutoCloseable {
 
     if (job.termination.compareAndSet(Termination.NONE, Termination.TIMEOUT)) {
       interrupt(job.workerThread);
-      job.result.completeExceptionally(failure(OriginExecutionFailure.TIMEOUT));
+      job.result.future.completeExceptionally(failure(OriginExecutionFailure.TIMEOUT));
     }
   }
 
@@ -358,14 +349,16 @@ public final class BoundedOriginExecutor implements AutoCloseable {
     if (workerStarted) {
       if (internalFailure) {
         interrupt(job.workerThread);
-        job.result.completeExceptionally(failure(OriginExecutionFailure.INTERNAL_ERROR, throwable));
+        job.result.future.completeExceptionally(
+            failure(OriginExecutionFailure.INTERNAL_ERROR, throwable));
       }
       return;
     }
 
     List<Job> starts = finishActive(job, internalFailure);
     if (internalFailure) {
-      job.result.completeExceptionally(failure(OriginExecutionFailure.INTERNAL_ERROR, throwable));
+      job.result.future.completeExceptionally(
+          failure(OriginExecutionFailure.INTERNAL_ERROR, throwable));
     }
     startJobs(starts);
   }
@@ -519,8 +512,11 @@ public final class BoundedOriginExecutor implements AutoCloseable {
     return Math.min(globalBudget.maxResultBytes(), policyBudget.maxResultBytes());
   }
 
-  private static CompletionStage<Artifact> failedStage(OriginExecutionException exception) {
-    return CompletableFuture.<Artifact>failedFuture(exception).minimalCompletionStage();
+  private static OriginExecution failedStage(OriginExecutionException exception) {
+    OriginExecution.Shared result = new OriginExecution.Shared();
+    OriginExecution execution = result.acquire(false);
+    result.future.completeExceptionally(exception);
+    return execution;
   }
 
   private static OriginExecutionException failure(OriginExecutionFailure failure) {
@@ -566,8 +562,7 @@ public final class BoundedOriginExecutor implements AutoCloseable {
     private final long maxResultBytes;
     private final OperationKey key;
     private final String policyId;
-    private final CompletableFuture<Artifact> result = new CompletableFuture<>();
-    private final CompletionStage<Artifact> stage = result.minimalCompletionStage();
+    private final OriginExecution.Shared result = new OriginExecution.Shared();
     private final AtomicReference<Termination> termination =
         new AtomicReference<>(Termination.NONE);
 

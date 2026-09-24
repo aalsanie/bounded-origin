@@ -19,6 +19,10 @@ final class io.github.aalsanie.boundedorigin.store.fs.FileSystemArtifactStore$St
   public java.lang.String digest();
   public long length();
 }
+final class io.github.aalsanie.boundedorigin.store.fs.FileSystemArtifactStore$StoredBody implements io.github.aalsanie.boundedorigin.api.ArtifactBody {
+  public java.io.InputStream openStream() throws java.io.IOException;
+  public void close() throws java.io.IOException;
+}
 public final class io.github.aalsanie.boundedorigin.store.fs.FileSystemArtifactStoreStats extends java.lang.Record {
   public io.github.aalsanie.boundedorigin.store.fs.FileSystemArtifactStoreStats(long, long, long, long);
   public final java.lang.String toString();

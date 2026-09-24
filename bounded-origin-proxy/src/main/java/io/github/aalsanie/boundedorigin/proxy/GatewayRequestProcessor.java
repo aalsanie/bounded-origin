@@ -7,6 +7,7 @@ import io.github.aalsanie.boundedorigin.api.OriginDecision;
 import io.github.aalsanie.boundedorigin.api.OriginPolicy;
 import io.github.aalsanie.boundedorigin.api.RequestDescriptor;
 import io.github.aalsanie.boundedorigin.core.BoundedOriginExecutor;
+import io.github.aalsanie.boundedorigin.core.OriginExecution;
 import io.github.aalsanie.boundedorigin.core.PolicyEngine;
 import java.io.IOException;
 import java.util.Objects;
@@ -94,7 +95,7 @@ final class GatewayRequestProcessor {
     deleteRequestBody(request.body());
     if (stored.isPresent()) {
       metrics.artifactHit();
-      return immediate(stored.orElseThrow(), selected.policy().id());
+      return owned(stored.orElseThrow(), selected.policy().id());
     }
     metrics.artifactMiss();
     return immediate(
@@ -108,11 +109,11 @@ final class GatewayRequestProcessor {
     if (stored.isPresent()) {
       metrics.artifactHit();
       deleteRequestBody(request.body());
-      return immediate(stored.orElseThrow(), selected.policy().id());
+      return owned(stored.orElseThrow(), selected.policy().id());
     }
     metrics.artifactMiss();
 
-    CompletionStage<Artifact> stage =
+    OriginExecution execution =
         executor.execute(
             selected,
             materializedOperation -> {
@@ -144,7 +145,8 @@ final class GatewayRequestProcessor {
               }
             });
 
-    FlightLeaseRegistry.Lease lease = flights.acquire(stage);
+    FlightLeaseRegistry.Lease lease = flights.acquire(execution);
+    CompletionStage<Artifact> stage = execution.result();
     stage.whenComplete((artifact, failure) -> deleteRequestBody(request.body()));
     return new Outcome(stage, lease, selected.policy().id());
   }
@@ -225,6 +227,11 @@ final class GatewayRequestProcessor {
 
   private static Outcome immediate(Artifact artifact, String policyId) {
     return new Outcome(CompletableFuture.completedFuture(artifact), null, policyId);
+  }
+
+  private Outcome owned(Artifact artifact, String policyId) {
+    FlightLeaseRegistry.Lease lease = flights.acquire(artifact);
+    return new Outcome(lease.result(), lease, policyId);
   }
 
   private static void deleteTemporaryArtifact(Artifact artifact) {

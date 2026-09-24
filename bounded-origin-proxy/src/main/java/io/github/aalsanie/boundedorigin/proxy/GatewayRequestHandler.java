@@ -403,7 +403,12 @@ final class GatewayRequestHandler extends ChannelInboundHandlerAdapter {
                       withActualContentLength(state.originHeaders, state.body.length());
                   GatewayRequestProcessor.Outcome outcome =
                       processor.process(new GatewayRequest(state.validated, headers, state.body));
-                  context.executor().execute(() -> attachOutcome(context, state, outcome));
+                  try {
+                    context.executor().execute(() -> attachOutcome(context, state, outcome));
+                  } catch (RuntimeException | Error failure) {
+                    closeLease(outcome.flightLease());
+                    throw failure;
+                  }
                 } catch (Throwable throwable) {
                   context.executor().execute(() -> processingFailed(context, state, throwable));
                 }
@@ -489,10 +494,13 @@ final class GatewayRequestHandler extends ChannelInboundHandlerAdapter {
   }
 
   private void writeArtifact(ChannelHandlerContext context, RequestState state, Artifact artifact) {
-    if (state.terminal.get()) {
+    if (state.terminal.get() || state.responseStarted) {
       return;
     }
     state.responseStarted = true;
+    // The writer owns the result even if the client disappears before it opens the body.
+    FlightLeaseRegistry.Lease writerLease = state.flightLease;
+    state.flightLease = null;
     try {
       responseWriter.write(
           context.channel(),
@@ -500,8 +508,12 @@ final class GatewayRequestHandler extends ChannelInboundHandlerAdapter {
           state.keepAlive,
           runtime.draining(),
           artifact,
-          failure -> responseCompleted(context, state, artifact.statusCode(), failure));
-    } catch (RuntimeException exception) {
+          failure -> {
+            closeLease(writerLease);
+            responseCompleted(context, state, artifact.statusCode(), failure);
+          });
+    } catch (RuntimeException | Error exception) {
+      closeLease(writerLease);
       responseFinished(context, state, 500, exception);
     }
   }

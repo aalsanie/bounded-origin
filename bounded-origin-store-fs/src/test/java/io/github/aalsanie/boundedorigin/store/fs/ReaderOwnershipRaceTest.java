@@ -39,7 +39,7 @@ class ReaderOwnershipRaceTest {
                 () -> {
                   try {
                     assertTrue(removing.await(5, TimeUnit.SECONDS));
-                    opened.set(store.get(key("pinned")).orElseThrow().body().openStream());
+                    opened.set(StoreTestSupport.open(store.get(key("pinned")).orElseThrow()));
                   } catch (Throwable exception) {
                     failure.set(exception);
                   } finally {
@@ -64,7 +64,7 @@ class ReaderOwnershipRaceTest {
                 }));
     try {
       store.put(key("pinned"), artifact(bytes(100, 1)));
-      try (InputStream first = store.get(key("pinned")).orElseThrow().body().openStream()) {
+      try (InputStream first = StoreTestSupport.open(store.get(key("pinned")).orElseThrow())) {
         assertEquals(1, first.read());
         opener.start();
       }
@@ -76,7 +76,7 @@ class ReaderOwnershipRaceTest {
         for (int index = 0; index < 8; index++) {
           store.put(key("pressure-" + index), artifact(bytes(100, index + 2)));
         }
-        assertTrue(store.get(key("pinned")).isPresent());
+        assertTrue(StoreTestSupport.contains(store, key("pinned")));
         assertArrayEquals(bytes(100, 1), second.readAllBytes());
       }
       assertEquals(0, ((AtomicInteger) field("totalOpenReaders").get(store)).get());
