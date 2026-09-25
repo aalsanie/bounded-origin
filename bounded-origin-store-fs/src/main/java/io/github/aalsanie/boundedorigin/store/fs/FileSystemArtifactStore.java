@@ -37,7 +37,14 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.stream.Stream;
 
+/**
+ * Owns a private store directory. All owners of one directory in a JVM must use the same defining
+ * class loader, and other code must not open its lock file: closing a separate descriptor can
+ * release the owner's OS lock on some platforms.
+ */
 public final class FileSystemArtifactStore implements ArtifactStore, AutoCloseable {
+  private static final Object OWNERS_LOCK = new Object();
+  private static final Set<Path> OWNERS = ConcurrentHashMap.newKeySet();
   private static final int BUFFER_SIZE = 32 * 1024;
   private static final long PROCESS_LOCK_RETRY_NANOS = 1_000_000_000L;
   private static final long PROCESS_LOCK_RETRY_SLEEP_MILLIS = 10L;
@@ -81,6 +88,7 @@ public final class FileSystemArtifactStore implements ArtifactStore, AutoCloseab
 
   private FileChannel lockChannel;
   private FileLock processLock;
+  private Path ownedDirectory;
   private volatile boolean closed;
   private boolean resourcesReleased;
   private long storedBytes;
@@ -223,8 +231,16 @@ public final class FileSystemArtifactStore implements ArtifactStore, AutoCloseab
   }
 
   private void acquireProcessLock() throws IOException {
+    Path directory = root.toRealPath();
+    reserveDirectory(directory);
+    ownedDirectory = directory;
     Path lockFile = root.resolve(".lock");
-    lockChannel = FileChannel.open(lockFile, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+    lockChannel =
+        FileChannel.open(
+            lockFile,
+            StandardOpenOption.CREATE,
+            StandardOpenOption.WRITE,
+            LinkOption.NOFOLLOW_LINKS);
     long deadline = System.nanoTime() + PROCESS_LOCK_RETRY_NANOS;
     while (true) {
       try {
@@ -244,6 +260,18 @@ public final class FileSystemArtifactStore implements ArtifactStore, AutoCloseab
         Thread.currentThread().interrupt();
         throw new IOException("interrupted while waiting for artifact store lock", exception);
       }
+    }
+  }
+
+  private static void reserveDirectory(Path directory) throws IOException {
+    synchronized (OWNERS_LOCK) {
+      for (Path owned : OWNERS) {
+        // Bind mounts can name the same directory with different real paths.
+        if (Files.isSameFile(owned, directory)) {
+          throw new IOException("artifact store is already open in this process");
+        }
+      }
+      OWNERS.add(directory);
     }
   }
 
@@ -877,6 +905,7 @@ public final class FileSystemArtifactStore implements ArtifactStore, AutoCloseab
         return;
       }
       IOException failure = null;
+      boolean channelClosed = lockChannel == null;
       if (processLock != null) {
         try {
           processLock.release();
@@ -887,6 +916,7 @@ public final class FileSystemArtifactStore implements ArtifactStore, AutoCloseab
       if (lockChannel != null) {
         try {
           lockChannel.close();
+          channelClosed = true;
         } catch (IOException exception) {
           if (failure == null) {
             failure = exception;
@@ -894,6 +924,10 @@ public final class FileSystemArtifactStore implements ArtifactStore, AutoCloseab
             failure.addSuppressed(exception);
           }
         }
+      }
+      if (channelClosed && ownedDirectory != null) {
+        OWNERS.remove(ownedDirectory);
+        ownedDirectory = null;
       }
       resourcesReleased = true;
       if (failure != null) {
