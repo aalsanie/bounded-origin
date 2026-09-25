@@ -37,6 +37,9 @@ jobs:
         with:
           cache-provider: basic
 
+      - name: Benchmark evidence tooling
+        run: python -m unittest discover -s bounded-origin-benchmarks/scripts -p 'test_*.py'
+
       - name: Check
         run: ./gradlew clean check --init-script .github/spotbugs-reports.init.gradle --stacktrace
         if: runner.os != 'Windows'
