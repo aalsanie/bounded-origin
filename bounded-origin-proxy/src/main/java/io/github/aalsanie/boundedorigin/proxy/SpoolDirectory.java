@@ -23,9 +23,7 @@ final class SpoolDirectory implements AutoCloseable {
     Files.createDirectories(directory);
     this.directory = directory.toRealPath();
     // Closing a second descriptor can release a JVM's existing OS lock on some systems.
-    if (!OWNERS.add(this.directory)) {
-      throw new IOException("temporary spool directory is already in use");
-    }
+    reserveDirectory(this.directory);
     FileChannel opened = null;
     boolean acquired = false;
     try {
@@ -43,14 +41,23 @@ final class SpoolDirectory implements AutoCloseable {
       acquired = true;
     } finally {
       if (!acquired) {
-        try {
-          if (opened != null) {
-            opened.close();
-          }
-        } finally {
-          OWNERS.remove(this.directory);
+        if (opened != null) {
+          opened.close();
+        }
+        OWNERS.remove(this.directory);
+      }
+    }
+  }
+
+  private static void reserveDirectory(Path directory) throws IOException {
+    synchronized (OWNERS) {
+      for (Path owned : OWNERS) {
+        // Bind mounts can name the same directory with different real paths.
+        if (Files.isSameFile(owned, directory)) {
+          throw new IOException("temporary spool directory is already in use");
         }
       }
+      OWNERS.add(directory);
     }
   }
 

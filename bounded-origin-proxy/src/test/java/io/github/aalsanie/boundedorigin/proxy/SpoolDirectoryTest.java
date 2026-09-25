@@ -8,8 +8,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.lang.reflect.InvocationTargetException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -44,6 +46,48 @@ class SpoolDirectoryTest {
       assertFalse(Files.exists(request));
       assertThrows(IOException.class, () -> new SpoolDirectory(directory));
       assertEquals("keep", Files.readString(unrelated));
+    }
+  }
+
+  @Test
+  void directoryClaimUsesFilesystemIdentityForDistinctPathNames()
+      throws IOException, ReflectiveOperationException {
+    Path root = directory.resolve("identity");
+    var owner = new SpoolDirectory(root);
+    try (owner) {
+      Path alias = root.toRealPath().resolve(".");
+      assertTrue(Files.isSameFile(root, alias));
+      assertFalse(root.toRealPath().equals(alias));
+      var claim = SpoolDirectory.class.getDeclaredMethod("reserveDirectory", Path.class);
+      claim.setAccessible(true);
+      var owners = SpoolDirectory.class.getDeclaredField("OWNERS");
+      owners.setAccessible(true);
+      try {
+        // Test the identity operation independently of constructor path normalization.
+        var failure =
+            assertThrows(InvocationTargetException.class, () -> claim.invoke(null, alias));
+        assertTrue(failure.getCause() instanceof IOException);
+      } finally {
+        ((Set<?>) owners.get(null)).remove(alias);
+      }
+    }
+  }
+
+  @Test
+  void separateDirectoriesRemainIndependentAcrossReplacementAndOldClose() throws IOException {
+    Path firstPath = directory.resolve("first");
+    Path secondPath = directory.resolve("second");
+    var first = new SpoolDirectory(firstPath);
+    var second = new SpoolDirectory(secondPath);
+    try (first;
+        second) {
+      first.close();
+      var replacement = new SpoolDirectory(firstPath);
+      try (replacement) {
+        first.close();
+        assertThrows(IOException.class, () -> new SpoolDirectory(firstPath));
+        assertThrows(IOException.class, () -> new SpoolDirectory(secondPath));
+      }
     }
   }
 
