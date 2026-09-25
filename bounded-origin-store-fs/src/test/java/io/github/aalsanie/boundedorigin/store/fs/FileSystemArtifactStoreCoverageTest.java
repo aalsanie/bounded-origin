@@ -284,6 +284,10 @@ class FileSystemArtifactStoreCoverageTest {
             0);
     StoreEntryCodec.write(path, exhausted, FileSystemArtifactStoreCoverageTest::openTruncated);
     assertThrows(IOException.class, () -> new FileSystemArtifactStore(root, 10_000, 100));
+    StoreEntryCodec.write(path, entry, FileSystemArtifactStoreCoverageTest::openTruncated);
+    try (FileSystemArtifactStore reopened = new FileSystemArtifactStore(root, 10_000, 100)) {
+      assertTrue(StoreTestSupport.contains(reopened, key("existing")));
+    }
   }
 
   @Test

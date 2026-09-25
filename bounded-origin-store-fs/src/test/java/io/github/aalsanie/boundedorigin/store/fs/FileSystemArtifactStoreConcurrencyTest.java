@@ -159,11 +159,16 @@ class FileSystemArtifactStoreConcurrencyTest {
                   }
                 });
 
-    assertTrue(entered.await(5, TimeUnit.SECONDS));
-    store.close();
-    assertThrows(IOException.class, () -> new FileSystemArtifactStore(root, 10_000, 1_000));
-    release.countDown();
-    writer.join();
+    try {
+      assertTrue(entered.await(5, TimeUnit.SECONDS));
+      store.close();
+      assertThrows(IOException.class, () -> new FileSystemArtifactStore(root, 10_000, 1_000));
+      DirectoryOwnershipProcessTest.assertChildAcquisition(root, false);
+    } finally {
+      release.countDown();
+      writer.join();
+      store.close();
+    }
 
     assertTrue(writerFailure.get() instanceof IOException);
     try (FileSystemArtifactStore reopened = new FileSystemArtifactStore(root, 10_000, 1_000)) {

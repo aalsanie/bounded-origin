@@ -19,9 +19,13 @@ import java.util.HashMap;
 import java.util.HexFormat;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.TreeMap;
+import java.util.concurrent.ConcurrentHashMap;
 
 final class OriginWorkRegistry implements AutoCloseable {
+  private static final Object OWNERS_LOCK = new Object();
+  private static final Set<Path> OWNERS = ConcurrentHashMap.newKeySet();
   private static final int MAGIC = 0x424f5731;
   private static final int DIGEST_BYTES = 32;
   private static final int HEADER_BYTES = 40;
@@ -33,6 +37,7 @@ final class OriginWorkRegistry implements AutoCloseable {
   private final Map<String, Entry> outstanding = new HashMap<>();
   private final byte[] originIdentity;
   private FileChannel channel;
+  private Path ownedDirectory;
   private boolean started;
   private boolean closed;
   private boolean failed;
@@ -60,6 +65,10 @@ final class OriginWorkRegistry implements AutoCloseable {
     Path file = directory.resolve("ownership.bin");
     boolean created = false;
     try {
+      Path canonical = directory.toRealPath();
+      // Reject before opening: closing a duplicate descriptor can release the live owner's OS lock.
+      reserveDirectory(canonical);
+      ownedDirectory = canonical;
       try {
         channel =
             FileChannel.open(
@@ -93,6 +102,18 @@ final class OriginWorkRegistry implements AutoCloseable {
     } catch (IOException | RuntimeException | Error exception) {
       close();
       throw exception;
+    }
+  }
+
+  private static void reserveDirectory(Path directory) throws IOException {
+    synchronized (OWNERS_LOCK) {
+      for (Path owned : OWNERS) {
+        // Bind mounts can name the same directory with different real paths.
+        if (Files.isSameFile(owned, directory)) {
+          throw new IOException("origin ownership directory is already in use");
+        }
+      }
+      OWNERS.add(directory);
     }
   }
 
@@ -166,7 +187,12 @@ final class OriginWorkRegistry implements AutoCloseable {
         channel.close();
       } catch (IOException exception) {
         StructuredLog.failure(0, "origin_ownership_close_failure", exception);
+        return;
       }
+    }
+    if (ownedDirectory != null) {
+      OWNERS.remove(ownedDirectory);
+      ownedDirectory = null;
     }
   }
 
