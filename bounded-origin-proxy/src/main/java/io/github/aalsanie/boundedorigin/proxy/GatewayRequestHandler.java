@@ -366,7 +366,8 @@ final class GatewayRequestHandler extends ChannelInboundHandlerAdapter {
         .spool
         .finish()
         .whenComplete(
-            (body, failure) ->
+            (body, failure) -> {
+              try {
                 context
                     .executor()
                     .execute(
@@ -389,7 +390,14 @@ final class GatewayRequestHandler extends ChannelInboundHandlerAdapter {
                           state.bodyOwnershipTransferred = true;
                           requestRead(context);
                           dispatch(context, state);
-                        }));
+                        });
+              } catch (RuntimeException | Error rejected) {
+                if (body != null) {
+                  deleteBody(body);
+                }
+                throw rejected;
+              }
+            });
   }
 
   private void dispatch(ChannelHandlerContext context, RequestState state) {

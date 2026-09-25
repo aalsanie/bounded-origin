@@ -267,6 +267,9 @@ public final class io.github.aalsanie.boundedorigin.proxy.RepresentationContract
 }
 final class io.github.aalsanie.boundedorigin.proxy.ResponseArtifacts {
 }
+final class io.github.aalsanie.boundedorigin.proxy.SpoolDirectory implements java.lang.AutoCloseable {
+  public synchronized void close();
+}
 final class io.github.aalsanie.boundedorigin.proxy.SpoolQuota {
 }
 final class io.github.aalsanie.boundedorigin.proxy.SpoolQuota$Reservation implements java.lang.AutoCloseable {
@@ -278,6 +281,9 @@ final class io.github.aalsanie.boundedorigin.proxy.StreamingSpool implements jav
   public synchronized void close();
 }
 final class io.github.aalsanie.boundedorigin.proxy.StreamingSpool$BodyLimitExceededException extends java.lang.RuntimeException {
+}
+interface io.github.aalsanie.boundedorigin.proxy.StreamingSpool$FileDeleter {
+  public abstract void delete(java.nio.file.Path) throws java.io.IOException;
 }
 final class io.github.aalsanie.boundedorigin.proxy.StreamingSpool$Result implements java.lang.AutoCloseable {
   public void close();

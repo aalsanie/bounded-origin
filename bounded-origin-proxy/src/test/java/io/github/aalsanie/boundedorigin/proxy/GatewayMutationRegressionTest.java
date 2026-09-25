@@ -55,6 +55,49 @@ class GatewayMutationRegressionTest {
   @TempDir Path temporaryDirectory;
 
   @Test
+  void rejectedFinishedBodyDeliveryReleasesItsTransferredSpool() throws Exception {
+    try (Fixture fixture = fixture(false, null)) {
+      fixture.channel().freezeTime();
+      DefaultHttpRequest request = request(HttpMethod.GET, "/rejected-body-delivery");
+      request.headers().set(HttpHeaderNames.CONTENT_LENGTH, "0");
+      fixture.channel().writeInbound(request);
+      Object state = currentState(fixture);
+      AtomicInteger rejectedDeliveries = new AtomicInteger();
+      EventExecutor rejected =
+          (EventExecutor)
+              Proxy.newProxyInstance(
+                  getClass().getClassLoader(),
+                  new Class<?>[] {EventExecutor.class},
+                  (proxy, method, arguments) -> {
+                    if (method.getName().equals("execute")) {
+                      fixture.channel().close();
+                      rejectedDeliveries.incrementAndGet();
+                      throw new RejectedExecutionException(
+                          "event loop terminated before body delivery");
+                    }
+                    return method.invoke(fixture.handlerContext().executor(), arguments);
+                  });
+      ChannelHandlerContext context =
+          (ChannelHandlerContext)
+              Proxy.newProxyInstance(
+                  getClass().getClassLoader(),
+                  new Class<?>[] {ChannelHandlerContext.class},
+                  (proxy, method, arguments) ->
+                      method.getName().equals("executor")
+                          ? rejected
+                          : method.invoke(fixture.handlerContext(), arguments));
+      handlerMethod("finishRequestBody", ChannelHandlerContext.class, state.getClass())
+          .invoke(fixture.handler(), context, state);
+      fixture.channel().runPendingTasks();
+      assertEquals(1, rejectedDeliveries.get());
+      assertTrue(((AtomicBoolean) objectField(state, "terminal")).get());
+      assertEquals(0, fixture.runtime().activeRequests());
+      assertEquals(0, fixture.quota().files());
+      assertEquals(0, fixture.flights().trackedFlights());
+    }
+  }
+
+  @Test
   void outcomeAttachedAfterTerminationReleasesItsUnopenedResult() throws Exception {
     try (Fixture fixture = fixture(false, null)) {
       fixture.channel().freezeTime();
