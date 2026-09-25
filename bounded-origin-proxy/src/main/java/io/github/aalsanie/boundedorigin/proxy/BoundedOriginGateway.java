@@ -27,6 +27,11 @@ import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.LockSupport;
 
+/**
+ * Owns private runtime directories. All gateways sharing a directory in one JVM must use the same
+ * defining class loader; other code must not open their ownership files, since closing a separate
+ * descriptor can release a live owner's OS lock on some platforms.
+ */
 public final class BoundedOriginGateway implements AutoCloseable {
   private static final long DRAIN_POLL_NANOS = TimeUnit.MILLISECONDS.toNanos(10);
 
