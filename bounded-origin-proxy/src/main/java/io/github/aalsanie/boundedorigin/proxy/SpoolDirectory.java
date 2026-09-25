@@ -11,6 +11,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Pattern;
 
 final class SpoolDirectory implements AutoCloseable {
+  private static final Object OWNERS_LOCK = new Object();
   private static final Set<Path> OWNERS = ConcurrentHashMap.newKeySet();
   private static final Pattern SPOOL_NAME =
       Pattern.compile("(?:client-request-|origin-response-).*\\.tmp");
@@ -50,7 +51,7 @@ final class SpoolDirectory implements AutoCloseable {
   }
 
   private static void reserveDirectory(Path directory) throws IOException {
-    synchronized (OWNERS) {
+    synchronized (OWNERS_LOCK) {
       for (Path owned : OWNERS) {
         // Bind mounts can name the same directory with different real paths.
         if (Files.isSameFile(owned, directory)) {
