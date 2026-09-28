@@ -16,6 +16,7 @@ import time
 
 from microbench import REPOSITORY, digest, git, write_json
 from system_invariants import Episode, prepare
+from system_provenance import verify_dependencies
 from system_support import (await_value, evidence_hashes, journal_summary, load, process_sample,
                             require, summarize_requests, write_rows)
 
@@ -261,6 +262,7 @@ def main(argv=None):
                         require(hashes.setdefault(identity, body) == body, "baseline/treatment representations differ")
         require(git("rev-parse", "HEAD") == metadata["head"] and git("status", "--porcelain") == metadata["status"],
                 "source state changed during campaign")
+        verify_dependencies(metadata["dependencies"])
         for name, expected in metadata["harness"].items():
             require(digest(Path(__file__).parent / name) == expected, "harness changed during campaign")
         for name, expected in metadata["source_hashes"].items():

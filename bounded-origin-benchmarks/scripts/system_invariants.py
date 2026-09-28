@@ -13,6 +13,7 @@ import sys
 import time
 
 from microbench import REPOSITORY, digest, environment, git, write_json
+from system_provenance import capture_filesystems, dependency_locks, verify_dependencies
 from system_support import (Gateway, Origin, await_value, configuration, control, evidence_hashes,
                             free_ports, journal_summary, request, require, runtime_environment, summarize_requests, write_rows)
 
@@ -30,11 +31,18 @@ class Episode:
         self.args = args
         self.listen, self.admin = free_ports()
         self.config = self.directory / "gateway.yaml"
+        self.locations = {"evidence": self.directory}
+        if not direct:
+            for name in ["store", "spool", "ownership"]:
+                location = self.directory / name
+                location.mkdir()
+                self.locations[name] = location
         write_json(self.directory / "parameters.json", {"strategy": strategy, "global_active": active,
                    "global_queued": queued, "policy_active": policy_active, "policy_queued": policy_queued,
                    "failure": failure, "direct_origin": direct, "held": held,
                    "cpu_iterations": args.iterations, "body_bytes": args.body_bytes})
         try:
+            self.capture_filesystems()
             self.origin = Origin(args.java, args.libraries, self.directory, args.iterations, args.body_bytes, held,
                                  getattr(args, "origin_cpu", None))
             with self.config.open("x", encoding="utf-8", newline="\n") as stream:
@@ -86,8 +94,13 @@ class Episode:
         self.gateway.close(crash)
         self.gateway = None
         self.sequence += 1
+        self.capture_filesystems()
         self.gateway = Gateway(self.args.launcher, self.config, self.directory, self.admin, self.sequence,
                                java=self.args.java, cpu=getattr(self.args, "gateway_cpu", None))
+
+    def capture_filesystems(self):
+        capture_filesystems(self.directory / f"filesystems-{self.sequence}.json", self.locations,
+                            required=getattr(self.args, "kind", None) == "system-publication")
 
     def raw(self, target):
         channel = socket.create_connection(("127.0.0.1", self.listen), timeout=3)
@@ -271,6 +284,8 @@ def prepare(args):
                 "limitations": ["Barrier latency is not performance evidence", "Windows gateway stop is forced process-tree termination",
                                 "work outstanding includes the explicit pre-computation barrier; it does not claim CPU use while held"]}
     write_json(args.output / "environment.json", metadata)
+    metadata["dependencies"] = dependency_locks()
+    write_json(args.output / "dependencies.json", metadata["dependencies"])
     # Save uncommitted authored sources too: a SHA and dirty-status flag alone do not identify development code.
     sources = {str(path.relative_to(REPOSITORY)): path.read_text(encoding="utf-8")
                for root in [REPOSITORY / "bounded-origin-benchmarks/src", REPOSITORY / "bounded-origin-benchmarks/scripts"]
@@ -284,6 +299,7 @@ def prepare(args):
     with (args.output / "build.log").open("xb") as log:
         result = subprocess.run(build, cwd=REPOSITORY, stdout=log, stderr=subprocess.STDOUT, check=False)
     require(result.returncode == 0, "benchmark/package build failed; raw log retained")
+    verify_dependencies(metadata["dependencies"])
     libraries = REPOSITORY / "bounded-origin-benchmarks/build/benchmark/lib"
     launcher_name = "bounded-origin.bat" if os.name == "nt" else "bounded-origin"
     launchers = list((REPOSITORY / "bounded-origin-cli/build/packaged-distribution-test").glob(f"*/bin/{launcher_name}"))
@@ -300,6 +316,10 @@ def prepare(args):
     artifacts = list(libraries.glob("*.jar")) + list((REPOSITORY / "bounded-origin-cli/build/distributions").glob(extension))
     write_json(args.output / "artifacts.json", {str(path.relative_to(REPOSITORY)): digest(path) for path in artifacts if path.is_file()})
     write_json(args.output / "installed-hashes.json", evidence_hashes(installed))
+    capture_filesystems(args.output / "filesystems.json",
+                        {"repository": REPOSITORY, "benchmark": REPOSITORY / "bounded-origin-benchmarks",
+                         "evidence": args.output, "benchmark_runtime": args.libraries, "cli_runtime": args.launcher.parent.parent},
+                        required=metadata["kind"] == "system-publication")
     return metadata
 
 
@@ -317,6 +337,7 @@ def main(argv=None):
     try:
         run_controls(args)
         require(git("rev-parse", "HEAD") == metadata["head"], "source commit changed during controls")
+        verify_dependencies(metadata["dependencies"])
         write_json(args.output / "completed.json", {"kind": "invariant-control", "cases": len(list(args.output.glob("*/verified.json"))),
                    "hashes": evidence_hashes(args.output)})
     except BaseException as error:
