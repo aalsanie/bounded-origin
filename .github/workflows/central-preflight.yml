@@ -1,0 +1,137 @@
+name: Central Release Preflight
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: central-release-preflight
+  cancel-in-progress: false
+
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    environment: release
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Require main
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = "refs/heads/main"
+          git fetch origin main --no-tags
+          test "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)"
+
+      - name: Set up Java
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
+        with:
+          cache-provider: basic
+
+      - name: Load release identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./gradlew writeReleaseIdentity --stacktrace
+          cat build/release/identity.env >> "$GITHUB_ENV"
+
+      - name: Require release credentials
+        shell: bash
+        env:
+          MAVEN_GPG_PRIVATE_KEY: ${{ secrets.MAVEN_GPG_PRIVATE_KEY }}
+          MAVEN_GPG_PASSPHRASE: ${{ secrets.MAVEN_GPG_PASSPHRASE }}
+          CENTRAL_TOKEN_USERNAME: ${{ secrets.CENTRAL_TOKEN_USERNAME }}
+          CENTRAL_TOKEN_PASSWORD: ${{ secrets.CENTRAL_TOKEN_PASSWORD }}
+        run: |
+          set -euo pipefail
+          test -n "$MAVEN_GPG_PRIVATE_KEY"
+          test -n "$MAVEN_GPG_PASSPHRASE"
+          test -n "$CENTRAL_TOKEN_USERNAME"
+          test -n "$CENTRAL_TOKEN_PASSWORD"
+
+      - name: Build signed Central bundle
+        env:
+          ORG_GRADLE_PROJECT_signingKey: ${{ secrets.MAVEN_GPG_PRIVATE_KEY }}
+          ORG_GRADLE_PROJECT_signingPassword: ${{ secrets.MAVEN_GPG_PASSPHRASE }}
+        run: ./gradlew centralBundle --stacktrace
+
+      - name: Verify signatures
+        shell: bash
+        env:
+          MAVEN_GPG_PRIVATE_KEY: ${{ secrets.MAVEN_GPG_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          export GNUPGHOME="$RUNNER_TEMP/bounded-origin-preflight-gpg"
+          install -d -m 700 "$GNUPGHOME"
+          printf '%s\n' "$MAVEN_GPG_PRIVATE_KEY" | gpg --batch --import
+
+          signature_count=0
+          while IFS= read -r -d '' signature; do
+            gpg --batch --verify "$signature" "${signature%.asc}"
+            signature_count=$((signature_count + 1))
+          done < <(find build/central-staging -type f -name '*.asc' -print0)
+          test "$signature_count" -eq 16
+
+      - name: Prepare Central authorization
+        shell: bash
+        env:
+          CENTRAL_TOKEN_USERNAME: ${{ secrets.CENTRAL_TOKEN_USERNAME }}
+          CENTRAL_TOKEN_PASSWORD: ${{ secrets.CENTRAL_TOKEN_PASSWORD }}
+        run: |
+          set -euo pipefail
+          encoded="$(printf '%s:%s' "$CENTRAL_TOKEN_USERNAME" "$CENTRAL_TOKEN_PASSWORD" | base64 | tr -d '\n')"
+          authorization="Bearer $encoded"
+          echo "::add-mask::$encoded"
+          echo "::add-mask::$authorization"
+          echo "CENTRAL_AUTHORIZATION=$authorization" >> "$GITHUB_ENV"
+
+      - name: Upload, validate, consume and drop
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          public_count="$(scripts/central-portal.sh public-count "$RELEASE_VERSION")"
+          if [[ "$public_count" != "0" ]]; then
+            echo "0.1.0 is already visible on Maven Central; preflight must run before publication." >&2
+            exit 1
+          fi
+
+          deployment_id="$(
+            scripts/central-portal.sh upload \
+              "build/distributions/$RELEASE_ARTIFACT_BASE-central-bundle.zip" \
+              "$RELEASE_ARTIFACT_BASE-preflight-$GITHUB_RUN_ID"
+          )"
+
+          validated=0
+          cleanup() {
+            if [[ "$validated" == "1" ]]; then
+              scripts/central-portal.sh drop "$deployment_id" || true
+            fi
+          }
+          trap cleanup EXIT
+
+          scripts/central-portal.sh wait-state "$deployment_id" VALIDATED >/dev/null
+          validated=1
+
+          export BOUNDED_ORIGIN_REPOSITORY_AUTHORIZATION="$CENTRAL_AUTHORIZATION"
+          GRADLE_USER_HOME="$RUNNER_TEMP/preflight-consumer-gradle" \
+            ./gradlew --no-daemon -p release-tests/consumer clean run \
+              -PboundedOriginRepository="https://central.sonatype.com/api/v1/publisher/deployment/$deployment_id/download/" \
+              -PboundedOriginVersion="$RELEASE_VERSION" \
+              --refresh-dependencies --stacktrace
+
+          scripts/central-portal.sh drop "$deployment_id"
+          validated=0
+          trap - EXIT
