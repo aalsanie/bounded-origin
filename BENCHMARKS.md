@@ -400,8 +400,9 @@ python bounded-origin-benchmarks/scripts/summarize_results.py \
   --output build/reproduced-results
 ```
 
-This produces `system.csv`, `micro.csv`, `tables.md` and `provenance.json`. The
-`tables.md` content is the marked generated section above. Provenance identifies
+This produces `system.csv`, `micro.csv`, `tables.md`, `readme-results.md` and
+`provenance.json`. `tables.md` is the marked generated section above;
+`readme-results.md` supplies the README's measured comparison. Provenance identifies
 the source SHA, raw input hashes and summarizer hash. CSVs can be compared directly
 with the committed files. Summaries retain every observed cell; table selection
 for mechanism examples is explicit in the script, not chosen by fastest result.

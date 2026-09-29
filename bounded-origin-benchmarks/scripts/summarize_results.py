@@ -200,6 +200,30 @@ def tables(system, micro, protocol):
     return "\n".join(lines)
 
 
+def readme_results(system, protocol):
+    lookup = {(row["cell"], row["mode"], row["phase"], row["metric"]): row for row in system}
+    cell = next(cell for cell in protocol["cells"] if cell["name"] == "same-64")
+    lines = ["<!-- generated-readme-results:start -->",
+             f"For {cell['count']} requests naming one operation at concurrency {cell['concurrency']}, "
+             f"across {protocol['measured_repetitions']} measured repetitions,",
+             f"both gateway strategies used active capacity {cell['active']} and queue capacity {cell['queued']}:", "",
+             "| Path | Origin executions, mean [min, max] | Maximum actual origin concurrency |",
+             "|---|---:|---:|"]
+    for mode, label in (("direct", "Direct origin"), ("bounded", "`BOUNDED_COMPUTE`"),
+                        ("materialize", "`MATERIALIZE`")):
+        starts = lookup[cell["name"], mode, "cold", "origin_executions"]
+        peak = lookup[cell["name"], mode, "cold", "origin_peak"]["max"]
+        lines.append(f"| {label} | {starts['mean']:g} [{starts['min']}, {starts['max']}] | {peak} |")
+    direct, bounded = [lookup["same-1", mode, "cold", "latency_p99_ms"]["median"]
+                       for mode in ("direct", "bounded")]
+    lines += ["", "There is a latency cost. In the separate sequential-request comparison,",
+              f"the median of per-trial p99 latencies was **{bounded:.1f} ms** through `BOUNDED_COMPUTE`",
+              f"versus **{direct:.1f} ms** directly. These are measurements of the complete paths,",
+              "not an attribution of overhead to any one component.", "",
+              "<!-- generated-readme-results:end -->", ""]
+    return "\n".join(lines)
+
+
 def write_csv(path, rows):
     with path.open("x", encoding="utf-8", newline="") as stream:
         writer = csv.DictWriter(stream, fieldnames=list(rows[0]), lineterminator="\n")
@@ -230,6 +254,7 @@ def main():
         write_csv(args.output / "system.csv", system)
         write_csv(args.output / "micro.csv", micro)
         (args.output / "tables.md").write_text(tables(system, micro, protocol), encoding="utf-8", newline="\n")
+        (args.output / "readme-results.md").write_text(readme_results(system, protocol), encoding="utf-8", newline="\n")
         metadata = {"head": evidence.json("system/environment.json")["head"],
                     "system_trials_sha256": raw_hash, "micro_raw_sha256": micro_hashes,
                     "archive_files_verified": verified_files, "system_groups": len(groups),
