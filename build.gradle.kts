@@ -4,16 +4,21 @@ import com.github.spotbugs.snom.Effort
 import com.github.spotbugs.snom.SpotBugsExtension
 import info.solidsoft.gradle.pitest.PitestPluginExtension
 import java.io.File
+import java.io.InputStream
 import java.math.BigDecimal
 import java.security.MessageDigest
+import java.util.zip.ZipFile
+import javax.xml.parsers.DocumentBuilderFactory
 import org.gradle.api.GradleException
 import org.gradle.api.artifacts.dsl.LockMode
 import org.gradle.api.plugins.JavaPluginExtension
 import org.gradle.api.publish.PublishingExtension
 import org.gradle.api.publish.maven.MavenPublication
+import org.gradle.api.publish.maven.tasks.GenerateMavenPom
 import org.gradle.api.publish.tasks.GenerateModuleMetadata
 import org.gradle.api.tasks.bundling.AbstractArchiveTask
 import org.gradle.api.tasks.bundling.Jar
+import org.gradle.api.tasks.bundling.Zip
 import org.gradle.api.tasks.compile.JavaCompile
 import org.gradle.api.tasks.testing.Test
 import org.gradle.api.tasks.PathSensitivity
@@ -22,7 +27,9 @@ import org.gradle.jvm.toolchain.JavaLanguageVersion
 import org.gradle.testing.jacoco.plugins.JacocoPluginExtension
 import org.gradle.testing.jacoco.tasks.JacocoCoverageVerification
 import org.gradle.testing.jacoco.tasks.JacocoReport
+import org.gradle.plugins.signing.Sign
 import org.gradle.plugins.signing.SigningExtension
+import org.w3c.dom.Element
 
 plugins {
     base
@@ -169,17 +176,200 @@ fun publicApiSnapshot(
     return header + body.trimEnd() + "\n"
 }
 
-fun sha256(file: File): String {
-    val digest = MessageDigest.getInstance("SHA-256")
-    file.inputStream().use { input ->
-        val buffer = ByteArray(8192)
-        while (true) {
-            val count = input.read(buffer)
-            if (count < 0) break
-            digest.update(buffer, 0, count)
-        }
+fun digestHex(input: InputStream, algorithm: String): String {
+    val digest = MessageDigest.getInstance(algorithm)
+    val buffer = ByteArray(8192)
+    while (true) {
+        val count = input.read(buffer)
+        if (count < 0) break
+        digest.update(buffer, 0, count)
     }
     return digest.digest().joinToString("") { "%02x".format(it.toInt() and 0xff) }
+}
+
+fun digestHex(file: File, algorithm: String): String =
+    file.inputStream().use { digestHex(it, algorithm) }
+
+fun sha256(file: File): String = digestHex(file, "SHA-256")
+
+fun parseXml(file: File): Element {
+    val factory = DocumentBuilderFactory.newInstance()
+    factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true)
+    factory.setFeature("http://xml.org/sax/features/external-general-entities", false)
+    factory.setFeature("http://xml.org/sax/features/external-parameter-entities", false)
+    factory.isExpandEntityReferences = false
+    factory.isXIncludeAware = false
+    return factory.newDocumentBuilder().parse(file).documentElement
+}
+
+fun directChildren(parent: Element, name: String): List<Element> =
+    (0 until parent.childNodes.length)
+        .mapNotNull { parent.childNodes.item(it) as? Element }
+        .filter { it.tagName == name }
+
+fun directChild(parent: Element, name: String): Element? =
+    directChildren(parent, name).singleOrNull()
+
+fun requiredChildText(parent: Element, name: String, context: String): String =
+    directChild(parent, name)
+        ?.textContent
+        ?.trim()
+        ?.takeIf(String::isNotEmpty)
+        ?: throw GradleException("Missing $name in $context")
+
+fun validateMavenPom(
+    file: File,
+    module: String,
+    version: String,
+    publicationName: String,
+    publicationDescription: String,
+    apacheLicensed: Boolean,
+    publishedModules: Set<String>,
+) {
+    if (!file.isFile || file.length() == 0L) {
+        throw GradleException("Missing generated POM for $module: $file")
+    }
+
+    val root = parseXml(file)
+    val context = file.path
+    if (requiredChildText(root, "modelVersion", context) != "4.0.0") {
+        throw GradleException("Unexpected Maven model version in $context")
+    }
+    if (requiredChildText(root, "groupId", context) != "io.github.aalsanie") {
+        throw GradleException("Unexpected groupId in $context")
+    }
+    if (requiredChildText(root, "artifactId", context) != module) {
+        throw GradleException("Unexpected artifactId in $context")
+    }
+    if (requiredChildText(root, "version", context) != version) {
+        throw GradleException("Unexpected version in $context")
+    }
+    if (requiredChildText(root, "name", context) != publicationName) {
+        throw GradleException("Unexpected project name in $context")
+    }
+    if (requiredChildText(root, "description", context) != publicationDescription) {
+        throw GradleException("Unexpected project description in $context")
+    }
+    if (requiredChildText(root, "url", context) != "https://github.com/aalsanie/bounded-origin") {
+        throw GradleException("Unexpected project URL in $context")
+    }
+
+    val licenses = directChild(root, "licenses")
+        ?: throw GradleException("Missing licenses in $context")
+    val license = directChildren(licenses, "license").singleOrNull()
+        ?: throw GradleException("Expected exactly one license in $context")
+    val expectedLicenseName =
+        if (apacheLicensed) "Apache License, Version 2.0"
+        else "GNU Affero General Public License v3.0 only"
+    val expectedLicenseUrl =
+        if (apacheLicensed) "https://www.apache.org/licenses/LICENSE-2.0.txt"
+        else "https://www.gnu.org/licenses/agpl-3.0.txt"
+    if (requiredChildText(license, "name", context) != expectedLicenseName ||
+        requiredChildText(license, "url", context) != expectedLicenseUrl ||
+        requiredChildText(license, "distribution", context) != "repo"
+    ) {
+        throw GradleException("Unexpected license metadata in $context")
+    }
+
+    val developers = directChild(root, "developers")
+        ?: throw GradleException("Missing developers in $context")
+    val developer = directChildren(developers, "developer").singleOrNull()
+        ?: throw GradleException("Expected exactly one developer in $context")
+    if (requiredChildText(developer, "id", context) != "aalsanie" ||
+        requiredChildText(developer, "name", context) != "Ahmad Al-Sanie" ||
+        requiredChildText(developer, "url", context) != "https://github.com/aalsanie"
+    ) {
+        throw GradleException("Unexpected developer metadata in $context")
+    }
+
+    val scm = directChild(root, "scm")
+        ?: throw GradleException("Missing SCM metadata in $context")
+    if (requiredChildText(scm, "connection", context) !=
+            "scm:git:https://github.com/aalsanie/bounded-origin.git" ||
+        requiredChildText(scm, "developerConnection", context) !=
+            "scm:git:ssh://git@github.com/aalsanie/bounded-origin.git" ||
+        requiredChildText(scm, "url", context) != "https://github.com/aalsanie/bounded-origin"
+    ) {
+        throw GradleException("Unexpected SCM metadata in $context")
+    }
+
+    directChild(root, "dependencies")
+        ?.let { dependencies ->
+            directChildren(dependencies, "dependency").forEach { dependency ->
+                val dependencyGroup = requiredChildText(dependency, "groupId", context)
+                val dependencyArtifact = requiredChildText(dependency, "artifactId", context)
+                val dependencyVersion = requiredChildText(dependency, "version", context)
+                val lowerVersion = dependencyVersion.lowercase()
+                if (dependencyVersion.contains("+") ||
+                    dependencyVersion.startsWith("[") ||
+                    dependencyVersion.startsWith("(") ||
+                    "snapshot" in lowerVersion ||
+                    lowerVersion.startsWith("latest.")
+                ) {
+                    throw GradleException(
+                        "Dynamic or snapshot dependency $dependencyGroup:$dependencyArtifact:$dependencyVersion in $context"
+                    )
+                }
+                if (dependencyGroup == "io.github.aalsanie" &&
+                    (dependencyArtifact !in publishedModules || dependencyVersion != version)
+                ) {
+                    throw GradleException(
+                        "POM exposes unpublished or mismatched project dependency " +
+                            "$dependencyGroup:$dependencyArtifact:$dependencyVersion in $context"
+                    )
+                }
+            }
+        }
+
+    if ("published-with-gradle-metadata" in file.readText(Charsets.UTF_8)) {
+        throw GradleException(
+            "POM advertises Gradle Module Metadata that is not in the Central bundle: $context"
+        )
+    }
+}
+
+fun requireArchiveEntry(
+    file: File,
+    description: String,
+    predicate: (String) -> Boolean,
+) {
+    if (!file.isFile || file.length() == 0L) {
+        throw GradleException("Missing $description archive: $file")
+    }
+    ZipFile(file).use { zip ->
+        val entries = zip.entries()
+        while (entries.hasMoreElements()) {
+            val entry = entries.nextElement()
+            if (!entry.isDirectory && predicate(entry.name)) {
+                return
+            }
+        }
+    }
+    throw GradleException("$description archive has no expected content: $file")
+}
+
+fun validatePublicationArchives(
+    mainJar: File,
+    sourcesJar: File,
+    javadocJar: File,
+) {
+    requireArchiveEntry(mainJar, "main") { it.endsWith(".class") }
+    requireArchiveEntry(sourcesJar, "sources") { it.endsWith(".java") }
+    requireArchiveEntry(javadocJar, "Javadoc") { it == "index.html" }
+
+    listOf(mainJar, sourcesJar, javadocJar).forEach { archive ->
+        requireArchiveEntry(archive, archive.name) { it == "META-INF/LICENSE" }
+    }
+}
+
+val centralStagingDirectory = layout.buildDirectory.dir("central-staging")
+
+val cleanCentralStaging = tasks.register("cleanCentralStaging") {
+    group = "release"
+    description = "Removes staged Maven Central bundle contents."
+    doLast {
+        delete(centralStagingDirectory.get().asFile)
+    }
 }
 
 configure<SpotlessExtension> {
@@ -283,9 +473,6 @@ subprojects {
                 into("META-INF")
                 rename { "LICENSE" }
             }
-            from(rootProject.layout.projectDirectory.file("LICENSING.md")) {
-                into("META-INF")
-            }
         }
 
         extensions.configure<SigningExtension> {
@@ -303,6 +490,126 @@ subprojects {
 
             setRequired(false)
             sign(publication)
+        }
+
+        val mainJar = tasks.named<Jar>("jar")
+        val sourcesJar = tasks.named<Jar>("sourcesJar")
+        val javadocJar = tasks.named<Jar>("javadocJar")
+        val generatedPom =
+            tasks.named<GenerateMavenPom>("generatePomFileForMavenJavaPublication")
+        val signPublication = tasks.named<Sign>("signMavenJavaPublication")
+
+        val verifyMavenPublication = tasks.register("verifyMavenPublication") {
+            group = "verification"
+            description = "Verifies Maven Central metadata and unsigned publication artifacts."
+            dependsOn(mainJar, sourcesJar, javadocJar, generatedPom)
+
+            doLast {
+                validatePublicationArchives(
+                    mainJar.get().archiveFile.get().asFile,
+                    sourcesJar.get().archiveFile.get().asFile,
+                    javadocJar.get().archiveFile.get().asFile,
+                )
+                validateMavenPom(
+                    generatedPom.get().destination,
+                    project.name,
+                    releaseVersion,
+                    mavenPublicationNames.getValue(project.name),
+                    mavenPublicationDescriptions.getValue(project.name),
+                    project.name in apacheLicensedPublicationModules,
+                    mavenPublicationModules,
+                )
+            }
+        }
+
+        val verifyCentralSigningCredentials = tasks.register("verifyCentralSigningCredentials") {
+            group = "release"
+            description = "Requires an ASCII-armored private OpenPGP key for Central publication."
+            doLast {
+                val signingKey = providers.gradleProperty("signingKey").orNull
+                if (signingKey.isNullOrBlank() ||
+                    !signingKey.contains("-----BEGIN PGP PRIVATE KEY BLOCK-----")
+                ) {
+                    throw GradleException(
+                        "Central bundle signing requires ORG_GRADLE_PROJECT_signingKey " +
+                            "with an ASCII-armored OpenPGP private key"
+                    )
+                }
+            }
+        }
+
+        tasks.register("stageCentralPublication") {
+            group = "release"
+            description = "Stages the signed $name publication in Maven Repository Layout."
+            dependsOn(
+                cleanCentralStaging,
+                verifyMavenPublication,
+                verifyCentralSigningCredentials,
+                signPublication,
+            )
+
+            val modulePath =
+                rootProject.group.toString().replace('.', '/') +
+                    "/$name/$releaseVersion"
+            val destinationDirectory =
+                rootProject.layout.buildDirectory.dir("central-staging/$modulePath")
+            outputs.dir(destinationDirectory)
+
+            doLast {
+                val destination = destinationDirectory.get().asFile
+                delete(destination)
+                if (!destination.mkdirs() && !destination.isDirectory) {
+                    throw GradleException("Could not create Central staging directory: $destination")
+                }
+
+                val sourceFiles =
+                    linkedMapOf(
+                        "$name-$releaseVersion.jar" to mainJar.get().archiveFile.get().asFile,
+                        "$name-$releaseVersion-sources.jar" to
+                            sourcesJar.get().archiveFile.get().asFile,
+                        "$name-$releaseVersion-javadoc.jar" to
+                            javadocJar.get().archiveFile.get().asFile,
+                        "$name-$releaseVersion.pom" to generatedPom.get().destination,
+                    )
+
+                sourceFiles.forEach { (targetName, source) ->
+                    if (!source.isFile || source.length() == 0L) {
+                        throw GradleException("Missing Central publication input: $source")
+                    }
+                    source.copyTo(File(destination, targetName), overwrite = true)
+
+                    val signature = File(source.parentFile, source.name + ".asc")
+                    if (!signature.isFile || signature.length() == 0L) {
+                        throw GradleException("Missing OpenPGP signature for $source")
+                    }
+                    signature.copyTo(
+                        File(destination, "$targetName.asc"),
+                        overwrite = true,
+                    )
+                }
+
+                val checksums =
+                    linkedMapOf(
+                        "md5" to "MD5",
+                        "sha1" to "SHA-1",
+                        "sha256" to "SHA-256",
+                        "sha512" to "SHA-512",
+                    )
+                sourceFiles.keys.forEach { targetName ->
+                    val target = File(destination, targetName)
+                    checksums.forEach { (extension, algorithm) ->
+                        File(destination, "$targetName.$extension")
+                            .writeText(
+                                digestHex(target, algorithm) + "\n",
+                                Charsets.US_ASCII,
+                            )
+                    }
+                }
+            }
+        }
+
+        tasks.named("check") {
+            dependsOn(verifyMavenPublication)
         }
     }
 
@@ -493,6 +800,216 @@ subprojects {
     tasks.named("check") {
         dependsOn("jacocoTestCoverageVerification", "jacocoTestReport", "spotlessCheck")
     }
+}
+
+val stageCentralPublications = tasks.register("stageCentralPublications") {
+    group = "release"
+    description = "Stages every signed 0.1.0 Maven publication for Central."
+    dependsOn(
+        mavenPublicationModules
+            .sorted()
+            .map { ":$it:stageCentralPublication" }
+    )
+}
+
+fun expectedCentralFiles(
+    modules: Set<String>,
+    groupId: String,
+    version: String,
+): Set<String> {
+    val groupPath = groupId.replace('.', '/')
+    val checksumExtensions = listOf("md5", "sha1", "sha256", "sha512")
+    return buildSet {
+        modules.sorted().forEach { module ->
+            val prefix = "$groupPath/$module/$version/$module-$version"
+            val primaries =
+                listOf(
+                    "$prefix.jar",
+                    "$prefix-sources.jar",
+                    "$prefix-javadoc.jar",
+                    "$prefix.pom",
+                )
+            primaries.forEach { primary ->
+                add(primary)
+                add("$primary.asc")
+                checksumExtensions.forEach { extension ->
+                    add("$primary.$extension")
+                }
+            }
+        }
+    }
+}
+
+val verifyCentralStaging = tasks.register("verifyCentralStaging") {
+    group = "verification"
+    description = "Verifies the exact signed Maven Repository Layout accepted by Central."
+    dependsOn(stageCentralPublications)
+    inputs.dir(centralStagingDirectory)
+
+    doLast {
+        val staging = centralStagingDirectory.get().asFile
+        val expected =
+            expectedCentralFiles(
+                mavenPublicationModules,
+                project.group.toString(),
+                releaseVersion,
+            )
+        val files =
+            staging
+                .walkTopDown()
+                .filter(File::isFile)
+                .toList()
+
+        val symbolicLinks =
+            files.filter { java.nio.file.Files.isSymbolicLink(it.toPath()) }
+        if (symbolicLinks.isNotEmpty()) {
+            throw GradleException(
+                "Central staging contains symbolic links: " +
+                    symbolicLinks.joinToString { it.relativeTo(staging).path }
+            )
+        }
+
+        val actual =
+            files
+                .map { it.relativeTo(staging).invariantSeparatorsPath }
+                .toSet()
+        if (actual != expected) {
+            throw GradleException(
+                "Central staging file set mismatch; " +
+                    "missing=${(expected - actual).sorted()}, " +
+                    "unexpected=${(actual - expected).sorted()}"
+            )
+        }
+
+        val checksumAlgorithms =
+            linkedMapOf(
+                "md5" to "MD5",
+                "sha1" to "SHA-1",
+                "sha256" to "SHA-256",
+                "sha512" to "SHA-512",
+            )
+        val groupPath = project.group.toString().replace('.', '/')
+
+        mavenPublicationModules.sorted().forEach { module ->
+            val directory = File(staging, "$groupPath/$module/$releaseVersion")
+            val base = "$module-$releaseVersion"
+            val primaryNames =
+                listOf(
+                    "$base.jar",
+                    "$base-sources.jar",
+                    "$base-javadoc.jar",
+                    "$base.pom",
+                )
+
+            primaryNames.forEach { primaryName ->
+                val primary = File(directory, primaryName)
+                if (primary.length() == 0L) {
+                    throw GradleException("Empty Central publication file: $primary")
+                }
+
+                val signature = File(directory, "$primaryName.asc")
+                val signatureText = signature.readText(Charsets.US_ASCII)
+                if (!signatureText.contains("-----BEGIN PGP SIGNATURE-----") ||
+                    !signatureText.contains("-----END PGP SIGNATURE-----")
+                ) {
+                    throw GradleException("Malformed armored OpenPGP signature: $signature")
+                }
+
+                checksumAlgorithms.forEach { (extension, algorithm) ->
+                    val checksumFile = File(directory, "$primaryName.$extension")
+                    val expectedChecksum = digestHex(primary, algorithm)
+                    val actualChecksum = checksumFile.readText(Charsets.US_ASCII).trim()
+                    if (actualChecksum != expectedChecksum) {
+                        throw GradleException(
+                            "Checksum mismatch for $primaryName.$extension"
+                        )
+                    }
+                }
+            }
+
+            validatePublicationArchives(
+                File(directory, "$base.jar"),
+                File(directory, "$base-sources.jar"),
+                File(directory, "$base-javadoc.jar"),
+            )
+            validateMavenPom(
+                File(directory, "$base.pom"),
+                module,
+                releaseVersion,
+                mavenPublicationNames.getValue(module),
+                mavenPublicationDescriptions.getValue(module),
+                module in apacheLicensedPublicationModules,
+                mavenPublicationModules,
+            )
+        }
+    }
+}
+
+val centralBundleZip = tasks.register<Zip>("centralBundleZip") {
+    group = "release"
+    description = "Creates the verified Maven Central upload bundle."
+    dependsOn(verifyCentralStaging)
+    archiveFileName.set("bounded-origin-$releaseVersion-central-bundle.zip")
+    destinationDirectory.set(layout.buildDirectory.dir("distributions"))
+    from(centralStagingDirectory)
+    includeEmptyDirs = false
+    isPreserveFileTimestamps = false
+    isReproducibleFileOrder = true
+}
+
+val verifyCentralBundle = tasks.register("verifyCentralBundle") {
+    group = "verification"
+    description = "Verifies the Central ZIP contains exactly the staged Maven files."
+    dependsOn(centralBundleZip)
+
+    val archive = centralBundleZip.flatMap { it.archiveFile }
+    inputs.file(archive)
+    inputs.dir(centralStagingDirectory)
+
+    doLast {
+        val staging = centralStagingDirectory.get().asFile
+        val expected =
+            expectedCentralFiles(
+                mavenPublicationModules,
+                project.group.toString(),
+                releaseVersion,
+            )
+
+        ZipFile(archive.get().asFile).use { zip ->
+            val entries = zip.entries()
+            val actual = linkedSetOf<String>()
+            while (entries.hasMoreElements()) {
+                val entry = entries.nextElement()
+                if (!entry.isDirectory) {
+                    actual += entry.name
+                }
+            }
+            if (actual != expected) {
+                throw GradleException(
+                    "Central bundle ZIP file set mismatch; " +
+                        "missing=${(expected - actual).sorted()}, " +
+                        "unexpected=${(actual - expected).sorted()}"
+                )
+            }
+
+            expected.forEach { path ->
+                val entry = zip.getEntry(path)
+                    ?: throw GradleException("Missing ZIP entry $path")
+                val archivedHash =
+                    zip.getInputStream(entry).use { digestHex(it, "SHA-256") }
+                val stagedHash = sha256(File(staging, path))
+                if (archivedHash != stagedHash) {
+                    throw GradleException("Central ZIP content differs from staging for $path")
+                }
+            }
+        }
+    }
+}
+
+tasks.register("centralBundle") {
+    group = "release"
+    description = "Builds and verifies the signed Maven Central 0.1.0 upload bundle."
+    dependsOn(verifyCentralBundle)
 }
 
 val everyCleanTask =
