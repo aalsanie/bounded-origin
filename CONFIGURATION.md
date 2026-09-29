@@ -2,7 +2,7 @@
 
 The packaged CLI accepts `validate --config PATH` or `run --config PATH`. Use
 [the tested example](examples/materialize.yaml) with the
-[packaged launchers](README.md#run-the-packaged-cli). Paths are relative to the
+[packaged launchers](README.md#try-it). Paths are relative to the
 process working directory, not the YAML file. Configuration is immutable until
 restart. Exit codes are 0 for success, 2 for configuration/input failure, 3 for
 runtime failure and 64 for incorrect command usage.
@@ -265,3 +265,24 @@ also applies to stored metadata. Public immutable errors, including eligible HTT
 
 These restrictions make the current gateway an explicit public artifact publisher,
 not a transparent proxy for arbitrary application responses.
+
+## Observability
+
+The separate admin listener exposes `/health`, `/ready` and Prometheus text at
+`/metrics`. It defaults to loopback. Keep it on an operator-controlled network;
+readiness describes gateway lifecycle, not origin health or spare compute capacity.
+
+| Metric family | Meaning |
+|---|---|
+| `bounded_origin_requests_total` | Decoded requests observed by the gateway. |
+| `bounded_origin_single_flight_joins_total`, `bounded_origin_artifact_hits_total` | Joined executions and validated artifact lookups; neither promises completed client delivery. |
+| `bounded_origin_origin_active`, `bounded_origin_origin_queue_depth`, `bounded_origin_origin_in_flight` | Local executor state. |
+| `bounded_origin_origin_work_outstanding`, `bounded_origin_origin_work_unresolved` | Durable ownership and the subset whose termination is unknown. These are not remote CPU meters. |
+| `bounded_origin_origin_executions_total` | Dispatch authorizations after durable reservation; actual remote execution must be measured at the origin. |
+| `bounded_origin_rejections_total`, `bounded_origin_origin_pool_rejections_total` | Aggregate gateway rejection indications and separate pool pressure. |
+
+Metrics also cover bytes, store/spool usage and duration sums/counts. Structured
+request logs include status and duration. Aggregate rejection counters mix causes;
+there are no built-in latency percentiles or exact producer failure-rate counters.
+Use origin instrumentation and client measurements when validating computation or
+tail latency. The benchmark harness does this independently.
