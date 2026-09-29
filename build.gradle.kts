@@ -28,7 +28,19 @@ plugins {
 }
 
 group = "io.github.aalsanie"
-version = "0.1.0-SNAPSHOT"
+
+val releaseVersion = "0.1.0"
+version = releaseVersion
+
+val mavenPublicationModules =
+    setOf(
+        "bounded-origin-api",
+        "bounded-origin-core",
+        "bounded-origin-store-fs",
+        "bounded-origin-proxy",
+    )
+val githubReleaseDistributionModules = setOf("bounded-origin-cli")
+val internalModules = setOf("bounded-origin-benchmarks", "test-infra")
 
 val coverageMinimum = BigDecimal("0.91")
 val jacocoVersion = libs.versions.jacoco.get()
@@ -530,6 +542,78 @@ val verifyNoSecrets = tasks.register("verifyNoSecrets") {
     }
 }
 
+val verifyReleasePublicationSurface = tasks.register("verifyReleasePublicationSurface") {
+    group = "verification"
+    description = "Verifies that every module has exactly one 0.1.0 release classification."
+
+    doLast {
+        val classifications =
+            listOf(
+                mavenPublicationModules,
+                githubReleaseDistributionModules,
+                internalModules,
+            )
+        val duplicateClassifications =
+            classifications
+                .flatten()
+                .groupingBy { it }
+                .eachCount()
+                .filterValues { it != 1 }
+                .keys
+        if (duplicateClassifications.isNotEmpty()) {
+            throw GradleException(
+                "Modules have multiple release classifications: " +
+                    duplicateClassifications.sorted().joinToString()
+            )
+        }
+
+        val actualModules = subprojects.map { it.name }.toSet()
+        val classifiedModules = classifications.flatten().toSet()
+        val missing = actualModules - classifiedModules
+        val unknown = classifiedModules - actualModules
+        if (missing.isNotEmpty() || unknown.isNotEmpty()) {
+            throw GradleException(
+                "Release publication surface does not match repository modules; " +
+                    "unclassified=${missing.sorted()}, unknown=${unknown.sorted()}"
+            )
+        }
+    }
+}
+
+val verifyReleaseRevision = tasks.register("verifyReleaseRevision") {
+    group = "verification"
+    description = "Verifies the source tree is the exact 0.1.0 release revision."
+
+    val changelog = layout.projectDirectory.file("CHANGELOG.md")
+    inputs.property("releaseVersion", releaseVersion)
+    inputs.file(changelog)
+
+    doLast {
+        if (rootProject.version.toString() != releaseVersion || releaseVersion.endsWith("-SNAPSHOT")) {
+            throw GradleException("Root project must be release version $releaseVersion")
+        }
+
+        val mismatchedModules =
+            subprojects
+                .filter { it.version.toString() != releaseVersion }
+                .map { "${it.name}=${it.version}" }
+        if (mismatchedModules.isNotEmpty()) {
+            throw GradleException(
+                "All modules must use release version $releaseVersion: " +
+                    mismatchedModules.joinToString()
+            )
+        }
+
+        val headings = changelog.asFile.readLines(Charsets.UTF_8).map(String::trim)
+        if ("## $releaseVersion" !in headings) {
+            throw GradleException("CHANGELOG.md must contain a $releaseVersion release heading")
+        }
+        if ("## Unreleased" in headings) {
+            throw GradleException("Release revision must not retain an Unreleased heading")
+        }
+    }
+}
+
 tasks.named("check") {
     dependsOn(
         subprojects.map { it.tasks.named("check") },
@@ -541,6 +625,8 @@ tasks.named("check") {
         verifyDependencyVerification,
         verifyNoProductionPlaceholders,
         verifyNoSecrets,
+        verifyReleasePublicationSurface,
+        verifyReleaseRevision,
         "spotlessCheck",
     )
 }
