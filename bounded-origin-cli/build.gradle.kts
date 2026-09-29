@@ -103,6 +103,10 @@ val releaseTar = tasks.named<Tar>("distTar") {
     dependsOn(generateReleaseSourceNotice)
 }
 
+tasks.named<Sync>("installDist") {
+    dependsOn(generateReleaseSourceNotice)
+}
+
 val verifyCliReleaseArchives = tasks.register("verifyCliReleaseArchives") {
     group = "verification"
     description = "Verifies the exact 0.1.0 CLI release archive names and required contents."
