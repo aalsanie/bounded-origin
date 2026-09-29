@@ -51,15 +51,18 @@ jobs:
           Name-Real: Bounded Origin CI
           Name-Email: ci@bounded-origin.invalid
           Expire-Date: 0
-          %no-protection
+          Passphrase: bounded-origin-ci-only
           %commit
           EOF
 
           gpg --batch --generate-key "$RUNNER_TEMP/bounded-origin-release-key.conf"
           export ORG_GRADLE_PROJECT_signingKey
           ORG_GRADLE_PROJECT_signingKey="$(
-            gpg --batch --armor --export-secret-keys ci@bounded-origin.invalid
+            gpg --batch --pinentry-mode loopback \
+              --passphrase bounded-origin-ci-only \
+              --armor --export-secret-keys ci@bounded-origin.invalid
           )"
+          export ORG_GRADLE_PROJECT_signingPassword=bounded-origin-ci-only
 
           ./gradlew centralBundle --stacktrace
 
