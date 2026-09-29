@@ -516,7 +516,7 @@ subprojects {
                 )
                 validateMavenPom(
                     generatedPom.get().destination,
-                    project.name,
+                    moduleName,
                     releaseVersion,
                     mavenPublicationNames.getValue(moduleName),
                     mavenPublicationDescriptions.getValue(moduleName),
