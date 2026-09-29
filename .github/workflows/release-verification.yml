@@ -11,6 +11,10 @@ on:
       - release-tests/**
       - scripts/verify-release-*.sh
       - .github/workflows/release-verification.yml
+      - .github/workflows/release.yml
+      - .github/workflows/central-preflight.yml
+      - scripts/central-portal.sh
+      - scripts/verify-release-workflow-policy.sh
 
 permissions:
   contents: read
@@ -154,3 +158,14 @@ jobs:
       - name: Verify release artifact reproducibility
         shell: bash
         run: bash scripts/verify-release-reproducible.sh
+
+  release-policy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+
+      - name: Verify tag-only release policy
+        run: bash scripts/verify-release-workflow-policy.sh
