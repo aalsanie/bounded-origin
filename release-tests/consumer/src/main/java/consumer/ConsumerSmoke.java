@@ -22,7 +22,7 @@ public final class ConsumerSmoke {
     }
 
     try (BoundedOriginExecutor ignored =
-            new BoundedOriginExecutor(budget, Duration.ZERO, 16);
+            new BoundedOriginExecutor(budget, Duration.ofMillis(1), 16);
         FileSystemArtifactStore store =
             new FileSystemArtifactStore(Files.createTempDirectory("bounded-origin-consumer"), 4096, 16)) {
       if (store.stats().entryCount() != 0) {
