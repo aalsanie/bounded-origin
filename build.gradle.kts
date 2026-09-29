@@ -42,6 +42,8 @@ plugins {
 group = "io.github.aalsanie"
 
 val releaseVersion = "0.1.0"
+val releaseTag = "v0.1.0"
+val releaseArtifactBaseName = "bounded-origin-$releaseVersion"
 version = releaseVersion
 
 val releaseGroupId = group.toString()
@@ -1236,6 +1238,17 @@ val verifyReleaseRevision = tasks.register("verifyReleaseRevision") {
     doLast {
         if (rootProject.version.toString() != releaseVersion || releaseVersion.endsWith("-SNAPSHOT")) {
             throw GradleException("Root project must be release version $releaseVersion")
+        }
+
+        if (releaseTag != "v$releaseVersion") {
+            throw GradleException(
+                "Release tag $releaseTag does not match release version $releaseVersion"
+            )
+        }
+        if (releaseArtifactBaseName != "bounded-origin-$releaseVersion") {
+            throw GradleException(
+                "Release artifact base name $releaseArtifactBaseName does not match release version $releaseVersion"
+            )
         }
 
         val mismatchedModules =
