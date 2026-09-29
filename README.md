@@ -41,6 +41,8 @@ workload, the packaged gateway, and independent origin-side work counts. It ran
 on Java 21 in a shared WSL2 Linux environment. The direct comparison uses the same
 origin, inputs and cost without the gateway or artifact reuse.
 
+![Origin executions for equivalent requests as client concurrency increases.](bounded-origin-benchmarks/results/2026-09-28/generated/origin-executions.svg)
+
 <!-- generated-readme-results:start -->
 For 256 requests naming one operation at concurrency 64, across 10 measured repetitions,
 both gateway strategies used active capacity 1 and queue capacity 0:
@@ -56,6 +58,8 @@ the median of per-trial p99 latencies was **81.5 ms** through `BOUNDED_COMPUTE`
 versus **20.4 ms** directly.
 
 <!-- generated-readme-results:end -->
+
+![Measured p99 latency for direct, bounded and materialized paths.](bounded-origin-benchmarks/results/2026-09-28/generated/latency.svg)
 
 Warm and restarted materialization required no origin recomputation. Distinct-key
 pressure stayed within capacity while rejecting excess work. Route matching and
