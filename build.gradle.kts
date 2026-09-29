@@ -22,6 +22,7 @@ import org.gradle.api.tasks.bundling.Zip
 import org.gradle.api.tasks.compile.JavaCompile
 import org.gradle.api.tasks.testing.Test
 import org.gradle.api.tasks.PathSensitivity
+import org.gradle.api.tasks.Exec
 import org.gradle.jvm.toolchain.JavaToolchainService
 import org.gradle.jvm.toolchain.JavaLanguageVersion
 import org.gradle.testing.jacoco.plugins.JacocoPluginExtension
@@ -367,6 +368,15 @@ fun validatePublicationArchives(
 }
 
 val centralStagingDirectory = layout.buildDirectory.dir("central-staging")
+val consumerStagingDirectory = layout.buildDirectory.dir("consumer-repository")
+
+val cleanConsumerStaging = tasks.register("cleanConsumerStaging") {
+    group = "release"
+    description = "Removes the isolated external-consumer Maven repository."
+    doLast {
+        delete(consumerStagingDirectory.get().asFile)
+    }
+}
 
 val cleanCentralStaging = tasks.register("cleanCentralStaging") {
     group = "release"
@@ -540,6 +550,47 @@ subprojects {
                         "Central bundle signing requires ORG_GRADLE_PROJECT_signingKey " +
                             "with an ASCII-armored OpenPGP private key"
                     )
+                }
+            }
+        }
+
+        tasks.register("stageConsumerPublication") {
+            group = "release"
+            description = "Stages the unsigned $moduleName publication for isolated consumer testing."
+            dependsOn(
+                cleanConsumerStaging,
+                verifyMavenPublication,
+            )
+
+            val modulePath =
+                releaseGroupId.replace('.', '/') +
+                    "/$moduleName/$releaseVersion"
+            val destinationDirectory =
+                rootProject.layout.buildDirectory.dir("consumer-repository/$modulePath")
+            outputs.dir(destinationDirectory)
+
+            doLast {
+                val destination = destinationDirectory.get().asFile
+                delete(destination)
+                if (!destination.mkdirs() && !destination.isDirectory) {
+                    throw GradleException("Could not create consumer staging directory: $destination")
+                }
+
+                val sourceFiles =
+                    linkedMapOf(
+                        "$moduleName-$releaseVersion.jar" to mainJar.get().archiveFile.get().asFile,
+                        "$moduleName-$releaseVersion-sources.jar" to
+                            sourcesJar.get().archiveFile.get().asFile,
+                        "$moduleName-$releaseVersion-javadoc.jar" to
+                            javadocJar.get().archiveFile.get().asFile,
+                        "$moduleName-$releaseVersion.pom" to generatedPom.get().destination,
+                    )
+
+                sourceFiles.forEach { (targetName, source) ->
+                    if (!source.isFile || source.length() == 0L) {
+                        throw GradleException("Missing consumer publication input: $source")
+                    }
+                    source.copyTo(File(destination, targetName), overwrite = true)
                 }
             }
         }
@@ -806,6 +857,49 @@ subprojects {
     tasks.named("check") {
         dependsOn("jacocoTestCoverageVerification", "jacocoTestReport", "spotlessCheck")
     }
+}
+
+val stageConsumerPublications = tasks.register("stageConsumerPublications") {
+    group = "release"
+    description = "Stages every 0.1.0 Maven publication for isolated consumer testing."
+    dependsOn(
+        mavenPublicationModules
+            .sorted()
+            .map { ":$it:stageConsumerPublication" }
+    )
+}
+
+val verifyExternalMavenConsumer = tasks.register<Exec>("verifyExternalMavenConsumer") {
+    group = "verification"
+    description = "Resolves and runs Bounded Origin from an isolated Maven consumer project."
+    dependsOn(stageConsumerPublications)
+
+    val consumerProject = layout.projectDirectory.dir("release-tests/consumer")
+    val repositoryUri = consumerStagingDirectory.map { it.asFile.toURI().toString() }
+    val wrapper =
+        layout.projectDirectory.file(
+            if (System.getProperty("os.name").startsWith("Windows")) {
+                "gradlew.bat"
+            } else {
+                "gradlew"
+            }
+        )
+
+    inputs.dir(consumerProject)
+    inputs.dir(consumerStagingDirectory)
+
+    workingDir(rootDir)
+    executable(wrapper.asFile.absolutePath)
+    args(
+        "--no-daemon",
+        "-p",
+        consumerProject.asFile.absolutePath,
+        "clean",
+        "run",
+        "-PboundedOriginRepository=${repositoryUri.get()}",
+        "-PboundedOriginVersion=$releaseVersion",
+        "--stacktrace",
+    )
 }
 
 val stageCentralPublications = tasks.register("stageCentralPublications") {
