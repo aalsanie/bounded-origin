@@ -1,0 +1,17 @@
+{
+  "head": "08c8043fb2ba6b6dc4442ce74a1eccf31f84bc05",
+  "system_trials_sha256": "744f952a361234485fe2986590d99dd5d498f682cf5c373d4fb569cc549fe08b",
+  "micro_raw_sha256": {
+    "configuration": "0a73ac59e3e877a5c7c42cce690214b9f7ac8d258e3d0df4f334cfe359ff91bd",
+    "routes": "c37758689a0802fafc80020aca1be679d983ada88c9ec9dc50bfe9e1b9876b25",
+    "overlap": "ff561a6f93c322084ff77767b5c2b7c855dc85e400f8ac9fe90fdec689e91241",
+    "keys": "0cd4b1738830e9ae46b3314b82f5c3948578ae3ccaca979d452718f18e973791",
+    "programmatic": "5d8a1c4dc1546cc029875b4a1aac96dad8fba2d951c357bb76934b2badbb2f0b"
+  },
+  "archive_files_verified": 12076,
+  "system_groups": 47,
+  "micro_cells": 215,
+  "outlier_removal": false,
+  "summary_units": "independent trial or fork mean; latency summaries are distributions of per-trial percentiles",
+  "script_sha256": "03af6d0ddfed314720d55ebedb1c16cf3bb0c4b326148f3b53cc060da97820a8"
+}

@@ -1,0 +1,47 @@
+schema: 1
+gateway:
+  listen.host: 127.0.0.1
+  listen.port: 8080
+  admin.host: 127.0.0.1
+  admin.port: 8081
+  origin.host: 127.0.0.1
+  origin.port: 9000
+  origin.completion-contract: RESPONSE_COMPLETE
+  origin.ownership-directory: ./bounded-origin-data/ownership
+  temporary.directory: ./bounded-origin-data/spool
+  http.max-request-body-bytes: 0
+  origin.max-active: 2
+  origin.max-queued: 4
+  origin.max-execution-duration: PT5S
+  origin.response-timeout: PT5S
+  origin.max-result-bytes: 65536
+  request.timeout: PT10S
+store:
+  directory: ./bounded-origin-data/artifacts
+  max-bytes: 67108864
+  max-artifact-bytes: 65536
+routes:
+  - id: hello
+    version: 1
+    precedence: 10
+    match:
+      method: GET
+      path: /hello/{name}
+      trust: UNTRUSTED
+    strategy: MATERIALIZE
+    representation: PUBLIC_IMMUTABLE
+    key:
+      path: [name]
+      query:
+        include: []
+    materializer-version: hello-v1
+    budget:
+      max-active: 2
+      max-queued: 4
+      max-execution-duration: PT5S
+      max-result-bytes: 65536
+fallback:
+  id: default-deny
+  version: 1
+  precedence: -2147483648
+  strategy: DENY
