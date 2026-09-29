@@ -8,6 +8,7 @@ import json
 import math
 from pathlib import Path
 import statistics
+from xml.sax.saxutils import escape
 import zipfile
 
 from microbench import summarize
@@ -161,8 +162,9 @@ def tables(system, micro, protocol):
     lookup = {(row["cell"], row["mode"], row["phase"], row["metric"]): row for row in system}
     order = {cell["name"]: index for index, cell in enumerate(protocol["cells"])}
     keys = sorted({key[:3] for key in lookup}, key=lambda key: (order[key[0]], ("direct", "bounded", "materialize").index(key[1]), ("cold", "warm", "restart").index(key[2])))
-    lines = ["<!-- generated-results:start -->", "### System results", "",
-             "Every row summarizes ten measured repetitions. Counts are means per repetition; origin starts also show the full range. Peak is the largest independently observed origin count. Drops were offered but never sent by the finite client. HTTP statuses remain separate from transport errors.", "",
+    lines = ["<!-- generated-results:start -->", "<details>", "<summary>System results — all workloads and outcomes</summary>", "", "### System results", "",
+             "Each row summarizes ten trials. Counts are means; origin starts also show the full range.",
+             "Origin peak is the largest independently observed active count. Client drops were never sent.", "",
              "| Cell | Mode / state | Attempted | 200 | 403 | 500 | 503 | Client drops | Origin starts, mean [min, max] | Origin peak |",
              "|---|---|---:|---:|---:|---:|---:|---:|---:|---:|"]
     for key in keys:
@@ -173,15 +175,19 @@ def tables(system, micro, protocol):
         values = [mean(metric) for metric in ("attempted", "http_200", "http_403", "http_500", "http_503", "client_drops")]
         lines.append(f"| {key[0]} | {key[1]} / {key[2]} | " + " | ".join(f"{value:.1f}" for value in values)
                      + f" | {starts['mean']:.1f} [{starts['min']}, {starts['max']}] | {lookup[*key, 'origin_peak']['max']} |")
-    lines += ["", "### CPU and latency", "",
-              "Origin CPU is whole-process CPU seconds per 1,000 attempted requests, reported as mean ± sample SD across repetitions. Latency columns are the median of per-trial percentiles in milliseconds; the p99 column retains their full range. Rejections are included. Per-status latency, CPU per successful response, throughput, queue, RSS and other counters are in the CSV.", "",
+    lines += ["", "</details>", "", "<details>", "<summary>CPU and latency — all workloads and outcomes</summary>", "", "### CPU and latency", "",
+              "Origin CPU is whole-process seconds per 1,000 attempted requests: mean ± sample SD.",
+              "Latency is the median of trial percentiles in milliseconds; p99 includes the full trial range.",
+              "Rejections are included. The CSV also retains per-status latency, CPU per successful response, throughput, queue and RSS.", "",
               "| Cell | Mode / state | Origin CPU s / 1,000 attempted | p50 ms | p99 ms [min, max] |",
               "|---|---|---:|---:|---:|"]
     for key in keys:
         cpu, p50, p99 = [lookup[*key, metric] for metric in ("origin_cpu_s_per_1000_attempted", "latency_p50_ms", "latency_p99_ms")]
         lines.append(f"| {key[0]} | {key[1]} / {key[2]} | {cpu['mean']:.4f} ± {cpu['stdev']:.4f} | {p50['median']:.3f} | {p99['median']:.3f} [{p99['min']:.3f}, {p99['max']:.3f}] |")
-    lines += ["", "### Mechanism examples", "",
-              "Time and allocation are means of ten fork means; ± is sample SD across those forks. Selected rows cover full configuration loading, last-match routing, order-independent query projection and the fixed-path comparison. The CSV and raw JSON retain every method and parameter combination, including misses, overlaps, ordered queries and all alias variants.", "",
+    lines += ["", "</details>", "", "<details>", "<summary>Mechanism costs — configuration, matching and keys</summary>", "", "### Mechanism examples", "",
+              "Time and allocation are means of ten fork means; ± is sample SD across forks.",
+              "These rows cover full configuration loading, last-match routing, order-independent query projection and the fixed-path comparison.",
+              "Every method and parameter combination, including misses, overlaps, ordered queries and aliases, remains in the CSV and raw JSON.", "",
               "| Method | Parameters | µs / operation | Bytes / operation |", "|---|---|---:|---:|"]
     allocations = {(row["benchmark"], row["params"]): row for row in micro if row["metric"] == "allocation"}
     for row in micro:
@@ -196,7 +202,7 @@ def tables(system, micro, protocol):
             allocation = allocations[row["benchmark"], row["params"]]
             label = ", ".join(f"{key}={value}" for key, value in sorted(params.items()))
             lines.append(f"| {method} | {label} | {row['mean']:.3f} ± {row['stdev']:.3f} | {allocation['mean']:.1f} |")
-    lines += ["", "<!-- generated-results:end -->", ""]
+    lines += ["", "</details>", "", "<!-- generated-results:end -->", ""]
     return "\n".join(lines)
 
 
@@ -218,10 +224,114 @@ def readme_results(system, protocol):
                        for mode in ("direct", "bounded")]
     lines += ["", "There is a latency cost. In the separate sequential-request comparison,",
               f"the median of per-trial p99 latencies was **{bounded:.1f} ms** through `BOUNDED_COMPUTE`",
-              f"versus **{direct:.1f} ms** directly. These are measurements of the complete paths,",
-              "not an attribution of overhead to any one component.", "",
+              f"versus **{direct:.1f} ms** directly.", "",
               "<!-- generated-readme-results:end -->", ""]
     return "\n".join(lines)
+
+
+def result_charts(system, protocol):
+    lookup = {(row["cell"], row["mode"], row["phase"], row["metric"]): row for row in system}
+    cells = {cell["name"]: cell for cell in protocol["cells"]}
+    modes = (("direct", "Direct origin", "#52525b"),
+             ("bounded", "BOUNDED_COMPUTE", "#1d4ed8"),
+             ("materialize", "MATERIALIZE", "#047857"))
+    names = ("same-1", "same-4", "same-16", "same-64")
+    counts = {cells[name]["count"] for name in names}
+    if len(counts) != 1 or any(cells[name]["active"] != 1 or cells[name]["queued"] != 0 for name in names):
+        raise ValueError("charts require equal request counts and active=1, queued=0")
+    count = counts.pop()
+    repetitions = protocol["measured_repetitions"]
+    for name in names:
+        for mode, _, _ in modes:
+            for metric, expected in (("attempted", count), ("http_200", count),
+                                     ("request_errors", 0), ("client_drops", 0)):
+                row = lookup[name, mode, "cold", metric]
+                if row["min"] != expected or row["max"] != expected:
+                    raise ValueError("equivalent-request charts require all requests to complete with HTTP 200")
+
+    def text(x, y, value, size=14, color="#18181b", anchor="start"):
+        return (f'<text x="{x:g}" y="{y:g}" font-size="{size}" fill="{color}" '
+                f'text-anchor="{anchor}">{escape(str(value))}</text>')
+
+    def line(x1, y1, x2, y2, color="#d4d4d8", width=1):
+        return f'<line x1="{x1:g}" y1="{y1:g}" x2="{x2:g}" y2="{y2:g}" stroke="{color}" stroke-width="{width}"/>'
+
+    def svg(title, description, height, elements):
+        return '\n'.join([
+            f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 {height}" role="img" aria-labelledby="title desc">',
+            f'<title id="title">{escape(title)}</title>', f'<desc id="desc">{escape(description)}</desc>',
+            f'<rect width="880" height="{height}" fill="#fff"/>',
+            '<g font-family="system-ui, -apple-system, Segoe UI, sans-serif">',
+            *elements, '</g>', '</svg>', ''])
+
+    work = [text(28, 34, "Origin executions as equivalent demand overlaps", 21),
+            text(28, 60, f"{count} requests per trial · {repetitions} trials · gateway active 1 / queued 0"),
+            text(28, 83, "Points: mean executions. Whiskers and labels: full trial range.", 13)]
+    max_work = max(lookup[name, mode, "cold", "origin_executions"]["max"] for name in names for mode, _, _ in modes)
+    ceiling = max(1, math.ceil(max_work / 64) * 64)
+    xs = [110 + index * 220 for index in range(len(names))]
+    y = lambda value: 372 - 228 * value / ceiling
+    for index in range(5):
+        value = index * ceiling / 4
+        work += [line(90, y(value), 800, y(value)), text(78, y(value) + 5, f"{value:g}", anchor="end")]
+    work += [text(90, 121, "Executions / trial", 13)]
+    descriptions = []
+    for mode, label, color in modes:
+        points = [(x, lookup[name, mode, "cold", "origin_executions"]) for x, name in zip(xs, names)]
+        coordinates = " ".join(f"{x:g},{y(row['mean']):g}" for x, row in points)
+        work.append(f'<polyline points="{coordinates}" fill="none" stroke="{color}" stroke-width="2.5"/>')
+        for (x, row), name in zip(points, names):
+            low, high, mean = row["min"], row["max"], row["mean"]
+            value_label = f"{mean:g}" if low == high else f"{mean:g} [{low:g}, {high:g}]"
+            work += [line(x, y(low), x, y(high), color, 2),
+                     line(x - 5, y(low), x + 5, y(low), color, 2),
+                     line(x - 5, y(high), x + 5, y(high), color, 2),
+                     f'<circle cx="{x:g}" cy="{y(mean):g}" r="4" fill="{color}"/>',
+                     text(x, y(mean) + (24 if mode == "materialize" else 23 if name == "same-1" and mode == "bounded" else -12),
+                          value_label, 14, color, "middle")]
+            descriptions.append(f"{label}, concurrency {cells[name]['concurrency']}: mean {mean:g}, range {low:g} to {high:g}.")
+    for x, name in zip(xs, names):
+        work.append(text(x, 424, cells[name]["concurrency"], anchor="middle"))
+    work.append(text(445, 452, "Client concurrency (measured settings)", anchor="middle"))
+    for index, (_, label, color) in enumerate(modes):
+        x = 50 + 275 * index
+        work += [line(x, 484, x + 23, 484, color, 3), text(x + 31, 489, label, 13)]
+    work.append(text(28, 523, "MATERIALIZE starts with the workload key absent, then reuses its published result.", 13))
+
+    latency = [text(28, 34, "Latency at sequential and concurrent demand", 21),
+               text(28, 60, f"{count} equivalent requests per trial · {repetitions} trials · all returned HTTP 200"),
+               text(28, 83, "Point: median of trial p99s. Whisker: full range of trial p99s. Linear axes start at zero.", 13)]
+    latency_descriptions = []
+    for index, name in enumerate(("same-1", "same-64")):
+        top = 126 + index * 226
+        concurrency = cells[name]["concurrency"]
+        latency.append(text(28, top, f"Concurrency {concurrency}" + (" — sequential" if concurrency == 1 else ""), 17))
+        rows = [lookup[name, mode, "cold", "latency_p99_ms"] for mode, _, _ in modes]
+        maximum = max(row["max"] for row in rows)
+        step = 10 ** math.floor(math.log10(maximum)) if maximum else 1
+        ceiling = max(1, math.ceil(maximum / step)) * step
+        x = lambda value: 230 + 335 * value / ceiling
+        for tick in range(5):
+            value = ceiling * tick / 4
+            latency += [line(x(value), top + 18, x(value), top + 138),
+                        text(x(value), top + 159, f"{value:g}", 12, anchor="middle")]
+        latency.append(text(400, top + 183, "p99 latency (ms)", 13, anchor="middle"))
+        for rank, ((_, label, color), row) in enumerate(zip(modes, rows)):
+            row_y = top + 35 + rank * 45
+            low, high, median = row["min"], row["max"], row["median"]
+            latency += [text(28, row_y + 5, label, 14, color),
+                        line(x(low), row_y, x(high), row_y, color, 2),
+                        line(x(low), row_y - 6, x(low), row_y + 6, color, 2),
+                        line(x(high), row_y - 6, x(high), row_y + 6, color, 2),
+                        f'<circle cx="{x(median):g}" cy="{row_y:g}" r="5" fill="{color}"/>',
+                        text(600, row_y + 5, f"{median:.1f} [{low:.1f}, {high:.1f}] ms", 14, color)]
+            latency_descriptions.append(f"{label}, concurrency {concurrency}: median trial p99 {median:.3f} ms, range {low:.3f} to {high:.3f} ms.")
+    latency += [text(28, 573, "Panels use different scales. MATERIALIZE includes initial production and subsequent hits.", 13),
+                text(28, 596, "These are complete request paths on the same shared host; component costs are not isolated.", 13)]
+    return {
+        "origin-executions.svg": svg("Origin executions by client concurrency", " ".join(descriptions), 546, work),
+        "latency.svg": svg("Request latency tradeoff", " ".join(latency_descriptions), 620, latency),
+    }
 
 
 def write_csv(path, rows):
@@ -255,12 +365,17 @@ def main():
         write_csv(args.output / "micro.csv", micro)
         (args.output / "tables.md").write_text(tables(system, micro, protocol), encoding="utf-8", newline="\n")
         (args.output / "readme-results.md").write_text(readme_results(system, protocol), encoding="utf-8", newline="\n")
+        charts = result_charts(system, protocol)
+        for name, content in charts.items():
+            (args.output / name).write_text(content, encoding="utf-8", newline="\n")
         metadata = {"head": evidence.json("system/environment.json")["head"],
                     "system_trials_sha256": raw_hash, "micro_raw_sha256": micro_hashes,
                     "archive_files_verified": verified_files, "system_groups": len(groups),
                     "micro_cells": len(micro) // 2, "outlier_removal": False,
                     "summary_units": "independent trial or fork mean; latency summaries are distributions of per-trial percentiles",
-                    "script_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest()}
+                    "script_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
+                    "charts_sha256": {name: hashlib.sha256(content.encode("utf-8")).hexdigest()
+                                      for name, content in charts.items()}}
         (args.output / "provenance.json").write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8", newline="\n")
         print(json.dumps(metadata, indent=2))
     finally:

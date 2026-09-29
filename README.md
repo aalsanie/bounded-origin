@@ -4,7 +4,15 @@ Bounded Origin is a Java 21 library and HTTP gateway that limits how much expens
 origin computation incoming requests can cause. You define which requests mean
 the same work, how much new work may run, and which results can be reused.
 
-[Try it](#try-it) · [Configuration](CONFIGURATION.md) · [Benchmarks](BENCHMARKS.md)
+```mermaid
+flowchart LR
+    R[Request] --> P[Policy + semantic identity]
+    P --> S[Reuse or join]
+    P --> B[Bounded admission]
+    B --> O[Origin]
+    O --> S
+    S --> D[Response]
+```
 
 ## Why it exists
 
@@ -17,44 +25,14 @@ Bounded Origin puts the budget on that work. Equivalent requests can share one
 running computation. Distinct operations compete for explicitly limited capacity.
 Completed, reusable results can be served without computing them again.
 
-The guiding invariant is: **untrusted demand must not control the rate of expensive
-origin computation.** The implemented bound is on outstanding operations. It does
-not impose a fixed operations-per-second rate or cap total CPU consumption.
+The scraper-triggered rendering described in
+[Creepy crawlies](https://people.kernel.org/monsieuricon/creepy-crawlies)
+motivated this repository's approach to controlling origin work.
 
-The project was inspired by scraper-triggered rendering described in
-[Creepy crawlies](https://people.kernel.org/monsieuricon/creepy-crawlies).
-That article explains the motivating problem; it does not evaluate or endorse
-Bounded Origin.
-
-## How it works
-
-For each request, a policy decides whether work is allowed and identifies the
-operation from its meaningful inputs. The gateway then reuses an eligible artifact,
-joins an equivalent running computation, or admits a new producer within both
-global and policy budgets. Full queues return **503 with `Retry-After`**; unmatched
-requests are denied.
-
-```mermaid
-flowchart LR
-    R[Request] --> P[Policy + semantic identity]
-    P --> S[Reuse or join]
-    P --> B[Bounded admission]
-    B --> O[Origin]
-    O --> S
-    S --> D[Response]
-```
-
-Equivalence is explicit. A route can select path captures and query parameters,
-normalize supported encoded aliases, and discard irrelevant query noise. The
-producer receives those selected inputs; ignored caller inputs cannot silently
-change a shared result. Method, host, body digest and selected representation
-headers also participate in HTTP identity.
-
-The computation budget outlives the connection. **A timeout does not prove that
-the origin stopped working.** The gateway records ownership durably before
-dispatch and retains uncertain work against capacity, including after restart.
-That avoids admitting replacement work while an earlier computation may still
-be running.
+Routes define meaningful inputs, so irrelevant query noise need not create new
+work. Global and per-policy budgets bound admission; full queues return **503 with
+`Retry-After`**, and unmatched requests are denied. Work whose completion is unknown
+keeps consuming capacity across timeouts and restarts.
 
 ## What has been measured
 
@@ -75,21 +53,16 @@ both gateway strategies used active capacity 1 and queue capacity 0:
 
 There is a latency cost. In the separate sequential-request comparison,
 the median of per-trial p99 latencies was **81.5 ms** through `BOUNDED_COMPUTE`
-versus **20.4 ms** directly. These are measurements of the complete paths,
-not an attribution of overhead to any one component.
+versus **20.4 ms** directly.
 
 <!-- generated-readme-results:end -->
 
-Warm and restarted materialization required no origin recomputation in the tested
-workload. Distinct-key pressure stayed within configured origin capacity while
-rejecting excess work. Single-flight applies to overlapping requests; successive
-`BOUNDED_COMPUTE` requests can start successive executions.
+Warm and restarted materialization required no origin recomputation. Distinct-key
+pressure stayed within capacity while rejecting excess work. Route matching and
+semantic-key costs grew with configuration complexity.
 
-Route matching and semantic-key costs grew with configuration complexity. At high
-offered load, the finite client also dropped requests before sending them. These
-results support the mechanism within the measured conditions; they do not establish
-performance for an application workload. Full distributions, failures, raw data,
-environment details and reproduction commands are in [BENCHMARKS.md](BENCHMARKS.md).
+See [Benchmarks](BENCHMARKS.md) for charts, complete results, limitations and
+reproduction commands, including overload runs with unsent client drops.
 
 ## Try it
 
@@ -162,18 +135,12 @@ authenticated, conditional and range responses are outside this sharing model.
 The origin must explicitly affirm public sharing; see the
 [representation contract](CONFIGURATION.md#public-representation-contract).
 
-The computation guarantee also requires that **all work caused by an operation,
-including delegated work, finishes before its complete response**. All work being
-bounded must pass through the same gateway ownership state. Preserve that state
-across restarts, keep its directory exclusive, and use a filesystem with reliable
-locking and atomic moves. A fresh ownership directory requires that no old work
-is still running. Independent gateways with separate state do not share one budget.
-
-Unknown termination can consume capacity indefinitely. Restarting or deleting
-ownership files cannot establish that old work has stopped. Read the
-[ownership and recovery contract](CONFIGURATION.md#computation-ownership) before
-deployment. Neither configuration validation nor a closed socket can verify an
-arbitrary origin's behavior.
+The origin must guarantee that **all work caused by an operation, including
+delegated work, finishes before its complete response**. The gateway preserves
+uncertain work against its budget indefinitely. Deployments must preserve exclusive
+ownership state across restarts and route all bounded work through that domain.
+Read the [ownership and recovery contract](CONFIGURATION.md#computation-ownership)
+before deployment, including its filesystem and recovery requirements.
 
 Bounded Origin complements authentication, TLS termination, ingress rate limits
 and CDN/WAF controls. It does not identify bots, eliminate incoming traffic or

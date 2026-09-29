@@ -3,9 +3,10 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
+import xml.etree.ElementTree as ET
 import zipfile
 
-from summarize_results import Evidence, distribution, system_groups
+from summarize_results import Evidence, distribution, result_charts, system_groups
 
 
 class ResultsTest(unittest.TestCase):
@@ -60,6 +61,52 @@ class ResultsTest(unittest.TestCase):
                             evidence.verify_archive()
                 finally:
                     evidence.close()
+
+    @staticmethod
+    def chart_data():
+        protocol = {"measured_repetitions": 10, "cells": [
+            {"name": f"same-{concurrency}", "concurrency": concurrency, "count": 257,
+             "active": 1, "queued": 0} for concurrency in (1, 4, 16, 64)]}
+        rows = []
+        for cell in protocol["cells"]:
+            for mode in ("direct", "bounded", "materialize"):
+                for metric, values in (
+                    ("attempted", [257] * 10), ("http_200", [257] * 10),
+                    ("client_drops", [0] * 10), ("request_errors", [0] * 10),
+                    ("origin_executions", [1] * 9 + [101]),
+                    ("latency_p99_ms", [2] * 9 + [102]),
+                ):
+                    rows.append({"cell": cell["name"], "mode": mode, "phase": "cold",
+                                 "metric": metric, **distribution(values)})
+        return rows, protocol
+
+    def test_charts_use_measured_counts_and_trial_percentiles_with_outliers(self):
+        rows, protocol = self.chart_data()
+        charts = result_charts(rows, protocol)
+        work = ET.fromstring(charts["origin-executions.svg"])
+        latency = ET.fromstring(charts["latency.svg"])
+        work_text, latency_text = " ".join(work.itertext()), " ".join(latency.itertext())
+        self.assertIn("257 requests per trial", work_text)
+        self.assertIn("11 [1, 101]", work_text)
+        self.assertIn("2.0 [2.0, 102.0] ms", latency_text)
+        self.assertNotIn("12.0 [2.0, 102.0]", latency_text)
+        self.assertIn("Linear axes start at zero", latency_text)
+        self.assertIn("Panels use different scales", latency_text)
+        self.assertEqual(12, len(work.findall(".//{*}circle")))
+        self.assertEqual(6, len(latency.findall(".//{*}circle")))
+
+    def test_charts_reject_changed_workload_or_incomplete_delivery(self):
+        for change in ("count", "budget", "drop", "error", "status"):
+            rows, protocol = self.chart_data()
+            if change == "count":
+                protocol["cells"][0]["count"] = 258
+            elif change == "budget":
+                protocol["cells"][0]["queued"] = 1
+            else:
+                metric = {"drop": "client_drops", "error": "request_errors", "status": "http_200"}[change]
+                next(row for row in rows if row["metric"] == metric)["max"] += 1
+            with self.subTest(change=change), self.assertRaises(ValueError):
+                result_charts(rows, protocol)
 
 
 if __name__ == "__main__":

@@ -1,0 +1,72 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 620" role="img" aria-labelledby="title desc">
+<title id="title">Request latency tradeoff</title>
+<desc id="desc">Direct origin, concurrency 1: median trial p99 20.386 ms, range 18.771 to 25.143 ms. BOUNDED_COMPUTE, concurrency 1: median trial p99 81.510 ms, range 80.515 to 90.678 ms. MATERIALIZE, concurrency 1: median trial p99 15.222 ms, range 14.725 to 18.270 ms. Direct origin, concurrency 64: median trial p99 1283.476 ms, range 1204.219 to 1545.132 ms. BOUNDED_COMPUTE, concurrency 64: median trial p99 356.067 ms, range 291.077 to 407.995 ms. MATERIALIZE, concurrency 64: median trial p99 389.069 ms, range 333.877 to 438.759 ms.</desc>
+<rect width="880" height="620" fill="#fff"/>
+<g font-family="system-ui, -apple-system, Segoe UI, sans-serif">
+<text x="28" y="34" font-size="21" fill="#18181b" text-anchor="start">Latency at sequential and concurrent demand</text>
+<text x="28" y="60" font-size="14" fill="#18181b" text-anchor="start">256 equivalent requests per trial · 10 trials · all returned HTTP 200</text>
+<text x="28" y="83" font-size="13" fill="#18181b" text-anchor="start">Point: median of trial p99s. Whisker: full range of trial p99s. Linear axes start at zero.</text>
+<text x="28" y="126" font-size="17" fill="#18181b" text-anchor="start">Concurrency 1 — sequential</text>
+<line x1="230" y1="144" x2="230" y2="264" stroke="#d4d4d8" stroke-width="1"/>
+<text x="230" y="285" font-size="12" fill="#18181b" text-anchor="middle">0</text>
+<line x1="313.75" y1="144" x2="313.75" y2="264" stroke="#d4d4d8" stroke-width="1"/>
+<text x="313.75" y="285" font-size="12" fill="#18181b" text-anchor="middle">25</text>
+<line x1="397.5" y1="144" x2="397.5" y2="264" stroke="#d4d4d8" stroke-width="1"/>
+<text x="397.5" y="285" font-size="12" fill="#18181b" text-anchor="middle">50</text>
+<line x1="481.25" y1="144" x2="481.25" y2="264" stroke="#d4d4d8" stroke-width="1"/>
+<text x="481.25" y="285" font-size="12" fill="#18181b" text-anchor="middle">75</text>
+<line x1="565" y1="144" x2="565" y2="264" stroke="#d4d4d8" stroke-width="1"/>
+<text x="565" y="285" font-size="12" fill="#18181b" text-anchor="middle">100</text>
+<text x="400" y="309" font-size="13" fill="#18181b" text-anchor="middle">p99 latency (ms)</text>
+<text x="28" y="166" font-size="14" fill="#52525b" text-anchor="start">Direct origin</text>
+<line x1="292.882" y1="161" x2="314.229" y2="161" stroke="#52525b" stroke-width="2"/>
+<line x1="292.882" y1="155" x2="292.882" y2="167" stroke="#52525b" stroke-width="2"/>
+<line x1="314.229" y1="155" x2="314.229" y2="167" stroke="#52525b" stroke-width="2"/>
+<circle cx="298.293" cy="161" r="5" fill="#52525b"/>
+<text x="600" y="166" font-size="14" fill="#52525b" text-anchor="start">20.4 [18.8, 25.1] ms</text>
+<text x="28" y="211" font-size="14" fill="#1d4ed8" text-anchor="start">BOUNDED_COMPUTE</text>
+<line x1="499.724" y1="206" x2="533.772" y2="206" stroke="#1d4ed8" stroke-width="2"/>
+<line x1="499.724" y1="200" x2="499.724" y2="212" stroke="#1d4ed8" stroke-width="2"/>
+<line x1="533.772" y1="200" x2="533.772" y2="212" stroke="#1d4ed8" stroke-width="2"/>
+<circle cx="503.058" cy="206" r="5" fill="#1d4ed8"/>
+<text x="600" y="211" font-size="14" fill="#1d4ed8" text-anchor="start">81.5 [80.5, 90.7] ms</text>
+<text x="28" y="256" font-size="14" fill="#047857" text-anchor="start">MATERIALIZE</text>
+<line x1="279.329" y1="251" x2="291.203" y2="251" stroke="#047857" stroke-width="2"/>
+<line x1="279.329" y1="245" x2="279.329" y2="257" stroke="#047857" stroke-width="2"/>
+<line x1="291.203" y1="245" x2="291.203" y2="257" stroke="#047857" stroke-width="2"/>
+<circle cx="280.992" cy="251" r="5" fill="#047857"/>
+<text x="600" y="256" font-size="14" fill="#047857" text-anchor="start">15.2 [14.7, 18.3] ms</text>
+<text x="28" y="352" font-size="17" fill="#18181b" text-anchor="start">Concurrency 64</text>
+<line x1="230" y1="370" x2="230" y2="490" stroke="#d4d4d8" stroke-width="1"/>
+<text x="230" y="511" font-size="12" fill="#18181b" text-anchor="middle">0</text>
+<line x1="313.75" y1="370" x2="313.75" y2="490" stroke="#d4d4d8" stroke-width="1"/>
+<text x="313.75" y="511" font-size="12" fill="#18181b" text-anchor="middle">500</text>
+<line x1="397.5" y1="370" x2="397.5" y2="490" stroke="#d4d4d8" stroke-width="1"/>
+<text x="397.5" y="511" font-size="12" fill="#18181b" text-anchor="middle">1000</text>
+<line x1="481.25" y1="370" x2="481.25" y2="490" stroke="#d4d4d8" stroke-width="1"/>
+<text x="481.25" y="511" font-size="12" fill="#18181b" text-anchor="middle">1500</text>
+<line x1="565" y1="370" x2="565" y2="490" stroke="#d4d4d8" stroke-width="1"/>
+<text x="565" y="511" font-size="12" fill="#18181b" text-anchor="middle">2000</text>
+<text x="400" y="535" font-size="13" fill="#18181b" text-anchor="middle">p99 latency (ms)</text>
+<text x="28" y="392" font-size="14" fill="#52525b" text-anchor="start">Direct origin</text>
+<line x1="431.707" y1="387" x2="488.81" y2="387" stroke="#52525b" stroke-width="2"/>
+<line x1="431.707" y1="381" x2="431.707" y2="393" stroke="#52525b" stroke-width="2"/>
+<line x1="488.81" y1="381" x2="488.81" y2="393" stroke="#52525b" stroke-width="2"/>
+<circle cx="444.982" cy="387" r="5" fill="#52525b"/>
+<text x="600" y="392" font-size="14" fill="#52525b" text-anchor="start">1283.5 [1204.2, 1545.1] ms</text>
+<text x="28" y="437" font-size="14" fill="#1d4ed8" text-anchor="start">BOUNDED_COMPUTE</text>
+<line x1="278.755" y1="432" x2="298.339" y2="432" stroke="#1d4ed8" stroke-width="2"/>
+<line x1="278.755" y1="426" x2="278.755" y2="438" stroke="#1d4ed8" stroke-width="2"/>
+<line x1="298.339" y1="426" x2="298.339" y2="438" stroke="#1d4ed8" stroke-width="2"/>
+<circle cx="289.641" cy="432" r="5" fill="#1d4ed8"/>
+<text x="600" y="437" font-size="14" fill="#1d4ed8" text-anchor="start">356.1 [291.1, 408.0] ms</text>
+<text x="28" y="482" font-size="14" fill="#047857" text-anchor="start">MATERIALIZE</text>
+<line x1="285.924" y1="477" x2="303.492" y2="477" stroke="#047857" stroke-width="2"/>
+<line x1="285.924" y1="471" x2="285.924" y2="483" stroke="#047857" stroke-width="2"/>
+<line x1="303.492" y1="471" x2="303.492" y2="483" stroke="#047857" stroke-width="2"/>
+<circle cx="295.169" cy="477" r="5" fill="#047857"/>
+<text x="600" y="482" font-size="14" fill="#047857" text-anchor="start">389.1 [333.9, 438.8] ms</text>
+<text x="28" y="573" font-size="13" fill="#18181b" text-anchor="start">Panels use different scales. MATERIALIZE includes initial production and subsequent hits.</text>
+<text x="28" y="596" font-size="13" fill="#18181b" text-anchor="start">These are complete request paths on the same shared host; component costs are not isolated.</text>
+</g>
+</svg>

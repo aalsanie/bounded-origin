@@ -1,197 +1,83 @@
-# Measured control and mechanism costs
+# Benchmarks
 
-This campaign asks whether increasing untrusted demand can exceed the configured
-computation bound under the supported origin contract, and what the generic
-machinery costs. The origin is **synthetic**. These results do not measure Git/cgit,
-identify bots, or estimate savings for the incident that motivated the project.
+This campaign measures how Bounded Origin controls expensive origin work under
+increasing demand, and what its routing, configuration and request processing cost.
+It combines the packaged gateway with an independently instrumented **synthetic
+CPU workload**, plus JMH microbenchmarks of the generic machinery.
 
-Measurements used clean merged main
-[`08c8043fb2ba6b6dc4442ce74a1eccf31f84bc05`](https://github.com/aalsanie/bounded-origin/commit/08c8043fb2ba6b6dc4442ce74a1eccf31f84bc05),
-tree `f6d4ee42e2257abc5ab609d010c2f88714e83a75`, after its
-[complete CI run passed](https://github.com/aalsanie/bounded-origin/actions/runs/36397376357).
-The campaign completed on 28 September 2026. Documentation and table generation
-were added afterward; no runtime optimization was made from these measurements.
+Measured against commit
+[`08c8043fb2ba6b6dc4442ce74a1eccf31f84bc05`](https://github.com/aalsanie/bounded-origin/commit/08c8043fb2ba6b6dc4442ce74a1eccf31f84bc05)
+on 28 September 2026. Full source, environment and artifact provenance is preserved
+in the [evidence package](#evidence-and-reproduction).
 
-## Hypotheses established before measurement
+## Experiment at a glance
 
-| Hypothesis | Observation that would falsify it |
+```mermaid
+flowchart LR
+    C[Python load client] -->|direct comparison| O[Java synthetic origin]
+    C -->|gateway comparison| B[Packaged Bounded Origin CLI]
+    B --> O
+    O --> J[Independent work journal]
+```
+
+The paths run in separate trials against the same origin implementation. Inputs,
+CPU cost, payload, seed, CPU allocation and client connection policy are held
+constant. The direct path executes every received request. The gateway can share
+running work or reuse a materialized result.
+
+## Findings
+
+Actual origin work stayed within the configured capacity in every measured
+gateway phase. Successful response bodies agreed across comparison paths. All
+31 adversarial controls passed, including work that continued after disconnect
+and gateway restart.
+
+### Equivalent requests share work
+
+![Origin executions for 256 equivalent requests at client concurrency 1, 4, 16 and 64, with means and full trial ranges.](bounded-origin-benchmarks/results/2026-09-28/generated/origin-executions.svg)
+
+More overlap allowed `BOUNDED_COMPUTE` to share more work. Sequential requests
+started successive executions. `MATERIALIZE` computed once, then reused the
+published result. The gateway used one active slot and no queue in these trials.
+
+### Latency depends on the workload
+
+![Median and full range of trial p99 latencies for direct, bounded and materialized paths at concurrency 1 and 64.](bounded-origin-benchmarks/results/2026-09-28/generated/latency.svg)
+
+Sequential bounded requests were slower than direct requests. Under concurrent
+equivalent demand, gateway paths performed fewer origin executions and had lower
+measured tail latency. Materialized trials include initial production and later hits.
+The two panels use different scales to keep both comparisons readable.
+
+### Other outcomes
+
+| Workload | Observation |
 |---|---|
-| Overlapping callers of one semantic operation share one producer. | More than one independently observed origin start while that controlled flight is held. Sequential `BOUNDED_COMPUTE` requests after completion are allowed to recompute. |
-| Unique-key demand respects global/policy active and queue bounds. | Origin active work exceeds its corresponding capacity, or controlled queue occupancy exceeds its limit. Sampled gauges alone cannot establish exact queue maxima. |
-| Completed immutable materialization suppresses equivalent recomputation, including restart. | Unexpected origin starts or incorrect response bytes in the warm/restarted phase. |
-| Unselected query noise and supported aliases preserve configured identity. | Different producer inputs/keys or duplicate overlapping computation. Different selected values and missing/bare/empty parameters are controls that must remain distinct. |
-| Denied/unmatched requests cause no origin work. | Any independent origin start for those gateway requests. |
-| Deadline/transport uncertainty retains expensive-work ownership. | With capacity one, distinct-key arrivals produce more than one actual unfinished computation while prior work continues, including through restart. Availability loss is a cost, not a reason to release unknown work. |
+| Distinct-key pressure | Origin work stayed within capacity; excess work received 503. At high offered load, the finite client also dropped requests before sending them. |
+| Materialized reuse | Warm and restarted phases required no workload recomputation. |
+| Query noise and supported aliases | Equivalent requests retained the same computation identity. |
+| Denied paths | Gateway requests caused no origin execution. |
+| Uncertain completion | Capacity remained reserved while the origin continued work, including across restart. |
+| Mechanism costs | Route matching and allocation grew with table size. Query projection, especially duplicate values, added cost. The restricted fixed-path programmatic matcher was cheaper than configured matching. |
 
-Microbenchmarks are descriptive. They do not presume that configuration is free,
-that a configured matcher must outperform a handwritten one, or that measured
-timing establishes security. No machine-dependent performance threshold was added
-to ordinary CI.
+## Complete results
 
-## Workloads and comparison definitions
-
-### Independent controls
-
-[system_invariants.py](bounded-origin-benchmarks/scripts/system_invariants.py) runs
-31 packaged-runtime controls. Explicit barriers cover overlap, semantic noise and
-selected-value distinctions, global/policy pressure with zero/nonzero queues,
-materialized reuse/restart, denial, response/executor deadline uncertainty and
-restart. Both computation strategies are exercised. An uncapped direct-origin
-control establishes that the origin fixture itself can exceed gateway capacity.
-Its journal records work that continues despite disconnect or transport reset.
-Barrier-induced latency is excluded from the performance comparisons below.
-
-These controls supplement deterministic unit, concurrency, protocol, filesystem
-and packaged process regressions. A passing benchmark does not replace those
-tests or prove arbitrary origins honor the completion contract.
-
-### Free-running system experiment
-
-[system_benchmark.py](bounded-origin-benchmarks/scripts/system_benchmark.py) runs
-three separate processes: a bounded Python client, the actual packaged CLI where
-applicable, and an independently instrumented Java synthetic origin. The origin
-uses a deterministic CPU loop whose result contributes to its response. It finishes
-computation/body generation before the complete response and has no semaphore at
-the tested gateway capacity. Serialized start/finish journal events independently
-record the actual work count and peak, rather than inferring CPU work from gateway
-connections or dispatch counters.
-
-The **direct baseline** sends the same operation sequence to that identical origin
-without Bounded Origin or artifact reuse. Cost, payload, seed, CPU allocation and
-client connection policy match the gateway comparison. `bounded` means
-`BOUNDED_COMPUTE`; `materialize` means `MATERIALIZE`. There is no deliberately slow
-alternative implementation or claimed comparison to an optimized HTTP cache.
-The gateway's upstream pool is part of the measured product. All clients use
-HTTP/1.1, one connection per request and no retries.
-
-| Cell | Demand and keys | Global / policy active; queued |
-|---|---|---|
-| `same-1/4/16/64` | 256 requests for one operation, closed-loop at the named concurrency. | 1; 0 |
-| `noise` | 256 equivalent requests at concurrency 64; encoded path alias and 33 unselected query parameters with changing values. | 1; 0 |
-| `unique-0/8-100/1000` | 256 distinct scheduled offers at 100 or 1,000/second, client capacity 64; queue size in the cell name. | 2; 0 or 8 |
-| `reuse` | 256 requests over 16 keys, concurrency 1; initial, warm and gateway-restart phases for materialization. | 2; 8 |
-| `low-mix` | 64 requests at 5 offers/second, concurrency 1, mixed repeated/distinct keys. | 2; 8 |
-| `failure` | 64 distinct requests, concurrency 16; origin returns eligible public HTTP 500. | 2; 8 |
-| `slow` | 64 distinct requests, concurrency 16; ten times the normal CPU iterations. | 2; 8 |
-| `large` | 64 distinct requests, concurrency 16; 1 MiB response body. | 2; 8 |
-| `denied` | 64 distinct requests, concurrency 16; gateway denies the path. The direct origin still computes. | 2; 8 |
-
-Normal origin cost is 10,000,000 iterations and a 4,096-byte body. The routes select
-one `q` query dimension with order-independent values and named path captures;
-unselected parameters do not reach the producer. The seed is 20260927 plus the
-repetition index. Baseline/treatment order rotates between repetitions. Denial
-intentionally performs different work; its CPU reduction is not equivalent-work
-throughput improvement. Rejection under overload must be interpreted similarly.
-
-Each cell has two preserved warmup trials and ten measured repetitions, with fresh
-processes and store/ownership domains. Each process first receives 32 disjoint
-code-warmup requests. `cold` therefore means the **workload keys are absent**, not
-that the filesystem/JVM or whole artifact store is empty. Warm/restarted phases
-reuse the explicit materialization state. Restarted gateways receive disjoint
-code warmup again. The complete matrix has 564 phases including warmups, with
-47 groups of ten measured phases.
-
-Gateway configurations use public immutable representations, explicit
-`RESPONSE_COMPLETE` ownership, active/queue limits from the table, one origin
-connection per active slot, zero pending connection acquisitions, and 60-second
-origin response/execution deadlines with a 70-second request timeout. These free-
-running deadlines are separate from adverse deadline controls. Every actual YAML,
-including store/spool/result limits, is in the evidence; defaults and cross-field
-rules are described in [Configuration](CONFIGURATION.md).
-
-At an offered rate, a full client records an unsent capacity drop rather than
-silently queuing. Offered, attempted, completed HTTP, HTTP status, transport error
-and dropped counts are different quantities. Scheduler delay is recorded. Thus
-`1000` labels scheduled offers, not a claim that 1,000 requests/second reached the
-gateway. Throughput means either completed HTTP responses/second or successful
-HTTP 200 responses/second, explicitly named in the CSV.
-
-### JVM mechanism experiment
-
-[microbench.py](bounded-origin-benchmarks/scripts/microbench.py) uses pinned JMH
-1.37, average time, one worker thread and the GC allocation profiler. Each cell has
-ten fresh JVM forks, five one-second warmup iterations and five one-second measured
-iterations. Raw per-fork/per-iteration data are retained. JMH is confined to the
-benchmark module and its locked, verified dependencies.
-
-| Suite | Measured operations and parameters |
-|---|---|
-| `configuration` | Bounded file/YAML load and decode; gateway field validation; semantic validation/compilation; policy compilation; route-template compilation; full load plus validation. Route counts 1, 16, 128, 256. |
-| `routes` | Actual `PolicyEngine.evaluate`, fixed/capture/catch-all templates, first/middle/last/miss, route counts 16, 128, 256. |
-| `overlap` | Overlapping patterns resolved by precedence, route counts 16, 128, 256. |
-| `keys` | Projection plus canonicalization and already-projected canonicalization; 1, 8, 32, 128 query dimensions; selected, noise, duplicate, missing, bare, empty, encoded and reversed inputs; both query-order modes. |
-| `programmatic` | Configured versus equivalent public-API fixed-path policies, first/last/miss at 1, 16, 128, 256 routes. |
-
-There are 215 cells. Route counts were chosen against parser byte/node limits, not
-observed speed: representative serialized configurations at 256 routes already
-exercise a meaningful fraction of those limits. The nominal 1,024-route maximum
-does not imply every full YAML of that size fits all parser limits. No scaling
-claim is made beyond measured configurations.
-
-File loading includes bounded read, UTF-8/YAML guards and model decode; it is not
-pure YAML parser cost. Semantic validation includes policy compilation. Phase
-measurements overlap and must not be summed. The JVM and filesystem cache are warm
-during measurements; these are not whole-process cold-start times. Route evaluation
-scans the policy table; position labels do not imply early-exit matching.
-
-The programmatic comparison checks equivalent decisions, keys and producer inputs
-for fixed normalized paths with identical policy/version/representation/body/host/
-method/trust semantics. Its handwritten matcher does not implement the general
-template language. The comparison quantifies that restricted abstraction cost,
-not a universally interchangeable faster implementation.
-
-## Environment and measurement methods
-
-| Item | Recorded environment |
-|---|---|
-| Runtime | Debian OpenJDK 21.0.9+10-Debian-1, Java 21; Python 3.13.7. |
-| OS | Kali Linux on WSL2, kernel 5.15.153.1; glibc 2.41. |
-| Physical host | AMD Ryzen 9 5900HX, 8 cores / 16 logical processors; Windows 11 Home 10.0.26200; 33,735,802,880 bytes RAM. |
-| Guest allocation | 14 logical processors / 7 reported cores; 16,079,628 KiB reported memory. |
-| Affinity | Origin/JMH logical CPU 2, gateway CPU 4, client CPU 6; distinct guest-reported cores. |
-| JVM limits | Origin heap 128 MiB, gateway 256 MiB, both `ActiveProcessorCount=2`; JMH heap 512 MiB and `ActiveProcessorCount=1`. |
-| Filesystem | Native Linux ext4 (`/dev/sde`) for source, benchmark evidence, store, ownership and spool; the original Windows checkout was on 9p. Mount source/options and actual per-process locations are recorded. |
-| Host conditions | Shared Windows/WSL machine, host Turbo power mode. No exclusive hardware reservation or host-noise isolation. |
-
-Host hardware was captured during the run at 10:51:11 UTC and is labeled accordingly.
-Guest metadata and load observations were captured by the runners. CPU affinity
-does not reserve a core; fixed heaps do not bound total RSS. The guest did not expose
-the queried cgroup-v2 root limit files; launch evidence records the actual v1/hybrid
-mount/allocation information rather than inventing a quota. Timing is evidence for
-this shared environment, not controlled exclusive-hardware performance.
-
-Primary origin CPU uses before/after `ProcessHandle.totalCpuDuration`: the whole
-origin process, including HTTP, journal instrumentation, JIT and GC. A separately
-named `ThreadMXBean` metric measures compute/body-generation thread CPU. Gateway
-CPU uses Linux `/proc/PID/stat` user/system ticks and includes sampling requests.
-Reported nanosecond units do not imply nanosecond clock resolution. A tiny warm
-phase quantized to zero does not establish zero CPU consumption.
-
-Latency includes failures and uses nearest-rank per-trial percentiles. The tables
-report distributions of independent trial percentiles; they are not a pooled
-global p99. JMH summaries use independent fork means. Mean, median, sample standard
-deviation and full ranges are retained in CSV; no outliers were removed and no
-statistical significance is claimed. Queue/RSS samples occur approximately every
-100 ms, so their observed peaks are lower bounds. Response body bytes are counted;
-IP/TCP network bytes are unmeasured.
-
-## Results
-
-All controls completed, and independent origin counts respected each configured
-bound in every measured gateway phase. All successful comparison bodies agreed.
-No transport or response-validation error occurred in the system phases. HTTP
-500/503 and unsent client drops remain in the data.
-
-The tables below are generated from the raw archive by
+The following tables and charts are generated by
 [summarize_results.py](bounded-origin-benchmarks/scripts/summarize_results.py).
-Complete distributions, including omitted table columns, are in
+Full distributions and additional metrics are in
 [system.csv](bounded-origin-benchmarks/results/2026-09-28/generated/system.csv) and
 [micro.csv](bounded-origin-benchmarks/results/2026-09-28/generated/micro.csv).
+There were no transport or response-validation errors in the system phases;
+HTTP 500/503 responses and unsent client drops remain in the results.
 
 <!-- generated-results:start -->
+<details>
+<summary>System results — all workloads and outcomes</summary>
+
 ### System results
 
-Every row summarizes ten measured repetitions. Counts are means per repetition; origin starts also show the full range. Peak is the largest independently observed origin count. Drops were offered but never sent by the finite client. HTTP statuses remain separate from transport errors.
+Each row summarizes ten trials. Counts are means; origin starts also show the full range.
+Origin peak is the largest independently observed active count. Client drops were never sent.
 
 | Cell | Mode / state | Attempted | 200 | 403 | 500 | 503 | Client drops | Origin starts, mean [min, max] | Origin peak |
 |---|---|---:|---:|---:|---:|---:|---:|---:|---:|
@@ -243,9 +129,16 @@ Every row summarizes ten measured repetitions. Counts are means per repetition; 
 | denied | bounded / cold | 64.0 | 0.0 | 64.0 | 0.0 | 0.0 | 0.0 | 0.0 [0, 0] | 0 |
 | denied | materialize / cold | 64.0 | 0.0 | 64.0 | 0.0 | 0.0 | 0.0 | 0.0 [0, 0] | 0 |
 
+</details>
+
+<details>
+<summary>CPU and latency — all workloads and outcomes</summary>
+
 ### CPU and latency
 
-Origin CPU is whole-process CPU seconds per 1,000 attempted requests, reported as mean ± sample SD across repetitions. Latency columns are the median of per-trial percentiles in milliseconds; the p99 column retains their full range. Rejections are included. Per-status latency, CPU per successful response, throughput, queue, RSS and other counters are in the CSV.
+Origin CPU is whole-process seconds per 1,000 attempted requests: mean ± sample SD.
+Latency is the median of trial percentiles in milliseconds; p99 includes the full trial range.
+Rejections are included. The CSV also retains per-status latency, CPU per successful response, throughput, queue and RSS.
 
 | Cell | Mode / state | Origin CPU s / 1,000 attempted | p50 ms | p99 ms [min, max] |
 |---|---|---:|---:|---:|
@@ -297,9 +190,16 @@ Origin CPU is whole-process CPU seconds per 1,000 attempted requests, reported a
 | denied | bounded / cold | 0.0312 ± 0.0659 | 51.773 | 103.056 [72.517, 134.553] |
 | denied | materialize / cold | 0.0156 ± 0.0494 | 47.464 | 98.340 [68.938, 126.260] |
 
+</details>
+
+<details>
+<summary>Mechanism costs — configuration, matching and keys</summary>
+
 ### Mechanism examples
 
-Time and allocation are means of ten fork means; ± is sample SD across those forks. Selected rows cover full configuration loading, last-match routing, order-independent query projection and the fixed-path comparison. The CSV and raw JSON retain every method and parameter combination, including misses, overlaps, ordered queries and all alias variants.
+Time and allocation are means of ten fork means; ± is sample SD across forks.
+These rows cover full configuration loading, last-match routing, order-independent query projection and the fixed-path comparison.
+Every method and parameter combination, including misses, overlaps, ordered queries and aliases, remains in the CSV and raw JSON.
 
 | Method | Parameters | µs / operation | Bytes / operation |
 |---|---|---:|---:|
@@ -337,62 +237,202 @@ Time and allocation are means of ten fork means; ± is sample SD across those fo
 | programmatic | position=LAST, routeCount=128 | 4.824 ± 0.081 | 9320.0 |
 | programmatic | position=LAST, routeCount=256 | 5.991 ± 0.340 | 9326.4 |
 
+</details>
+
 <!-- generated-results:end -->
 
-## Interpretation and limits
+## Method
 
-The mechanism controlled admitted work in this experiment. Increasing equivalent
-concurrency reduced origin starts through shared flights; materialization reused
-completed output and eliminated workload recomputation after gateway restart.
-Distinct-key pressure produced explicit overload responses while actual origin
-work remained bounded. Denied gateway traffic caused no origin starts. The adverse
-controls retained unresolved capacity, including across restart, while the origin
-continued real work. That outcome deliberately trades availability for safety.
+### Independent controls
 
-Single-flight is not permanent deduplication: the free-running bounded rows contain
-successive executions after earlier flights complete. Lower origin CPU under
-overload partly reflects work rejected or never transmitted by the finite client.
-It cannot be described as serving the same work more efficiently. Warm artifact
-reuse is a different declared state from cold production of the artifact.
+[system_invariants.py](bounded-origin-benchmarks/scripts/system_invariants.py)
+checks correctness through the packaged CLI before performance measurement.
+Barriers hold origin work open so the harness can inspect overlapping callers,
+queue pressure and termination uncertainty at known points.
 
-Costs are material. Sequential bounded requests added latency against the direct
-origin in this environment. Route classification and allocation grew with table
-size; selected-query projection and duplicate values also have measurable costs.
-The restricted fixed-path programmatic comparison was cheaper than configured
-matching. The measured end-to-end latency has not been decomposed into storage
-durability, transport, pool, scheduler and policy costs; attributing every added
-millisecond to one mechanism would exceed the evidence.
+The 31 controls cover both computation strategies, semantic noise and distinct
+selected values, global/policy budgets with zero and nonzero queues, reuse,
+denial, response/execution deadlines and restart. The origin continues its CPU
+work after a disconnect or reset. An uncapped direct control confirms that the
+fixture can exceed the gateway's capacity. Barrier-induced latency is excluded
+from the performance results.
 
-This is a finite synthetic experiment on one shared host, not a long-duration soak,
-an exhaustive capacity/fairness proof, a cold-disk startup study or a real scraper
-workload. Request count, latency, origin executions, origin CPU and rejection are
-separate outcomes. The implementation/test evidence and explicit deployment
-contracts establish the claimed ownership boundary; a benchmark cannot prove a
-different origin tells the truth about completion or immutable public output.
+### System workloads
 
-The future independent Git consumer must measure actual renderer and delegated
-process lifetime/CPU, including disconnect and cancellation, realistic semantic
-equivalence and distinct-key pressure. This campaign supplies generic mechanism
-evidence only. No Git proof repository or performance result is implied.
+[system_benchmark.py](bounded-origin-benchmarks/scripts/system_benchmark.py)
+runs a Python client, a Java origin, and, for gateway trials, the packaged CLI.
+Each runs in its own process. The origin executes a deterministic CPU loop and
+uses its result in the response body.
 
-## Reproduce or inspect
+The origin records serialized start and finish events. Those events measure
+execution count and peak active work independently of gateway counters or sockets.
+There is no origin semaphore at the gateway's configured capacity. Computation
+and body generation finish before the complete response.
+
+The **direct baseline** sends the same operation sequence to this origin without
+the gateway or artifact reuse. `bounded` means `BOUNDED_COMPUTE`; `materialize`
+means `MATERIALIZE`. All clients use HTTP/1.1, one connection per request and no
+retries. The gateway's upstream connection pool is part of the measured path.
+
+| Cell | Demand and keys | Global / policy active; queued |
+|---|---|---|
+| `same-1/4/16/64` | 256 requests for one operation, closed-loop at the named concurrency. | 1; 0 |
+| `noise` | 256 equivalent requests at concurrency 64; encoded path alias and 33 unselected query parameters with changing values. | 1; 0 |
+| `unique-0/8-100/1000` | 256 distinct scheduled offers at 100 or 1,000/second, client capacity 64; queue size in the cell name. | 2; 0 or 8 |
+| `reuse` | 256 requests over 16 keys, concurrency 1; initial, warm and gateway-restart phases for materialization. | 2; 8 |
+| `low-mix` | 64 requests at 5 offers/second, concurrency 1, mixed repeated/distinct keys. | 2; 8 |
+| `failure` | 64 distinct requests, concurrency 16; origin returns eligible public HTTP 500. | 2; 8 |
+| `slow` | 64 distinct requests, concurrency 16; ten times the normal CPU iterations. | 2; 8 |
+| `large` | 64 distinct requests, concurrency 16; 1 MiB response body. | 2; 8 |
+| `denied` | 64 distinct requests, concurrency 16; gateway denies the path. The direct origin still computes. | 2; 8 |
+
+Normal origin cost is 10,000,000 loop iterations with a 4,096-byte body. Routes
+select named path captures and one `q` query dimension with order-independent
+values. Unselected query parameters do not reach the producer. Seeds are 20260927
+plus the repetition index; comparison order rotates between repetitions.
+
+Each cell has two retained warmup trials and ten measured trials, using fresh
+processes and store/ownership domains. Each process first receives 32 disjoint
+code-warmup requests. **Cold means workload keys are absent.** Warm and restarted
+phases reuse materialized state; restarted gateways receive disjoint code warmup
+again. The matrix contains 564 phases, including warmups, and 47 measured groups.
+
+Gateway configurations use `PUBLIC_IMMUTABLE`, `RESPONSE_COMPLETE`, the tabulated
+budgets, one origin connection per active slot and zero pending pool acquisitions.
+Origin response/execution deadlines are 60 seconds; the request timeout is 70
+seconds. Adverse deadline controls run separately. Every actual YAML, including
+store, spool and result limits, is retained in the evidence package.
+
+At a scheduled offer, a full client records an unsent drop. It does not build a
+hidden queue or retry. Thus `1000` names offered requests per second, not achieved
+gateway traffic. The records separate offered, attempted, completed HTTP, status,
+transport error and dropped counts, plus scheduler delay. Throughput columns
+explicitly count either completed HTTP responses or successful HTTP 200 responses.
+
+### JVM mechanism costs
+
+[microbench.py](bounded-origin-benchmarks/scripts/microbench.py) uses JMH 1.37,
+average time, one worker thread and the GC allocation profiler. Each cell has ten
+fresh JVM forks, with five one-second warmup iterations and five one-second
+measurement iterations. Raw fork and iteration data are retained. JMH and its
+locked, verified dependencies are confined to the benchmark module.
+
+| Suite | Measured operations and parameters |
+|---|---|
+| `configuration` | Bounded file/YAML load and decode; gateway field validation; semantic validation/compilation; policy compilation; route-template compilation; full load plus validation. Route counts 1, 16, 128, 256. |
+| `routes` | Actual `PolicyEngine.evaluate`, fixed/capture/catch-all templates, first/middle/last/miss, route counts 16, 128, 256. |
+| `overlap` | Overlapping patterns resolved by precedence, route counts 16, 128, 256. |
+| `keys` | Projection plus canonicalization and already-projected canonicalization; 1, 8, 32, 128 query dimensions; selected, noise, duplicate, missing, bare, empty, encoded and reversed inputs; both query-order modes. |
+| `programmatic` | Configured versus equivalent public-API fixed-path policies, first/last/miss at 1, 16, 128, 256 routes. |
+
+The 215 cells cover representative configurations up to 256 routes. These sizes
+were chosen against YAML byte/node limits before measuring speed. A 256-route
+configuration already uses a meaningful fraction of those limits; the nominal
+1,024-route ceiling does not mean every fully populated document fits.
+
+The programmatic comparison uses fixed normalized paths with equivalent policy
+decisions, keys and producer inputs. Policy version, representation, body, host,
+method and trust semantics match. This isolates a restricted configuration cost;
+the handwritten matcher does not implement the general template language.
+
+### Hypotheses set before measurement
+
+| Hypothesis | Observation that would falsify it |
+|---|---|
+| Overlapping callers of one semantic operation share one producer. | More than one independently observed origin start while that controlled flight is held. Sequential `BOUNDED_COMPUTE` requests after completion are allowed to recompute. |
+| Unique-key demand respects global/policy active and queue bounds. | Origin active work exceeds its corresponding capacity, or controlled queue occupancy exceeds its limit. Sampled gauges alone cannot establish exact queue maxima. |
+| Completed immutable materialization suppresses equivalent recomputation, including restart. | Unexpected origin starts or incorrect response bytes in the warm/restarted phase. |
+| Unselected query noise and supported aliases preserve configured identity. | Different producer inputs/keys or duplicate overlapping computation. Different selected values and missing/bare/empty parameters are controls that must remain distinct. |
+| Denied/unmatched requests cause no origin work. | Any independent origin start for those gateway requests. |
+| Deadline/transport uncertainty retains expensive-work ownership. | With capacity one, distinct-key arrivals produce more than one actual unfinished computation while prior work continues, including through restart. Availability loss is a cost, not a reason to release unknown work. |
+
+Microbenchmarks describe cost and scaling without a preferred winner. Ordinary CI
+checks fixtures and invariant counters, with no absolute latency or throughput gate.
+
+## Environment and measurements
+
+| Item | Recorded environment |
+|---|---|
+| Runtime | Debian OpenJDK 21.0.9+10-Debian-1, Java 21; Python 3.13.7. |
+| OS | Kali Linux on WSL2, kernel 5.15.153.1; glibc 2.41. |
+| Physical host | AMD Ryzen 9 5900HX, 8 cores / 16 logical processors; Windows 11 Home 10.0.26200; 33,735,802,880 bytes RAM. |
+| Guest allocation | 14 logical processors / 7 reported cores; 16,079,628 KiB reported memory. |
+| Affinity | Origin/JMH logical CPU 2, gateway CPU 4, client CPU 6; distinct guest-reported cores. |
+| JVM limits | Origin heap 128 MiB, gateway 256 MiB, both `ActiveProcessorCount=2`; JMH heap 512 MiB and `ActiveProcessorCount=1`. |
+| Filesystem | Native Linux ext4 (`/dev/sde`) for source, benchmark evidence, store, ownership and spool; the original Windows checkout was on 9p. Mount source/options and actual per-process locations are recorded. |
+| Host conditions | Shared Windows/WSL machine, host Turbo power mode. No exclusive hardware reservation or host-noise isolation. |
+
+Host hardware was captured during the run at 10:51:11 UTC. Runners captured guest
+metadata and load. The evidence records actual mount/allocation information,
+including the v1/hybrid cgroup layout where queried v2 limit files were unavailable.
+
+| Measurement | Method |
+|---|---|
+| Origin CPU | Before/after `ProcessHandle.totalCpuDuration`, covering the whole process: HTTP, journal instrumentation, JIT and GC. A separate `ThreadMXBean` metric covers compute/body-generation thread CPU. |
+| Gateway CPU | Linux `/proc/PID/stat` user/system ticks, including metrics sampling requests. |
+| Request latency | Nearest-rank percentiles per trial, including failures. Tables summarize the distribution of trial percentiles. |
+| JMH | Independent fork means for time and allocation. |
+| Queue and RSS | Samples approximately every 100 ms. |
+| Bytes | Response bodies are counted; IP/TCP network bytes are unmeasured. |
+
+CSVs retain mean, median, sample standard deviation and full ranges. No outliers
+were removed and no statistical significance is claimed.
+
+## Limitations and fair comparisons
+
+**Workload and host.** This finite synthetic campaign characterizes the mechanism
+on one shared Windows/WSL machine. Application-specific savings need measurements
+of that application's real computation. The campaign is not a long-duration soak,
+an exhaustive fairness/capacity proof or a cold-disk startup study. CPU affinity
+does not reserve hardware; fixed heaps do not cap total RSS.
+
+**Work performed.** Single-flight shares overlapping work; successive flights may
+recompute. Materialization deliberately changes later requests into artifact hits.
+Denial, overload rejection and unsent client drops reduce work performed. Their
+lower CPU cannot be read as serving equivalent work faster. The direct baseline
+is the origin itself, not an optimized reverse proxy or HTTP cache.
+
+**Measurement scope.** Trial p99 distributions are not a pooled global p99. Sampled
+queue/RSS peaks are lower bounds. CPU counters have finite clock resolution even
+when expressed in nanoseconds; a quantized zero is not proof of zero CPU use.
+End-to-end latency combines durability, transport, pooling, scheduling and policy
+costs. This campaign does not attribute each added millisecond to a component.
+
+**Microbenchmark scope.** File loading includes bounded reads, UTF-8/YAML guards
+and model decoding. Semantic validation includes policy compilation. These phases
+overlap and must not be summed. JVM/filesystem caches are warm. Route evaluation
+scans the policy table, so position labels do not imply early exit. Results cover
+the measured configurations; the fixed-path comparator is not a substitute for
+general route matching.
+
+**Deployment contracts.** Controls supplement unit, concurrency, protocol,
+filesystem and process tests. Origins must still honor the
+[completion and representation contracts](CONFIGURATION.md#before-production).
+Unknown completion can retain capacity indefinitely; that availability cost is
+part of the ownership guarantee.
+
+## Evidence and reproduction
 
 The [evidence ZIP](bounded-origin-benchmarks/results/2026-09-28/evidence.zip) retains
-all measurement/warmup rows, origin journals, client outcomes, process samples,
-logs, configurations, benchmark fixtures, harness sources and completion manifests.
-It also contains environment, source/tree, executable hashes, every committed
-`gradle.lockfile` SHA-256, and filesystem/mount provenance. Check its
-[SHA256SUMS](bounded-origin-benchmarks/results/2026-09-28/SHA256SUMS).
+all measurement and warmup rows, origin journals, client outcomes, process samples,
+logs, configurations, fixtures, harness sources and completion manifests.
+It includes source/tree state, environment metadata, executable hashes, SHA-256
+hashes for every committed `gradle.lockfile`, and filesystem/mount provenance.
+Verify it against [SHA256SUMS](bounded-origin-benchmarks/results/2026-09-28/SHA256SUMS).
 
-Its `evidence-manifest.json` hashes every included file and lists omitted files
-with hashes and reasons. Only rebuildable distribution files and runtime
-store/spool contents were omitted from this transport archive. Original completion
-manifests remain unchanged; omission is not removal of a measurement or outlier.
-`launch/commands.json` records the exact campaign commands. The archive is not
-needed for normal builds, tests or new experiments.
+The measured tree was `f6d4ee42e2257abc5ab609d010c2f88714e83a75`, with
+[main CI passing](https://github.com/aalsanie/bounded-origin/actions/runs/36397376357).
+Documentation and result rendering were added afterward; runtime behavior was
+unchanged. `launch/commands.json` records the exact campaign commands.
 
-Regenerate tables and verify archive membership/hashes with Python 3.11 or later
-from this documentation revision, using a new output directory:
+`evidence-manifest.json` hashes every included file. It also records hashes and
+reasons for omitted rebuildable distributions and runtime store/spool contents.
+Original completion manifests are preserved. All measurement rows remain in the
+package; ordinary builds, tests and new experiments do not need this archive.
+
+### Regenerate tables and charts
+
+Use Python 3.11 or later from this documentation revision and a new output directory:
 
 ```sh
 python bounded-origin-benchmarks/scripts/summarize_results.py \
@@ -400,20 +440,29 @@ python bounded-origin-benchmarks/scripts/summarize_results.py \
   --output build/reproduced-results
 ```
 
-This produces `system.csv`, `micro.csv`, `tables.md`, `readme-results.md` and
-`provenance.json`. `tables.md` is the marked generated section above;
-`readme-results.md` supplies the README's measured comparison. Provenance identifies
-the source SHA, raw input hashes and summarizer hash. CSVs can be compared directly
-with the committed files. Summaries retain every observed cell; table selection
-for mechanism examples is explicit in the script, not chosen by fastest result.
+The command verifies archive membership and hashes before producing:
 
-For new measurements, use JDK 21, Python 3.11+ and the repository's Gradle wrapper
-on native Linux storage. The publication runners require clean merged `main`
-equal to `origin/main`, a verified green CI URL and valid explicit CPU affinities.
-`--ci-run` records the operator's verification; it does not itself authenticate CI
-success. Build/test the current source first. Choose distinct available cores and
-fresh evidence directories outside the source tree; adjust the example CPU IDs
-for the recorded topology of that machine.
+| Output | Contents |
+|---|---|
+| `system.csv`, `micro.csv` | All summarized cells and distributions. |
+| `tables.md` | The marked complete-results section of this document. |
+| `readme-results.md` | The README's measured comparison. |
+| `origin-executions.svg`, `latency.svg` | The figures above, rendered with Python's standard library. |
+| `provenance.json` | Source SHA, raw input hashes, summarizer hash and generated chart hashes. |
+
+Compare the CSVs and SVGs directly with
+[the committed generated files](bounded-origin-benchmarks/results/2026-09-28/generated).
+Mechanism table selection is explicit in the script; all cells remain in the CSV.
+
+### Run a new campaign
+
+Use JDK 21, Python 3.11+ and the Gradle wrapper on native Linux storage. Build and
+test the source first. Publication runners require clean merged `main` equal to
+`origin/main`, a verified green CI URL and explicit valid CPU affinities.
+`--ci-run` records the operator's verification; it does not authenticate CI success.
+
+Choose distinct available cores and fresh evidence directories outside the source
+tree. Adjust these CPU IDs for the machine's recorded topology:
 
 ```sh
 python3 bounded-origin-benchmarks/scripts/system_invariants.py --output /path/to/new-controls
@@ -425,15 +474,14 @@ python3 bounded-origin-benchmarks/scripts/microbench.py \
   --ci-run YOUR_VERIFIED_MAIN_CI_URL --cpu 2
 ```
 
-Run the last command separately with suites `routes`, `overlap`, `keys` and
-`programmatic`, each with its own new directory. Do not run suites concurrently.
-Runners build the packaged artifacts, verify dependency locks, capture metadata
-and preserve failed runs. The full campaign takes hours. `--smoke` is available
-for development fixture validation and is labeled non-publication evidence.
-Do not weaken clean-main checks to rerun an old revision; inspect/re-summarize the
-retained historical evidence, or publish a separately identified new campaign.
+Repeat the last command for `routes`, `overlap`, `keys` and `programmatic`, each
+with a new directory. Run suites sequentially. Runners build packaged artifacts,
+verify locks, capture metadata and preserve failed runs. A full campaign takes
+hours. `--smoke` validates development fixtures and is labeled non-publication.
 
-Run `python -m unittest discover -s bounded-origin-benchmarks/scripts -p 'test_*.py'`
-to check evidence tooling without a measurement campaign. Correctness gates verify
-fixtures and invariant counters; no absolute latency or throughput assertion runs
-in ordinary CI.
+Keep historical results intact: re-summarize their evidence or create a separately
+identified campaign from current main. To check the tooling without measurements:
+
+```sh
+python -m unittest discover -s bounded-origin-benchmarks/scripts -p 'test_*.py'
+```
