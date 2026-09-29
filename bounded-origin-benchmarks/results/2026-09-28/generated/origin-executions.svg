@@ -1,0 +1,96 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 546" role="img" aria-labelledby="title desc">
+<title id="title">Origin executions by client concurrency</title>
+<desc id="desc">Direct origin, concurrency 1: mean 256, range 256 to 256. Direct origin, concurrency 4: mean 256, range 256 to 256. Direct origin, concurrency 16: mean 256, range 256 to 256. Direct origin, concurrency 64: mean 256, range 256 to 256. BOUNDED_COMPUTE, concurrency 1: mean 256, range 256 to 256. BOUNDED_COMPUTE, concurrency 4: mean 64, range 64 to 64. BOUNDED_COMPUTE, concurrency 16: mean 16.9, range 16 to 17. BOUNDED_COMPUTE, concurrency 64: mean 10, range 9 to 13. MATERIALIZE, concurrency 1: mean 1, range 1 to 1. MATERIALIZE, concurrency 4: mean 1, range 1 to 1. MATERIALIZE, concurrency 16: mean 1, range 1 to 1. MATERIALIZE, concurrency 64: mean 1, range 1 to 1.</desc>
+<rect width="880" height="546" fill="#fff"/>
+<g font-family="system-ui, -apple-system, Segoe UI, sans-serif">
+<text x="28" y="34" font-size="21" fill="#18181b" text-anchor="start">Origin executions as equivalent demand overlaps</text>
+<text x="28" y="60" font-size="14" fill="#18181b" text-anchor="start">256 requests per trial · 10 trials · gateway active 1 / queued 0</text>
+<text x="28" y="83" font-size="13" fill="#18181b" text-anchor="start">Points: mean executions. Whiskers and labels: full trial range.</text>
+<line x1="90" y1="372" x2="800" y2="372" stroke="#d4d4d8" stroke-width="1"/>
+<text x="78" y="377" font-size="14" fill="#18181b" text-anchor="end">0</text>
+<line x1="90" y1="315" x2="800" y2="315" stroke="#d4d4d8" stroke-width="1"/>
+<text x="78" y="320" font-size="14" fill="#18181b" text-anchor="end">64</text>
+<line x1="90" y1="258" x2="800" y2="258" stroke="#d4d4d8" stroke-width="1"/>
+<text x="78" y="263" font-size="14" fill="#18181b" text-anchor="end">128</text>
+<line x1="90" y1="201" x2="800" y2="201" stroke="#d4d4d8" stroke-width="1"/>
+<text x="78" y="206" font-size="14" fill="#18181b" text-anchor="end">192</text>
+<line x1="90" y1="144" x2="800" y2="144" stroke="#d4d4d8" stroke-width="1"/>
+<text x="78" y="149" font-size="14" fill="#18181b" text-anchor="end">256</text>
+<text x="90" y="121" font-size="13" fill="#18181b" text-anchor="start">Executions / trial</text>
+<polyline points="110,144 330,144 550,144 770,144" fill="none" stroke="#52525b" stroke-width="2.5"/>
+<line x1="110" y1="144" x2="110" y2="144" stroke="#52525b" stroke-width="2"/>
+<line x1="105" y1="144" x2="115" y2="144" stroke="#52525b" stroke-width="2"/>
+<line x1="105" y1="144" x2="115" y2="144" stroke="#52525b" stroke-width="2"/>
+<circle cx="110" cy="144" r="4" fill="#52525b"/>
+<text x="110" y="132" font-size="14" fill="#52525b" text-anchor="middle">256</text>
+<line x1="330" y1="144" x2="330" y2="144" stroke="#52525b" stroke-width="2"/>
+<line x1="325" y1="144" x2="335" y2="144" stroke="#52525b" stroke-width="2"/>
+<line x1="325" y1="144" x2="335" y2="144" stroke="#52525b" stroke-width="2"/>
+<circle cx="330" cy="144" r="4" fill="#52525b"/>
+<text x="330" y="132" font-size="14" fill="#52525b" text-anchor="middle">256</text>
+<line x1="550" y1="144" x2="550" y2="144" stroke="#52525b" stroke-width="2"/>
+<line x1="545" y1="144" x2="555" y2="144" stroke="#52525b" stroke-width="2"/>
+<line x1="545" y1="144" x2="555" y2="144" stroke="#52525b" stroke-width="2"/>
+<circle cx="550" cy="144" r="4" fill="#52525b"/>
+<text x="550" y="132" font-size="14" fill="#52525b" text-anchor="middle">256</text>
+<line x1="770" y1="144" x2="770" y2="144" stroke="#52525b" stroke-width="2"/>
+<line x1="765" y1="144" x2="775" y2="144" stroke="#52525b" stroke-width="2"/>
+<line x1="765" y1="144" x2="775" y2="144" stroke="#52525b" stroke-width="2"/>
+<circle cx="770" cy="144" r="4" fill="#52525b"/>
+<text x="770" y="132" font-size="14" fill="#52525b" text-anchor="middle">256</text>
+<polyline points="110,144 330,315 550,356.948 770,363.094" fill="none" stroke="#1d4ed8" stroke-width="2.5"/>
+<line x1="110" y1="144" x2="110" y2="144" stroke="#1d4ed8" stroke-width="2"/>
+<line x1="105" y1="144" x2="115" y2="144" stroke="#1d4ed8" stroke-width="2"/>
+<line x1="105" y1="144" x2="115" y2="144" stroke="#1d4ed8" stroke-width="2"/>
+<circle cx="110" cy="144" r="4" fill="#1d4ed8"/>
+<text x="110" y="167" font-size="14" fill="#1d4ed8" text-anchor="middle">256</text>
+<line x1="330" y1="315" x2="330" y2="315" stroke="#1d4ed8" stroke-width="2"/>
+<line x1="325" y1="315" x2="335" y2="315" stroke="#1d4ed8" stroke-width="2"/>
+<line x1="325" y1="315" x2="335" y2="315" stroke="#1d4ed8" stroke-width="2"/>
+<circle cx="330" cy="315" r="4" fill="#1d4ed8"/>
+<text x="330" y="303" font-size="14" fill="#1d4ed8" text-anchor="middle">64</text>
+<line x1="550" y1="357.75" x2="550" y2="356.859" stroke="#1d4ed8" stroke-width="2"/>
+<line x1="545" y1="357.75" x2="555" y2="357.75" stroke="#1d4ed8" stroke-width="2"/>
+<line x1="545" y1="356.859" x2="555" y2="356.859" stroke="#1d4ed8" stroke-width="2"/>
+<circle cx="550" cy="356.948" r="4" fill="#1d4ed8"/>
+<text x="550" y="344.948" font-size="14" fill="#1d4ed8" text-anchor="middle">16.9 [16, 17]</text>
+<line x1="770" y1="363.984" x2="770" y2="360.422" stroke="#1d4ed8" stroke-width="2"/>
+<line x1="765" y1="363.984" x2="775" y2="363.984" stroke="#1d4ed8" stroke-width="2"/>
+<line x1="765" y1="360.422" x2="775" y2="360.422" stroke="#1d4ed8" stroke-width="2"/>
+<circle cx="770" cy="363.094" r="4" fill="#1d4ed8"/>
+<text x="770" y="351.094" font-size="14" fill="#1d4ed8" text-anchor="middle">10 [9, 13]</text>
+<polyline points="110,371.109 330,371.109 550,371.109 770,371.109" fill="none" stroke="#047857" stroke-width="2.5"/>
+<line x1="110" y1="371.109" x2="110" y2="371.109" stroke="#047857" stroke-width="2"/>
+<line x1="105" y1="371.109" x2="115" y2="371.109" stroke="#047857" stroke-width="2"/>
+<line x1="105" y1="371.109" x2="115" y2="371.109" stroke="#047857" stroke-width="2"/>
+<circle cx="110" cy="371.109" r="4" fill="#047857"/>
+<text x="110" y="395.109" font-size="14" fill="#047857" text-anchor="middle">1</text>
+<line x1="330" y1="371.109" x2="330" y2="371.109" stroke="#047857" stroke-width="2"/>
+<line x1="325" y1="371.109" x2="335" y2="371.109" stroke="#047857" stroke-width="2"/>
+<line x1="325" y1="371.109" x2="335" y2="371.109" stroke="#047857" stroke-width="2"/>
+<circle cx="330" cy="371.109" r="4" fill="#047857"/>
+<text x="330" y="395.109" font-size="14" fill="#047857" text-anchor="middle">1</text>
+<line x1="550" y1="371.109" x2="550" y2="371.109" stroke="#047857" stroke-width="2"/>
+<line x1="545" y1="371.109" x2="555" y2="371.109" stroke="#047857" stroke-width="2"/>
+<line x1="545" y1="371.109" x2="555" y2="371.109" stroke="#047857" stroke-width="2"/>
+<circle cx="550" cy="371.109" r="4" fill="#047857"/>
+<text x="550" y="395.109" font-size="14" fill="#047857" text-anchor="middle">1</text>
+<line x1="770" y1="371.109" x2="770" y2="371.109" stroke="#047857" stroke-width="2"/>
+<line x1="765" y1="371.109" x2="775" y2="371.109" stroke="#047857" stroke-width="2"/>
+<line x1="765" y1="371.109" x2="775" y2="371.109" stroke="#047857" stroke-width="2"/>
+<circle cx="770" cy="371.109" r="4" fill="#047857"/>
+<text x="770" y="395.109" font-size="14" fill="#047857" text-anchor="middle">1</text>
+<text x="110" y="424" font-size="14" fill="#18181b" text-anchor="middle">1</text>
+<text x="330" y="424" font-size="14" fill="#18181b" text-anchor="middle">4</text>
+<text x="550" y="424" font-size="14" fill="#18181b" text-anchor="middle">16</text>
+<text x="770" y="424" font-size="14" fill="#18181b" text-anchor="middle">64</text>
+<text x="445" y="452" font-size="14" fill="#18181b" text-anchor="middle">Client concurrency (measured settings)</text>
+<line x1="50" y1="484" x2="73" y2="484" stroke="#52525b" stroke-width="3"/>
+<text x="81" y="489" font-size="13" fill="#18181b" text-anchor="start">Direct origin</text>
+<line x1="325" y1="484" x2="348" y2="484" stroke="#1d4ed8" stroke-width="3"/>
+<text x="356" y="489" font-size="13" fill="#18181b" text-anchor="start">BOUNDED_COMPUTE</text>
+<line x1="600" y1="484" x2="623" y2="484" stroke="#047857" stroke-width="3"/>
+<text x="631" y="489" font-size="13" fill="#18181b" text-anchor="start">MATERIALIZE</text>
+<text x="28" y="523" font-size="13" fill="#18181b" text-anchor="start">MATERIALIZE starts with the workload key absent, then reuses its published result.</text>
+</g>
+</svg>

@@ -13,5 +13,9 @@
   "micro_cells": 215,
   "outlier_removal": false,
   "summary_units": "independent trial or fork mean; latency summaries are distributions of per-trial percentiles",
-  "script_sha256": "e519c9100a565986213d34141ee625052fc56a60a9dbf3c93bb41ef1f4dced7a"
+  "script_sha256": "a44c798eaa733e88db8cbe3c08af50fa9fe00e06664536c783a52be51cdbf5c7",
+  "charts_sha256": {
+    "origin-executions.svg": "9ac997271104ca20d0afe8a5b9407fb36ff64541e58b99c2934e552774725835",
+    "latency.svg": "b57eac08a228b6ebb90c09e264d2288cec4e7dc359929153a5e3dfb7e8406739"
+  }
 }
