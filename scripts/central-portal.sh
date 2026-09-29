@@ -23,6 +23,18 @@ request() {
   shift 2
   require_authorization
   curl --fail-with-body --silent --show-error \
+    --connect-timeout 15 --max-time 120 \
+    --request "$method" \
+    --header "Authorization: $CENTRAL_AUTHORIZATION" \
+    "$@" "$url"
+}
+
+read_request() {
+  local method="$1"
+  local url="$2"
+  shift 2
+  require_authorization
+  curl --fail-with-body --silent --show-error \
     --retry 3 --retry-all-errors \
     --connect-timeout 15 --max-time 120 \
     --request "$method" \
@@ -55,7 +67,7 @@ upload() {
 
 status() {
   local deployment_id="$1"
-  request POST "$BASE_URL/status?id=$deployment_id"
+  read_request POST "$BASE_URL/status?id=$deployment_id"
 }
 
 wait_state() {
