@@ -480,9 +480,9 @@ subprojects {
         }
 
         extensions.configure<SigningExtension> {
-            val signingKey = providers.gradleProperty("signingKey").orNull
-            val signingPassword = providers.gradleProperty("signingPassword").orNull
-            val signingKeyId = providers.gradleProperty("signingKeyId").orNull
+            val signingKey = project.findProperty("signingKey") as String?
+            val signingPassword = project.findProperty("signingPassword") as String?
+            val signingKeyId = project.findProperty("signingKeyId") as String?
 
             if (!signingKey.isNullOrBlank()) {
                 if (signingKeyId.isNullOrBlank()) {
@@ -492,7 +492,7 @@ subprojects {
                 }
             }
 
-            setRequired(false)
+            setRequired(true)
             sign(publication)
         }
 
