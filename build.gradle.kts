@@ -44,6 +44,8 @@ group = "io.github.aalsanie"
 val releaseVersion = "0.1.0"
 version = releaseVersion
 
+val releaseGroupId = group.toString()
+
 val mavenPublicationModules =
     setOf(
         "bounded-origin-api",
@@ -408,6 +410,8 @@ subprojects {
     }
 
     if (name in mavenPublicationModules) {
+        val moduleName = name
+
         apply(plugin = "maven-publish")
         apply(plugin = "signing")
 
@@ -419,16 +423,16 @@ subprojects {
                 .publications
                 .create("mavenJava", MavenPublication::class.java) {
                     from(components.getByName("java"))
-                    artifactId = project.name
+                    artifactId = moduleName
 
                     pom {
-                        name.set(mavenPublicationNames.getValue(project.name))
-                        description.set(mavenPublicationDescriptions.getValue(project.name))
+                        name.set(mavenPublicationNames.getValue(moduleName))
+                        description.set(mavenPublicationDescriptions.getValue(moduleName))
                         url.set("https://github.com/aalsanie/bounded-origin")
 
                         licenses {
                             license {
-                                if (project.name in apacheLicensedPublicationModules) {
+                                if (moduleName in apacheLicensedPublicationModules) {
                                     name.set("Apache License, Version 2.0")
                                     url.set("https://www.apache.org/licenses/LICENSE-2.0.txt")
                                 } else {
@@ -514,9 +518,9 @@ subprojects {
                     generatedPom.get().destination,
                     project.name,
                     releaseVersion,
-                    mavenPublicationNames.getValue(project.name),
-                    mavenPublicationDescriptions.getValue(project.name),
-                    project.name in apacheLicensedPublicationModules,
+                    mavenPublicationNames.getValue(moduleName),
+                    mavenPublicationDescriptions.getValue(moduleName),
+                    moduleName in apacheLicensedPublicationModules,
                     mavenPublicationModules,
                 )
             }
@@ -540,7 +544,7 @@ subprojects {
 
         tasks.register("stageCentralPublication") {
             group = "release"
-            description = "Stages the signed $name publication in Maven Repository Layout."
+            description = "Stages the signed $moduleName publication in Maven Repository Layout."
             dependsOn(
                 cleanCentralStaging,
                 verifyMavenPublication,
@@ -549,8 +553,8 @@ subprojects {
             )
 
             val modulePath =
-                rootProject.group.toString().replace('.', '/') +
-                    "/$name/$releaseVersion"
+                releaseGroupId.replace('.', '/') +
+                    "/$moduleName/$releaseVersion"
             val destinationDirectory =
                 rootProject.layout.buildDirectory.dir("central-staging/$modulePath")
             outputs.dir(destinationDirectory)
@@ -564,12 +568,12 @@ subprojects {
 
                 val sourceFiles =
                     linkedMapOf(
-                        "$name-$releaseVersion.jar" to mainJar.get().archiveFile.get().asFile,
-                        "$name-$releaseVersion-sources.jar" to
+                        "$moduleName-$releaseVersion.jar" to mainJar.get().archiveFile.get().asFile,
+                        "$moduleName-$releaseVersion-sources.jar" to
                             sourcesJar.get().archiveFile.get().asFile,
-                        "$name-$releaseVersion-javadoc.jar" to
+                        "$moduleName-$releaseVersion-javadoc.jar" to
                             javadocJar.get().archiveFile.get().asFile,
-                        "$name-$releaseVersion.pom" to generatedPom.get().destination,
+                        "$moduleName-$releaseVersion.pom" to generatedPom.get().destination,
                     )
 
                 sourceFiles.forEach { (targetName, source) ->
@@ -851,7 +855,7 @@ val verifyCentralStaging = tasks.register("verifyCentralStaging") {
         val expected =
             expectedCentralFiles(
                 mavenPublicationModules,
-                project.group.toString(),
+                releaseGroupId,
                 releaseVersion,
             )
         val files =
@@ -888,7 +892,7 @@ val verifyCentralStaging = tasks.register("verifyCentralStaging") {
                 "sha256" to "SHA-256",
                 "sha512" to "SHA-512",
             )
-        val groupPath = project.group.toString().replace('.', '/')
+        val groupPath = releaseGroupId.replace('.', '/')
 
         mavenPublicationModules.sorted().forEach { module ->
             val directory = File(staging, "$groupPath/$module/$releaseVersion")
@@ -971,7 +975,7 @@ val verifyCentralBundle = tasks.register("verifyCentralBundle") {
         val expected =
             expectedCentralFiles(
                 mavenPublicationModules,
-                project.group.toString(),
+                releaseGroupId,
                 releaseVersion,
             )
 
