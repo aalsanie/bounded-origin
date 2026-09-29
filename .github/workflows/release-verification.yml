@@ -7,6 +7,9 @@ on:
     branches: [main]
     paths:
       - build.gradle.kts
+      - bounded-origin-cli/build.gradle.kts
+      - release-tests/**
+      - scripts/verify-release-*.sh
       - .github/workflows/release-verification.yml
 
 permissions:
@@ -80,3 +83,74 @@ jobs:
           done < <(find build/central-staging -type f -name '*.asc' -print0)
 
           test "$signature_count" -eq 16
+
+      - name: Negative release-contract tests
+        shell: bash
+        run: bash scripts/verify-release-negative.sh
+
+  cli-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+
+      - name: Set up Java
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
+        with:
+          cache-provider: basic
+
+      - name: Build and verify CLI release artifacts
+        run: ./gradlew :bounded-origin-cli:cliReleaseArtifacts --stacktrace
+
+  external-consumer:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+
+      - name: Set up Java
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
+        with:
+          cache-provider: basic
+
+      - name: Resolve and run isolated Maven consumer
+        run: ./gradlew verifyExternalMavenConsumer --stacktrace
+
+  release-reproducibility:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+
+      - name: Set up Java
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
+        with:
+          cache-provider: basic
+
+      - name: Verify release artifact reproducibility
+        shell: bash
+        run: bash scripts/verify-release-reproducible.sh

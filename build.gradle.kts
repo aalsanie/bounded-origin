@@ -21,10 +21,12 @@ import org.gradle.api.tasks.bundling.Jar
 import org.gradle.api.tasks.bundling.Zip
 import org.gradle.api.tasks.compile.JavaCompile
 import org.gradle.api.tasks.testing.Test
+import org.gradle.api.tasks.javadoc.Javadoc
 import org.gradle.api.tasks.PathSensitivity
 import org.gradle.api.tasks.Exec
 import org.gradle.jvm.toolchain.JavaToolchainService
 import org.gradle.jvm.toolchain.JavaLanguageVersion
+import org.gradle.external.javadoc.StandardJavadocDocletOptions
 import org.gradle.testing.jacoco.plugins.JacocoPluginExtension
 import org.gradle.testing.jacoco.tasks.JacocoCoverageVerification
 import org.gradle.testing.jacoco.tasks.JacocoReport
@@ -428,6 +430,15 @@ subprojects {
         apply(plugin = "signing")
 
         javaExtension.withJavadocJar()
+
+        tasks.named<Javadoc>("javadoc") {
+            (options as StandardJavadocDocletOptions).apply {
+                addBooleanOption("notimestamp", true)
+                encoding = "UTF-8"
+                charSet = "UTF-8"
+                docEncoding = "UTF-8"
+            }
+        }
 
         val publication =
             extensions
