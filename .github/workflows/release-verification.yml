@@ -43,6 +43,11 @@ jobs:
           export GNUPGHOME="$RUNNER_TEMP/bounded-origin-release-gpg"
           install -d -m 700 "$GNUPGHOME"
 
+          if ./gradlew :bounded-origin-api:verifyCentralSigningCredentials --stacktrace; then
+            echo "Central signing credential verification unexpectedly passed without a key" >&2
+            exit 1
+          fi
+
           cat > "$RUNNER_TEMP/bounded-origin-release-key.conf" <<'EOF'
           Key-Type: RSA
           Key-Length: 2048
@@ -67,3 +72,11 @@ jobs:
           ./gradlew centralBundle --stacktrace
 
           test -s build/distributions/bounded-origin-0.1.0-central-bundle.zip
+
+          signature_count=0
+          while IFS= read -r -d '' signature; do
+            gpg --batch --verify "$signature" "${signature%.asc}"
+            signature_count=$((signature_count + 1))
+          done < <(find build/central-staging -type f -name '*.asc' -print0)
+
+          test "$signature_count" -eq 16
