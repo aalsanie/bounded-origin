@@ -1,0 +1,66 @@
+name: Release Verification
+
+on:
+  push:
+    branches: [release/0.1.0]
+  pull_request:
+    branches: [main]
+    paths:
+      - build.gradle.kts
+      - .github/workflows/release-verification.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-verification-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  central-bundle:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+
+      - name: Set up Java
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
+        with:
+          cache-provider: basic
+
+      - name: Build and verify Central bundle with ephemeral signing key
+        shell: bash
+        run: |
+          set -euo pipefail
+          export GNUPGHOME="$RUNNER_TEMP/bounded-origin-release-gpg"
+          install -d -m 700 "$GNUPGHOME"
+
+          cat > "$RUNNER_TEMP/bounded-origin-release-key.conf" <<'EOF'
+          Key-Type: RSA
+          Key-Length: 2048
+          Subkey-Type: RSA
+          Subkey-Length: 2048
+          Name-Real: Bounded Origin CI
+          Name-Email: ci@bounded-origin.invalid
+          Expire-Date: 0
+          %no-protection
+          %commit
+          EOF
+
+          gpg --batch --generate-key "$RUNNER_TEMP/bounded-origin-release-key.conf"
+          export ORG_GRADLE_PROJECT_signingKey
+          ORG_GRADLE_PROJECT_signingKey="$(
+            gpg --batch --armor --export-secret-keys ci@bounded-origin.invalid
+          )"
+
+          ./gradlew centralBundle --stacktrace
+
+          test -s build/distributions/bounded-origin-0.1.0-central-bundle.zip
