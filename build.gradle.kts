@@ -9,7 +9,11 @@ import java.security.MessageDigest
 import org.gradle.api.GradleException
 import org.gradle.api.artifacts.dsl.LockMode
 import org.gradle.api.plugins.JavaPluginExtension
+import org.gradle.api.publish.PublishingExtension
+import org.gradle.api.publish.maven.MavenPublication
+import org.gradle.api.publish.tasks.GenerateModuleMetadata
 import org.gradle.api.tasks.bundling.AbstractArchiveTask
+import org.gradle.api.tasks.bundling.Jar
 import org.gradle.api.tasks.compile.JavaCompile
 import org.gradle.api.tasks.testing.Test
 import org.gradle.api.tasks.PathSensitivity
@@ -18,6 +22,7 @@ import org.gradle.jvm.toolchain.JavaLanguageVersion
 import org.gradle.testing.jacoco.plugins.JacocoPluginExtension
 import org.gradle.testing.jacoco.tasks.JacocoCoverageVerification
 import org.gradle.testing.jacoco.tasks.JacocoReport
+import org.gradle.plugins.signing.SigningExtension
 
 plugins {
     base
@@ -41,6 +46,22 @@ val mavenPublicationModules =
     )
 val githubReleaseDistributionModules = setOf("bounded-origin-cli")
 val internalModules = setOf("bounded-origin-benchmarks", "test-infra")
+
+val mavenPublicationNames =
+    mapOf(
+        "bounded-origin-api" to "Bounded Origin API",
+        "bounded-origin-core" to "Bounded Origin Core",
+        "bounded-origin-store-fs" to "Bounded Origin Filesystem Store",
+        "bounded-origin-proxy" to "Bounded Origin Proxy",
+    )
+val mavenPublicationDescriptions =
+    mapOf(
+        "bounded-origin-api" to "Framework-independent public contracts for Bounded Origin.",
+        "bounded-origin-core" to "Core policy and bounded origin-execution engine.",
+        "bounded-origin-store-fs" to "Filesystem-backed artifact store for Bounded Origin.",
+        "bounded-origin-proxy" to "Standalone HTTP gateway runtime for Bounded Origin.",
+    )
+val apacheLicensedPublicationModules = setOf("bounded-origin-api")
 
 val coverageMinimum = BigDecimal("0.91")
 val jacocoVersion = libs.versions.jacoco.get()
@@ -194,6 +215,95 @@ subprojects {
     javaExtension.apply {
         toolchain.languageVersion.set(JavaLanguageVersion.of(21))
         withSourcesJar()
+    }
+
+    if (name in mavenPublicationModules) {
+        apply(plugin = "maven-publish")
+        apply(plugin = "signing")
+
+        javaExtension.withJavadocJar()
+
+        val publication =
+            extensions
+                .getByType<PublishingExtension>()
+                .publications
+                .create("mavenJava", MavenPublication::class.java) {
+                    from(components.getByName("java"))
+                    artifactId = project.name
+
+                    pom {
+                        name.set(mavenPublicationNames.getValue(project.name))
+                        description.set(mavenPublicationDescriptions.getValue(project.name))
+                        url.set("https://github.com/aalsanie/bounded-origin")
+
+                        licenses {
+                            license {
+                                if (project.name in apacheLicensedPublicationModules) {
+                                    name.set("Apache License, Version 2.0")
+                                    url.set("https://www.apache.org/licenses/LICENSE-2.0.txt")
+                                } else {
+                                    name.set("GNU Affero General Public License v3.0 only")
+                                    url.set("https://www.gnu.org/licenses/agpl-3.0.txt")
+                                }
+                                distribution.set("repo")
+                            }
+                        }
+
+                        developers {
+                            developer {
+                                id.set("aalsanie")
+                                name.set("Ahmad Al-Sanie")
+                                url.set("https://github.com/aalsanie")
+                            }
+                        }
+
+                        scm {
+                            connection.set("scm:git:https://github.com/aalsanie/bounded-origin.git")
+                            developerConnection.set(
+                                "scm:git:ssh://git@github.com/aalsanie/bounded-origin.git"
+                            )
+                            url.set("https://github.com/aalsanie/bounded-origin")
+                        }
+                    }
+                }
+
+        tasks.withType<GenerateModuleMetadata>().configureEach {
+            enabled = false
+        }
+
+        val publicationLicense =
+            if (name in apacheLicensedPublicationModules) {
+                layout.projectDirectory.file("LICENSE")
+            } else {
+                rootProject.layout.projectDirectory.file("LICENSE")
+            }
+
+        tasks.withType<Jar>().configureEach {
+            from(publicationLicense) {
+                into("META-INF")
+                rename { "LICENSE" }
+            }
+            from(rootProject.layout.projectDirectory.file("LICENSING.md")) {
+                into("META-INF")
+            }
+        }
+
+        extensions.configure<SigningExtension> {
+            val signingKey = providers.gradleProperty("signingKey").orNull
+            val signingPassword = providers.gradleProperty("signingPassword").orNull
+            val signingKeyId = providers.gradleProperty("signingKeyId").orNull
+
+            if (!signingKey.isNullOrBlank()) {
+                if (signingKeyId.isNullOrBlank()) {
+                    useInMemoryPgpKeys(signingKey, signingPassword)
+                } else {
+                    useInMemoryPgpKeys(signingKeyId, signingKey, signingPassword)
+                }
+            }
+
+            setRequired(false)
+            sign(publication)
+        }
     }
 
     val apiSnapshotLauncher =
@@ -565,6 +675,20 @@ val verifyReleasePublicationSurface = tasks.register("verifyReleasePublicationSu
                 "Modules have multiple release classifications: " +
                     duplicateClassifications.sorted().joinToString()
             )
+        }
+
+        val publicationMetadataSets =
+            listOf(
+                mavenPublicationNames.keys,
+                mavenPublicationDescriptions.keys,
+            )
+        if (publicationMetadataSets.any { it != mavenPublicationModules }) {
+            throw GradleException(
+                "Maven publication metadata must exactly match the frozen publication surface"
+            )
+        }
+        if (!apacheLicensedPublicationModules.all { it in mavenPublicationModules }) {
+            throw GradleException("Publication license classification names an unpublished module")
         }
 
         val actualModules = subprojects.map { it.name }.toSet()
