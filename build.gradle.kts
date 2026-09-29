@@ -1377,6 +1377,29 @@ val verifyReleaseRevision = tasks.register("verifyReleaseRevision") {
     }
 }
 
+val releaseIdentityFile = layout.buildDirectory.file("release/identity.env")
+
+tasks.register("writeReleaseIdentity") {
+    group = "release"
+    description = "Writes the verified release identity for CI release workflows."
+    dependsOn(verifyReleaseRevision)
+    outputs.file(releaseIdentityFile)
+
+    doLast {
+        val file = releaseIdentityFile.get().asFile
+        file.parentFile.mkdirs()
+        file.writeText(
+            """
+            RELEASE_VERSION=$releaseVersion
+            RELEASE_TAG=$releaseTag
+            RELEASE_ARTIFACT_BASE=$releaseArtifactBaseName
+            RELEASE_GROUP_ID=$releaseGroupId
+            """.trimIndent() + "\n",
+            Charsets.UTF_8,
+        )
+    }
+}
+
 tasks.named("check") {
     dependsOn(
         subprojects.map { it.tasks.named("check") },

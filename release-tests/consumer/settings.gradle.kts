@@ -1,4 +1,6 @@
+import org.gradle.api.credentials.HttpHeaderCredentials
 import org.gradle.api.initialization.resolve.RepositoriesMode
+import org.gradle.authentication.http.HttpHeaderAuthentication
 
 pluginManagement {
     repositories {
@@ -16,6 +18,18 @@ dependencyResolutionManagement {
             metadataSources {
                 mavenPom()
                 artifact()
+            }
+
+            val authorization =
+                providers.environmentVariable("BOUNDED_ORIGIN_REPOSITORY_AUTHORIZATION").orNull
+            if (!authorization.isNullOrBlank()) {
+                credentials(HttpHeaderCredentials::class) {
+                    name = "Authorization"
+                    value = authorization
+                }
+                authentication {
+                    create<HttpHeaderAuthentication>("header")
+                }
             }
         }
         mavenCentral()
