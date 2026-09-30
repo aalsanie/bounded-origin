@@ -1,0 +1,288 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  pull_request:
+    branches: [main]
+    paths:
+      - .github/workflows/release.yml
+      - .github/workflows/central-preflight.yml
+      - build.gradle.kts
+      - bounded-origin-cli/build.gradle.kts
+      - release-tests/**
+      - scripts/central-portal.sh
+      - scripts/verify-release-workflow-policy.sh
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Set up Java
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
+        with:
+          cache-provider: basic
+
+      - name: Verify release workflow policy
+        run: bash scripts/verify-release-workflow-policy.sh
+
+      - name: Verify release revision
+        run: ./gradlew verifyReleaseRevision writeReleaseIdentity --stacktrace
+
+  publish:
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+    needs: validate
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout release tag
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Set up Java
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
+        with:
+          cache-provider: basic
+
+      - name: Load and verify release identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./gradlew writeReleaseIdentity --stacktrace
+          cat build/release/identity.env >> "$GITHUB_ENV"
+          source build/release/identity.env
+
+          git fetch origin main --no-tags
+          test "$GITHUB_REF_NAME" = "$RELEASE_TAG"
+          test "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)"
+
+      - name: Require release credentials
+        shell: bash
+        env:
+          MAVEN_GPG_PRIVATE_KEY: ${{ secrets.MAVEN_GPG_PRIVATE_KEY }}
+          MAVEN_GPG_PASSPHRASE: ${{ secrets.MAVEN_GPG_PASSPHRASE }}
+          CENTRAL_TOKEN_USERNAME: ${{ secrets.CENTRAL_TOKEN_USERNAME }}
+          CENTRAL_TOKEN_PASSWORD: ${{ secrets.CENTRAL_TOKEN_PASSWORD }}
+        run: |
+          set -euo pipefail
+          test -n "$MAVEN_GPG_PRIVATE_KEY"
+          test -n "$MAVEN_GPG_PASSPHRASE"
+          test -n "$CENTRAL_TOKEN_USERNAME"
+          test -n "$CENTRAL_TOKEN_PASSWORD"
+
+      - name: Build signed Central and CLI artifacts
+        env:
+          ORG_GRADLE_PROJECT_signingKey: ${{ secrets.MAVEN_GPG_PRIVATE_KEY }}
+          ORG_GRADLE_PROJECT_signingPassword: ${{ secrets.MAVEN_GPG_PASSPHRASE }}
+        run: |
+          ./gradlew centralBundle :bounded-origin-cli:cliReleaseArtifacts --stacktrace
+
+      - name: Verify signatures and sign CLI assets
+        shell: bash
+        env:
+          MAVEN_GPG_PRIVATE_KEY: ${{ secrets.MAVEN_GPG_PRIVATE_KEY }}
+          MAVEN_GPG_PASSPHRASE: ${{ secrets.MAVEN_GPG_PASSPHRASE }}
+        run: |
+          set -euo pipefail
+          export GNUPGHOME="$RUNNER_TEMP/bounded-origin-production-gpg"
+          install -d -m 700 "$GNUPGHOME"
+          printf '%s\n' "$MAVEN_GPG_PRIVATE_KEY" | gpg --batch --import
+
+          signature_count=0
+          while IFS= read -r -d '' signature; do
+            gpg --batch --verify "$signature" "${signature%.asc}"
+            signature_count=$((signature_count + 1))
+          done < <(find build/central-staging -type f -name '*.asc' -print0)
+          test "$signature_count" -eq 16
+
+          for artifact in \
+            "bounded-origin-cli/build/distributions/$RELEASE_ARTIFACT_BASE.zip" \
+            "bounded-origin-cli/build/distributions/$RELEASE_ARTIFACT_BASE.tar" \
+            "bounded-origin-cli/build/distributions/SHA256SUMS"
+          do
+            printf '%s\n' "$MAVEN_GPG_PASSPHRASE" |
+              gpg --batch --yes --pinentry-mode loopback --passphrase-fd 0 \
+                --armor --detach-sign --output "$artifact.asc" "$artifact"
+            gpg --batch --verify "$artifact.asc" "$artifact"
+          done
+
+      - name: Prepare Central authorization
+        shell: bash
+        env:
+          CENTRAL_TOKEN_USERNAME: ${{ secrets.CENTRAL_TOKEN_USERNAME }}
+          CENTRAL_TOKEN_PASSWORD: ${{ secrets.CENTRAL_TOKEN_PASSWORD }}
+        run: |
+          set -euo pipefail
+          encoded="$(printf '%s:%s' "$CENTRAL_TOKEN_USERNAME" "$CENTRAL_TOKEN_PASSWORD" | base64 | tr -d '\n')"
+          authorization="Bearer $encoded"
+          echo "::add-mask::$encoded"
+          echo "::add-mask::$authorization"
+          echo "CENTRAL_AUTHORIZATION=$authorization" >> "$GITHUB_ENV"
+
+      - name: Ensure durable draft release state
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          notes="$RUNNER_TEMP/release-notes.md"
+          awk -v heading="## $RELEASE_VERSION" '
+            $0 == heading { found=1; next }
+            found && /^## / { exit }
+            found { print }
+          ' CHANGELOG.md | sed '/./,$!d' > "$notes"
+          test -s "$notes"
+
+          if ! gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release create "$RELEASE_TAG" \
+              --draft \
+              --verify-tag \
+              --title "Bounded Origin $RELEASE_VERSION" \
+              --notes-file "$notes"
+          fi
+
+      - name: Validate and publish Central deployment
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          state_dir="$RUNNER_TEMP/bounded-origin-release-state"
+          mkdir -p "$state_dir"
+          state_file="$state_dir/central-deployment-id.txt"
+          deployment_id=""
+
+          if gh release download "$RELEASE_TAG" \
+            --pattern central-deployment-id.txt \
+            --dir "$state_dir" >/dev/null 2>&1; then
+            deployment_id="$(tr -d '\r\n' < "$state_file")"
+          else
+            public_count="$(scripts/central-portal.sh public-count "$RELEASE_VERSION")"
+            case "$public_count" in
+              4)
+                echo "All Maven artifacts are already public; resuming GitHub release finalization."
+                ;;
+              0)
+                deployment_id="$(
+                  scripts/central-portal.sh upload \
+                    "build/distributions/$RELEASE_ARTIFACT_BASE-central-bundle.zip" \
+                    "$RELEASE_ARTIFACT_BASE"
+                )"
+                printf '%s\n' "$deployment_id" > "$state_file"
+                gh release upload "$RELEASE_TAG" "$state_file" --clobber
+                ;;
+              *)
+                echo "Only $public_count of 4 Maven artifacts are public; refusing ambiguous recovery." >&2
+                exit 1
+                ;;
+            esac
+          fi
+
+          if [[ -n "$deployment_id" ]]; then
+            status_json="$(scripts/central-portal.sh status "$deployment_id")"
+            state="$(jq -r '.deploymentState // empty' <<<"$status_json")"
+
+            case "$state" in
+              PENDING|VALIDATING)
+                scripts/central-portal.sh wait-state "$deployment_id" VALIDATED >/dev/null
+                state="VALIDATED"
+                ;;
+              VALIDATED|PUBLISHING|PUBLISHED)
+                ;;
+              FAILED)
+                jq . <<<"$status_json" >&2
+                exit 1
+                ;;
+              *)
+                echo "Unexpected Central deployment state: $state" >&2
+                jq . <<<"$status_json" >&2
+                exit 1
+                ;;
+            esac
+
+            if [[ "$state" == "VALIDATED" ]]; then
+              export BOUNDED_ORIGIN_REPOSITORY_AUTHORIZATION="$CENTRAL_AUTHORIZATION"
+              GRADLE_USER_HOME="$RUNNER_TEMP/validated-consumer-gradle" \
+                ./gradlew --no-daemon -p release-tests/consumer clean run \
+                  -PboundedOriginRepository="https://central.sonatype.com/api/v1/publisher/deployment/$deployment_id/download/" \
+                  -PboundedOriginVersion="$RELEASE_VERSION" \
+                  --refresh-dependencies --stacktrace
+              unset BOUNDED_ORIGIN_REPOSITORY_AUTHORIZATION
+
+              scripts/central-portal.sh publish "$deployment_id"
+              state="PUBLISHING"
+            fi
+
+            if [[ "$state" == "PUBLISHING" ]]; then
+              scripts/central-portal.sh wait-state "$deployment_id" PUBLISHED >/dev/null
+            fi
+          fi
+
+          scripts/central-portal.sh wait-public "$RELEASE_VERSION"
+
+      - name: Verify public Maven consumption
+        shell: bash
+        run: |
+          set -euo pipefail
+          GRADLE_USER_HOME="$RUNNER_TEMP/public-consumer-gradle" \
+            ./gradlew --no-daemon -p release-tests/consumer clean run \
+              -PboundedOriginRepository="https://repo.maven.apache.org/maven2" \
+              -PboundedOriginVersion="$RELEASE_VERSION" \
+              --refresh-dependencies --stacktrace
+
+      - name: Finalize GitHub release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release upload "$RELEASE_TAG" \
+            "bounded-origin-cli/build/distributions/$RELEASE_ARTIFACT_BASE.zip" \
+            "bounded-origin-cli/build/distributions/$RELEASE_ARTIFACT_BASE.zip.asc" \
+            "bounded-origin-cli/build/distributions/$RELEASE_ARTIFACT_BASE.tar" \
+            "bounded-origin-cli/build/distributions/$RELEASE_ARTIFACT_BASE.tar.asc" \
+            "bounded-origin-cli/build/distributions/SHA256SUMS" \
+            "bounded-origin-cli/build/distributions/SHA256SUMS.asc" \
+            --clobber
+
+          release_id="$(gh release view "$RELEASE_TAG" --json databaseId --jq '.databaseId')"
+          state_asset_id="$(
+            gh api "repos/$GITHUB_REPOSITORY/releases/$release_id/assets" \
+              --jq '.[] | select(.name == "central-deployment-id.txt") | .id' |
+              head -n 1
+          )"
+          if [[ -n "$state_asset_id" ]]; then
+            gh api --method DELETE "repos/$GITHUB_REPOSITORY/releases/assets/$state_asset_id"
+          fi
+
+          gh release edit "$RELEASE_TAG" --draft=false
+          test "$(gh release view "$RELEASE_TAG" --json isDraft --jq '.isDraft')" = "false"
