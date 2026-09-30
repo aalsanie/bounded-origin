@@ -3,6 +3,7 @@
 [![CI](https://github.com/aalsanie/bounded-origin/actions/workflows/ci.yml/badge.svg)](https://github.com/aalsanie/bounded-origin/actions/workflows/ci.yml)
 [![Maven Central](https://img.shields.io/maven-central/v/io.github.aalsanie/bounded-origin-core?label=Maven%20Central)](https://central.sonatype.com/artifact/io.github.aalsanie/bounded-origin-core)
 [![Coverage gate](https://img.shields.io/badge/coverage%20gate-%E2%89%A591%25%20line%20%26%20branch-brightgreen)](build.gradle.kts)
+[![Mutation testing](https://img.shields.io/badge/mutation%20testing-%E2%89%A590%25%20score%20%7C%20%E2%89%A590%25%20strength-brightgreen)](build.gradle.kts)
 [![License](https://img.shields.io/badge/license-AGPL--3.0--only%20%7C%20API%20Apache--2.0-blue)](LICENSING.md)
 
 Bounded Origin is a Java 21 library and HTTP gateway that limits how much expensive
