@@ -68,7 +68,7 @@ semantic-key costs grew with configuration complexity.
 See [Benchmarks](BENCHMARKS.md) for charts, complete results, limitations and
 reproduction commands, including overload runs with unsent client drops.
 
-## Try it
+## Usage
 
 Download the **0.1.0 CLI distribution** from
 [Releases](https://github.com/aalsanie/bounded-origin/releases):
