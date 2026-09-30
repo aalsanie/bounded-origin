@@ -1,5 +1,11 @@
 # Bounded Origin
 
+[![CI](https://github.com/aalsanie/bounded-origin/actions/workflows/ci.yml/badge.svg)](https://github.com/aalsanie/bounded-origin/actions/workflows/ci.yml)
+[![Maven Central](https://img.shields.io/maven-central/v/io.github.aalsanie/bounded-origin-core?label=Maven%20Central)](https://central.sonatype.com/artifact/io.github.aalsanie/bounded-origin-core)
+[![Coverage gate](https://img.shields.io/badge/coverage%20gate-%E2%89%A591%25%20line%20%26%20branch-brightgreen)](build.gradle.kts)
+[![Mutation testing](https://img.shields.io/badge/mutation%20testing-%E2%89%A590%25%20score%20%7C%20%E2%89%A590%25%20strength-brightgreen)](build.gradle.kts)
+[![License](https://img.shields.io/badge/license-AGPL--3.0--only%20%7C%20API%20Apache--2.0-blue)](LICENSING.md)
+
 Bounded Origin is a Java 21 library and HTTP gateway that limits how much expensive
 origin computation incoming requests can cause. You define which requests mean
 the same work, how much new work may run, and which results can be reused.
@@ -17,22 +23,22 @@ flowchart LR
 ## Why it exists
 
 Serving a result can be cheap while producing it is expensive. Many URLs may name
-the same underlying operation; a stream of distinct requests may keep creating
-new work. Counting requests alone tells you neither how much computation they
-cause nor how much of it is redundant.
+the same underlying operation, and a stream of distinct requests may keep creating
+new work. Counting requests alone tells you neither how much computation they cause
+nor how much of it is redundant.
 
 Bounded Origin puts the budget on that work. Equivalent requests can share one
-running computation. Distinct operations compete for explicitly limited capacity.
-Completed, reusable results can be served without computing them again.
+running computation, distinct operations compete for explicitly limited capacity,
+and completed reusable results can be served without computing them again.
 
 The scraper-triggered rendering described in
 [Creepy crawlies](https://people.kernel.org/monsieuricon/creepy-crawlies)
 motivated this repository's approach to controlling origin work.
 
-Routes define meaningful inputs, so irrelevant query noise need not create new
-work. Global and per-policy budgets bound admission; full queues return **503 with
-`Retry-After`**, and unmatched requests are denied. Work whose completion is unknown
-keeps consuming capacity across timeouts and restarts.
+Routes decide which requests count as the same work. Global and per-policy
+limits control how much new origin work can start. When capacity is full, excess
+requests get **503 with `Retry-After`**. If the gateway cannot prove that origin
+work has finished, that work keeps consuming capacity across timeouts and restarts.
 
 ## What has been measured
 
@@ -65,33 +71,67 @@ Warm and restarted materialization required no origin recomputation. Distinct-ke
 pressure stayed within capacity while rejecting excess work. Route matching and
 semantic-key costs grew with configuration complexity.
 
-See [Benchmarks](BENCHMARKS.md) for charts, complete results, limitations and
-reproduction commands, including overload runs with unsent client drops.
+See [Benchmarks](BENCHMARKS.md) for complete results, limitations and reproduction
+commands, including overload runs with unsent client drops.
 
 ## Usage
+
+### Java library
+
+The published modules are available from Maven Central. Start with the core engine:
+
+```kotlin
+dependencies {
+    implementation("io.github.aalsanie:bounded-origin-core:0.1.0")
+}
+```
+
+| Module | Use it for |
+|---|---|
+| `bounded-origin-api` | Framework-independent public contracts only. |
+| `bounded-origin-core` | Policy and execution engine; includes `bounded-origin-api`. |
+| `bounded-origin-store-fs` | Filesystem-backed artifact storage; add it alongside the engine or proxy when needed. |
+| `bounded-origin-proxy` | Embeddable HTTP gateway runtime; includes `bounded-origin-core` and the API. |
+
+<details>
+<summary>Maven equivalent</summary>
+
+```xml
+<dependency>
+    <groupId>io.github.aalsanie</groupId>
+    <artifactId>bounded-origin-core</artifactId>
+    <version>0.1.0</version>
+</dependency>
+```
+
+</details>
+
+Use the module that matches your integration surface rather than depending on all
+four. The [configuration reference](CONFIGURATION.md) covers the runtime model,
+defaults, limits and operational metrics.
+
+### CLI gateway
 
 Download the **0.1.0 CLI distribution** from
 [Releases](https://github.com/aalsanie/bounded-origin/releases):
 `bounded-origin-0.1.0.tar` for POSIX or `bounded-origin-0.1.0.zip` for Windows.
 The distribution includes its dependencies and requires Java 21.
 
-For this local demonstration, also install Python 3 and save
-[materialize.yaml](examples/materialize.yaml) and
-[public_origin.py](examples/public_origin.py) beside the downloaded archive.
-The configuration materializes public responses from a small loopback origin;
-the gateway itself needs no application code.
+<details>
+<summary>Run the local materialization demo</summary>
 
-First, start the demonstration origin in its own terminal:
+Install Python 3 and save [materialize.yaml](examples/materialize.yaml) and
+[public_origin.py](examples/public_origin.py) beside the downloaded archive.
+
+Start the demonstration origin:
 
 ```sh
 python public_origin.py
 ```
 
-In a second terminal, extract the distribution, validate the configuration and
-start the gateway:
+Then extract the distribution, validate the configuration and start the gateway.
 
-<details>
-<summary>POSIX</summary>
+#### POSIX
 
 ```sh
 tar -xf bounded-origin-0.1.0.tar
@@ -99,18 +139,13 @@ tar -xf bounded-origin-0.1.0.tar
 ./bounded-origin-0.1.0/bin/bounded-origin run --config materialize.yaml
 ```
 
-</details>
-
-<details>
-<summary>Windows PowerShell</summary>
+#### Windows PowerShell
 
 ```powershell
 Expand-Archive .\bounded-origin-0.1.0.zip -DestinationPath .
 .\bounded-origin-0.1.0\bin\bounded-origin.bat validate --config materialize.yaml
 .\bounded-origin-0.1.0\bin\bounded-origin.bat run --config materialize.yaml
 ```
-
-</details>
 
 `validate` exits silently with code 0 on success. In another terminal, send two
 equivalent requests; on PowerShell use `curl.exe`:
@@ -123,13 +158,13 @@ curl "http://127.0.0.1:8080/hello/%77orld?noise=two"
 Both return `Hello from /hello/world.` The configured path normalization and query
 selection make them the same operation: the first request materializes the result,
 and the second reuses it. Restart the gateway from the same working directory and
-request it again to reuse the persisted artifact. The origin log shows which
-requests actually reached it.
+request it again to reuse the persisted artifact.
 
 The example keeps state in `bounded-origin-data/` and binds its listeners to
-loopback. Its admin endpoint exposes [metrics](http://127.0.0.1:8081/metrics),
-health and readiness. This is a wiring demonstration, separate from the benchmark
-workload. Configuration changes take effect on restart.
+loopback. Its admin endpoint exposes
+[metrics](http://127.0.0.1:8081/metrics), health and readiness.
+
+</details>
 
 ## Before connecting an origin
 
@@ -162,21 +197,13 @@ make arbitrary remote computation safe to cancel.
 
 Artifact reuse requires `PUBLIC_IMMUTABLE`; this also allows `BOUNDED_COMPUTE` to
 reuse an existing artifact. `PUBLIC` permits sharing a running computation without
-persistent reuse. The [configuration reference](CONFIGURATION.md) covers these
-contracts, every field, defaults, limits and operational metrics.
-
-Java integrations can use the [public API](bounded-origin-api/src/main/java/io/github/aalsanie/boundedorigin/api)
-and [execution core](bounded-origin-core/src/main/java/io/github/aalsanie/boundedorigin/core)
-directly. Embedded producers must honor their computation-lifetime contracts and
-close owned result handles.
+persistent reuse.
 
 ## Development and license
 
-[CI](.github/workflows/ci.yml) exercises Ubuntu and Windows, including packaged
-process tests, coverage and mutation gates, static analysis, dependency verification,
-reproducible archives and Docker smoke. Correctness tests cover concurrency,
-timeouts, disconnects, restart, representation boundaries and storage failures.
-Performance measurements run separately from ordinary correctness gates.
+[CI](.github/workflows/ci.yml) exercises Ubuntu and Windows with coverage and
+mutation gates, static analysis, dependency verification, reproducible archives,
+packaged process tests and Docker smoke.
 
 ```sh
 ./gradlew clean check --init-script .github/spotbugs-reports.init.gradle --stacktrace
