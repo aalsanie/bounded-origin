@@ -35,10 +35,10 @@ The scraper-triggered rendering described in
 [Creepy crawlies](https://people.kernel.org/monsieuricon/creepy-crawlies)
 motivated this repository's approach to controlling origin work.
 
-Routes define semantic identity. Global and per-policy budgets bound new work;
-full queues return **503 with `Retry-After`**, unmatched requests are denied, and
-work whose completion is unknown keeps consuming capacity across timeouts and
-restarts.
+Routes decide which requests count as the same work. Global and per-policy
+limits control how much new origin work can start. When capacity is full, excess
+requests get **503 with `Retry-After`**. If the gateway cannot prove that origin
+work has finished, that work keeps consuming capacity across timeouts and restarts.
 
 ## What has been measured
 
