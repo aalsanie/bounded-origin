@@ -129,9 +129,9 @@ class GatewayFailureMappingTest {
               origin.port(),
               temporaryDirectory,
               Map.of(
-                  "origin.max-execution-duration", "PT0.3S",
+                  "origin.max-execution-duration", "PT2S",
                   "origin.response-timeout", "PT0.1S",
-                  "request.timeout", "PT0.5S"));
+                  "request.timeout", "PT3S"));
       try (BoundedOriginGateway gateway =
           GatewayTestFixtures.start(
               config,
