@@ -30,7 +30,3 @@ Commercial licensing does not change the rights already granted under the AGPL o
 ## Third-party material
 
 Third-party and generated material retains its own applicable license and copyright notices. Nothing in this repository relicenses third-party material under Bounded Origin's project licenses.
-
-## Machine-readable declarations
-
-`REUSE.toml` records the license assignments for project-owned files without adding license headers to every source file.
