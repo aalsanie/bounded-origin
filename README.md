@@ -199,22 +199,7 @@ Artifact reuse requires `PUBLIC_IMMUTABLE`; this also allows `BOUNDED_COMPUTE` t
 reuse an existing artifact. `PUBLIC` permits sharing a running computation without
 persistent reuse.
 
-## Development and license
-
-[CI](.github/workflows/ci.yml) exercises Ubuntu and Windows with coverage and
-mutation gates, static analysis, dependency verification, reproducible archives,
-packaged process tests and Docker smoke.
-
-```sh
-./gradlew clean check --init-script .github/spotbugs-reports.init.gradle --stacktrace
-```
-
-Windows uses `gradlew.bat`. [Report issues](https://github.com/aalsanie/bounded-origin/issues)
-with a reproducer and the version/configuration involved.
-
-To build a CLI distribution from source, run `./gradlew :bounded-origin-cli:distTar`
-or `gradlew.bat :bounded-origin-cli:distZip`; archives are written to
-`bounded-origin-cli/build/distributions/`.
+## License
 
 The runtime is **AGPL-3.0-only**; `bounded-origin-api` is **Apache-2.0**.
 See [Licensing](LICENSING.md) for component and third-party terms.
