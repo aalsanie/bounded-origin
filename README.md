@@ -5,9 +5,10 @@
 [![Mutation testing](https://img.shields.io/badge/mutation%20testing-%E2%89%A590%25%20score%20%7C%20%E2%89%A590%25%20strength-brightgreen)](build.gradle.kts)
 [![License](https://img.shields.io/badge/license-AGPL--3.0--only%20%7C%20API%20Apache--2.0-blue)](LICENSING.md)
 
-Bounded Origin is a Java 21 library and HTTP gateway that limits how much expensive
-origin computation incoming requests can cause. You define which requests mean
-the same work, how much new work may run, and which results can be reused.
+Bounded Origin is a Java library and HTTP gateway that limits how much expensive
+origin computation incoming requests can cause. It puts an explicit budget on origin work:
+equivalent requests can share one running computation, distinct operations compete for bounded capacity,
+and reusable results can be served without computing them again.
 
 ```mermaid
 flowchart LR
@@ -19,20 +20,10 @@ flowchart LR
     S --> D[Response]
 ```
 
-## Why it exists
-
-Serving a result can be cheap while producing it is expensive. Many URLs may name
-the same underlying operation, and a stream of distinct requests may keep creating
-new work. Counting requests alone tells you neither how much computation they cause
-nor how much of it is redundant.
-
-Bounded Origin puts the budget on that work. Equivalent requests can share one
-running computation, distinct operations compete for explicitly limited capacity,
-and completed reusable results can be served without computing them again.
-
-The scraper-triggered rendering described in
-[Creepy crawlies](https://people.kernel.org/monsieuricon/creepy-crawlies)
-motivated this repository's approach to controlling origin work.
+Request count alone is a poor proxy for origin cost: different requests may represent
+the same expensive operation, while distinct requests can continuously create new work.
+The scraper-triggered rendering described in [Creepy crawlies](https://people.kernel.org/monsieuricon/creepy-crawlies)
+helped motivate this approach to controlling origin work.
 
 Routes decide which requests count as the same work. Global and per-policy
 limits control how much new origin work can start. When capacity is full, excess
@@ -40,11 +31,6 @@ requests get **503 with `Retry-After`**. If the gateway cannot prove that origin
 work has finished, that work keeps consuming capacity across timeouts and restarts.
 
 ## What has been measured
-
-The [reproducible campaign](BENCHMARKS.md) used a deterministic synthetic CPU
-workload, the packaged gateway, and independent origin-side work counts. It ran
-on Java 21 in a shared WSL2 Linux environment. The direct comparison uses the same
-origin, inputs and cost without the gateway or artifact reuse.
 
 ![Origin executions for equivalent requests as client concurrency increases.](bounded-origin-benchmarks/results/2026-09-28/generated/origin-executions.svg)
 
@@ -66,7 +52,7 @@ versus **20.4 ms** directly.
 
 ![Measured p99 latency for direct, bounded and materialized paths.](bounded-origin-benchmarks/results/2026-09-28/generated/latency.svg)
 
-Warm and restarted materialization required no origin recomputation. Distinct-key
+Warm and restarted materialization required no origin recomputation and distinct-key
 pressure stayed within capacity while rejecting excess work. Route matching and
 semantic-key costs grew with configuration complexity.
 
@@ -75,9 +61,7 @@ commands, including overload runs with unsent client drops.
 
 ## Usage
 
-### Java library
-
-The published modules are available from Maven Central. Start with the core engine:
+### Library
 
 ```kotlin
 dependencies {
@@ -93,7 +77,7 @@ dependencies {
 | `bounded-origin-proxy` | Embeddable HTTP gateway runtime; includes `bounded-origin-core` and the API. |
 
 <details>
-<summary>Maven equivalent</summary>
+<summary>Maven</summary>
 
 ```xml
 <dependency>
@@ -105,8 +89,7 @@ dependencies {
 
 </details>
 
-Use the module that matches your integration surface rather than depending on all
-four. The [configuration reference](CONFIGURATION.md) covers the runtime model,
+The [configuration reference](CONFIGURATION.md) covers the runtime model,
 defaults, limits and operational metrics.
 
 ### CLI gateway
@@ -122,13 +105,13 @@ The distribution includes its dependencies and requires Java 21.
 Install Python 3 and save [materialize.yaml](examples/materialize.yaml) and
 [public_origin.py](examples/public_origin.py) beside the downloaded archive.
 
-Start the demonstration origin:
+Start:
 
 ```sh
 python public_origin.py
 ```
 
-Then extract the distribution, validate the configuration and start the gateway.
+Then extract, validate the configuration and start the gateway.
 
 #### POSIX
 
@@ -146,16 +129,12 @@ Expand-Archive .\bounded-origin-0.1.0.zip -DestinationPath .
 .\bounded-origin-0.1.0\bin\bounded-origin.bat run --config materialize.yaml
 ```
 
-`validate` exits silently with code 0 on success. In another terminal, send two
-equivalent requests; on PowerShell use `curl.exe`:
-
 ```sh
 curl "http://127.0.0.1:8080/hello/world?noise=one"
 curl "http://127.0.0.1:8080/hello/%77orld?noise=two"
 ```
 
-Both return `Hello from /hello/world.` The configured path normalization and query
-selection make them the same operation: the first request materializes the result,
+Both return `Hello from /hello/world.` The first request materializes the result,
 and the second reuses it. Restart the gateway from the same working directory and
 request it again to reuse the persisted artifact.
 
