@@ -31,9 +31,9 @@ covers routing, budgets and the five policy strategies.
 ## Applied to Git/cgit
 
 [Bounded Origin Git](https://github.com/aalsanie/bounded-origin-git) is an independent
-application built on the released **Bounded Origin 0.1.0** libraries. Trusted
-preparation renders pages; anonymous reads serve stored results; supported Git
-comparisons run on the client.
+application built on the released **Bounded Origin 0.1.0** libraries. It serves
+cgit pages rendered ahead of time, so anonymous traffic does not trigger cgit
+rendering.
 
 In its [Linux/cgit campaign](https://github.com/aalsanie/bounded-origin-git/blob/a8ca9fd93a3a562073f800a8f1a7c289898136eb/BENCHMARKS.md),
 across **47,200 measured Bounded Origin attempts**, anonymous requests caused
