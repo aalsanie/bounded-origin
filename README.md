@@ -59,6 +59,21 @@ semantic-key costs grew with configuration complexity.
 See [Benchmarks](BENCHMARKS.md) for complete results, limitations and reproduction
 commands, including overload runs with unsent client drops.
 
+### Git/cgit application
+
+[Bounded Origin Git](https://github.com/aalsanie/bounded-origin-git) is an independent
+consumer of the released `0.1.0` API, core, filesystem store and proxy artifacts.
+It combines trusted preparation, artifact-only anonymous reads and client-side
+Git comparisons. Git-specific identity, refs and rendering remain in that repository.
+
+Its [Linux/cgit benchmark](https://github.com/aalsanie/bounded-origin-git/blob/58a8ca9525c27d93401aa7675202e77f5308fe63/README.md#what-the-campaign-establishes)
+delivered all 512 prepared commit pages with zero request-triggered cgit executions
+in each of ten measured repetitions. Preparation still required 512 trusted renders.
+The same campaign reports the tradeoffs: warm nginx was faster for cached content,
+and the bounded client delivered only 28 of 64 comparisons per repetition.
+See its [results and reproduction](https://github.com/aalsanie/bounded-origin-git/blob/58a8ca9525c27d93401aa7675202e77f5308fe63/BENCHMARKS.md)
+for the full matrix, preparation costs and limitations.
+
 ## Usage
 
 ### Library
