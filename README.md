@@ -5,34 +5,137 @@
 [![Mutation testing](https://img.shields.io/badge/mutation%20testing-%E2%89%A590%25%20score%20%7C%20%E2%89%A590%25%20strength-brightgreen)](build.gradle.kts)
 [![License](https://img.shields.io/badge/license-AGPL--3.0--only%20%7C%20API%20Apache--2.0-blue)](LICENSING.md)
 
-Bounded Origin is a Java library and HTTP gateway that limits how much expensive
-origin computation incoming requests can cause. It puts an explicit budget on origin work:
-equivalent requests can share one running computation, distinct operations compete for bounded capacity,
-and reusable results can be served without computing them again.
+Bounded Origin is an **HTTP gateway and Java library for controlling expensive
+server-side work**. Equivalent requests can share one computation, new work runs
+within explicit limits, and saved results can be reused across restarts.
 
 ```mermaid
 flowchart LR
-    R[Request] --> P[Policy + semantic identity]
-    P --> S[Reuse or join]
-    P --> B[Bounded admission]
-    B --> O[Origin]
-    O --> S
-    S --> D[Response]
+    R[Request] --> B[Bounded Origin]
+    B -->|Reuse| S[Saved result]
+    B -->|Join| W[Work already running]
+    B -->|Start within limits| O[New computation at your origin]
 ```
 
-Request count alone is a poor proxy for origin cost: different requests may represent
-the same expensive operation, while distinct requests can continuously create new work.
-The scraper-triggered rendering described in [Creepy crawlies](https://people.kernel.org/monsieuricon/creepy-crawlies)
-helped motivate this approach to controlling origin work.
+Serving a result can be cheap while producing it is expensive. Request counts alone
+do not capture that cost: many URLs may ask for the same work, while distinct
+requests can continuously create new work. The scraper-triggered rendering in
+[Creepy crawlies](https://people.kernel.org/monsieuricon/creepy-crawlies) motivated
+this repository.
 
-Routes decide which requests count as the same work. Global and per-policy
-limits control how much new origin work can start. When capacity is full, excess
-requests get **503 with `Retry-After`**. If the gateway cannot prove that origin
-work has finished, that work keeps consuming capacity across timeouts and restarts.
+You configure which inputs identify the same operation and set global and
+per-policy limits on active and queued work. Excess requests receive **503 with
+`Retry-After`**; unclassified requests are denied. The [configuration guide](CONFIGURATION.md)
+covers routing, budgets and the five policy strategies.
 
-## What has been measured
+## Applied to Git/cgit
 
-![Origin executions for equivalent requests as client concurrency increases.](bounded-origin-benchmarks/results/2026-09-28/generated/origin-executions.svg)
+[Bounded Origin Git](https://github.com/aalsanie/bounded-origin-git) is an independent
+application built on the released **Bounded Origin 0.1.0** libraries. It serves
+cgit pages rendered ahead of time, so anonymous traffic does not trigger cgit
+rendering.
+
+In its [Linux/cgit campaign](https://github.com/aalsanie/bounded-origin-git/blob/a8ca9fd93a3a562073f800a8f1a7c289898136eb/BENCHMARKS.md),
+across **47,200 measured Bounded Origin attempts**, anonymous requests caused
+**zero native cgit executions**. For the **512-page unique crawl**, prepared BO
+delivered **512/512 representations in every one of ten measured repetitions**,
+again with zero request-triggered cgit.
+
+[![Native cgit CPU and content delivery for 512 distinct pages across eight configurations.](https://raw.githubusercontent.com/aalsanie/bounded-origin-git/a8ca9fd93a3a562073f800a8f1a7c289898136eb/benchmarks/results/2026-10-03/generated/origin-and-delivery.svg)](https://github.com/aalsanie/bounded-origin-git/blob/a8ca9fd93a3a562073f800a8f1a7c289898136eb/README.md#what-the-campaign-establishes)
+
+Preparation required **512 trusted renders**; unprepared pages return 404.
+Client-side comparisons have a separate cost and coverage tradeoff:
+
+[![Client comparison workload: server CPU, client CPU and latency, with 28/64 comparisons delivered by prepared BO.](https://raw.githubusercontent.com/aalsanie/bounded-origin-git/a8ca9fd93a3a562073f800a8f1a7c289898136eb/benchmarks/results/2026-10-03/generated/comparison-tradeoff.svg)](https://github.com/aalsanie/bounded-origin-git/blob/a8ca9fd93a3a562073f800a8f1a7c289898136eb/BENCHMARKS.md#comparison-coverage)
+
+[Full results, preparation costs and reproduction instructions](https://github.com/aalsanie/bounded-origin-git/blob/a8ca9fd93a3a562073f800a8f1a7c289898136eb/BENCHMARKS.md).
+
+## Usage
+
+### Quick start
+
+The gateway runs from YAML and requires **Java 21**. Download the
+[0.1.0 distribution](https://github.com/aalsanie/bounded-origin/releases/tag/v0.1.0):
+`bounded-origin-0.1.0.tar` for POSIX or `bounded-origin-0.1.0.zip` for Windows.
+Dependencies are included.
+
+Save [materialize.yaml](examples/materialize.yaml) and
+[public_origin.py](examples/public_origin.py) beside the archive. Start the demo
+origin in one terminal (Python 3 required):
+
+```sh
+python public_origin.py
+```
+
+In a second terminal, extract, validate and run:
+
+```sh
+tar -xf bounded-origin-0.1.0.tar
+./bounded-origin-0.1.0/bin/bounded-origin validate --config materialize.yaml
+./bounded-origin-0.1.0/bin/bounded-origin run --config materialize.yaml
+```
+
+<details>
+<summary>Windows PowerShell commands</summary>
+
+```powershell
+Expand-Archive .\bounded-origin-0.1.0.zip -DestinationPath .
+.\bounded-origin-0.1.0\bin\bounded-origin.bat validate --config materialize.yaml
+.\bounded-origin-0.1.0\bin\bounded-origin.bat run --config materialize.yaml
+```
+
+</details>
+
+In another terminal, send two equivalent requests (use `curl.exe` on PowerShell):
+
+```sh
+curl "http://127.0.0.1:8080/hello/world?noise=one"
+curl "http://127.0.0.1:8080/hello/%77orld?noise=two"
+```
+
+Both return `Hello from /hello/world.` The first saves the result; the second
+reuses it. Restart from the same working directory to reuse it again. State lives
+in `bounded-origin-data/`; listeners bind to loopback.
+
+Next: [adapt the configuration](CONFIGURATION.md#adapt-the-example) and
+[inspect metrics, health and readiness](CONFIGURATION.md#observability).
+
+### Use from Java
+
+Add the core engine from Maven Central:
+
+```kotlin
+dependencies {
+    implementation("io.github.aalsanie:bounded-origin-core:0.1.0")
+}
+```
+
+<details>
+<summary>Maven equivalent and other modules</summary>
+
+```xml
+<dependency>
+    <groupId>io.github.aalsanie</groupId>
+    <artifactId>bounded-origin-core</artifactId>
+    <version>0.1.0</version>
+</dependency>
+```
+
+| Module | Purpose |
+|---|---|
+| `bounded-origin-api` | Framework-independent public contracts. |
+| `bounded-origin-core` | Policy and execution engine; includes the API. |
+| `bounded-origin-store-fs` | Filesystem artifact storage. |
+| `bounded-origin-proxy` | Embeddable HTTP gateway; includes the core and API. |
+
+</details>
+
+## Mechanism benchmarks
+
+The [generic benchmark campaign](BENCHMARKS.md) compares a synthetic CPU origin
+with shared computation (`BOUNDED_COMPUTE`) and saved results (`MATERIALIZE`). It
+uses the packaged gateway, independent origin-side work counts and the same
+origin workload, on Java 21 in a shared WSL2 environment.
 
 <!-- generated-readme-results:start -->
 For 256 requests naming one operation at concurrency 64, across 10 measured repetitions,
@@ -50,134 +153,27 @@ versus **20.4 ms** directly.
 
 <!-- generated-readme-results:end -->
 
-![Measured p99 latency for direct, bounded and materialized paths.](bounded-origin-benchmarks/results/2026-09-28/generated/latency.svg)
+Routing and operation-key costs grow with configuration complexity. Full results,
+charts, raw evidence and reproduction commands are in [Benchmarks](BENCHMARKS.md).
 
-Warm and restarted materialization required no origin recomputation and distinct-key
-pressure stayed within capacity while rejecting excess work. Route matching and
-semantic-key costs grew with configuration complexity.
+## Before deploying
 
-See [Benchmarks](BENCHMARKS.md) for complete results, limitations and reproduction
-commands, including overload runs with unsent client drops.
+**Responses must be safe to share.** The HTTP gateway serves public results;
+stored results must remain valid for their versioned identity. Caller-specific,
+authenticated, conditional and range responses are outside this model. The origin
+must affirm public sharing; see the [response contract](CONFIGURATION.md#public-representation-contract).
 
-## Usage
+**A timeout does not prove computation stopped.** The origin must finish all work,
+including delegated work, before its complete response. Uncertain work retains
+capacity indefinitely, including across restarts. Preserve the exclusive ownership
+state and route all work being bounded through that domain. Read the
+[ownership and recovery requirements](CONFIGURATION.md#computation-ownership)
+before deployment.
 
-### Library
-
-```kotlin
-dependencies {
-    implementation("io.github.aalsanie:bounded-origin-core:0.1.0")
-}
-```
-
-| Module | Use it for |
-|---|---|
-| `bounded-origin-api` | Framework-independent public contracts only. |
-| `bounded-origin-core` | Policy and execution engine; includes `bounded-origin-api`. |
-| `bounded-origin-store-fs` | Filesystem-backed artifact storage; add it alongside the engine or proxy when needed. |
-| `bounded-origin-proxy` | Embeddable HTTP gateway runtime; includes `bounded-origin-core` and the API. |
-
-<details>
-<summary>Maven</summary>
-
-```xml
-<dependency>
-    <groupId>io.github.aalsanie</groupId>
-    <artifactId>bounded-origin-core</artifactId>
-    <version>0.1.0</version>
-</dependency>
-```
-
-</details>
-
-The [configuration reference](CONFIGURATION.md) covers the runtime model,
-defaults, limits and operational metrics.
-
-### CLI gateway
-
-Download the **0.1.0 CLI distribution** from
-[Releases](https://github.com/aalsanie/bounded-origin/releases):
-`bounded-origin-0.1.0.tar` for POSIX or `bounded-origin-0.1.0.zip` for Windows.
-The distribution includes its dependencies and requires Java 21.
-
-<details>
-<summary>Run the local materialization demo</summary>
-
-Install Python 3 and save [materialize.yaml](examples/materialize.yaml) and
-[public_origin.py](examples/public_origin.py) beside the downloaded archive.
-
-Start:
-
-```sh
-python public_origin.py
-```
-
-Then extract, validate the configuration and start the gateway.
-
-#### POSIX
-
-```sh
-tar -xf bounded-origin-0.1.0.tar
-./bounded-origin-0.1.0/bin/bounded-origin validate --config materialize.yaml
-./bounded-origin-0.1.0/bin/bounded-origin run --config materialize.yaml
-```
-
-#### Windows PowerShell
-
-```powershell
-Expand-Archive .\bounded-origin-0.1.0.zip -DestinationPath .
-.\bounded-origin-0.1.0\bin\bounded-origin.bat validate --config materialize.yaml
-.\bounded-origin-0.1.0\bin\bounded-origin.bat run --config materialize.yaml
-```
-
-```sh
-curl "http://127.0.0.1:8080/hello/world?noise=one"
-curl "http://127.0.0.1:8080/hello/%77orld?noise=two"
-```
-
-Both return `Hello from /hello/world.` The first request materializes the result,
-and the second reuses it. Restart the gateway from the same working directory and
-request it again to reuse the persisted artifact.
-
-The example keeps state in `bounded-origin-data/` and binds its listeners to
-loopback. Its admin endpoint exposes
-[metrics](http://127.0.0.1:8081/metrics), health and readiness.
-
-</details>
-
-## Before connecting an origin
-
-The HTTP gateway is for **public results that can be shared safely**. Persisted
-results must remain valid for their versioned identity. Caller-specific,
-authenticated, conditional and range responses are outside this sharing model.
-The origin must explicitly affirm public sharing; see the
-[representation contract](CONFIGURATION.md#public-representation-contract).
-
-The origin must guarantee that **all work caused by an operation, including
-delegated work, finishes before its complete response**. The gateway preserves
-uncertain work against its budget indefinitely. Deployments must preserve exclusive
-ownership state across restarts and route all bounded work through that domain.
-Read the [ownership and recovery contract](CONFIGURATION.md#computation-ownership)
-before deployment, including its filesystem and recovery requirements.
-
-Bounded Origin complements authentication, TLS termination, ingress rate limits
-and CDN/WAF controls. It does not identify bots, eliminate incoming traffic or
-make arbitrary remote computation safe to cancel.
-
-## Choose a policy
-
-| Strategy | Behavior |
-|---|---|
-| `DENY` | Reject without origin computation. |
-| `ARTIFACT_ONLY` | Serve a stored artifact; return 404 on a miss. |
-| `BOUNDED_COMPUTE` | Share overlapping computation within budgets; do not persist new results. |
-| `MATERIALIZE` | Reuse a stored artifact, or compute within budgets and publish the result. |
-| `CLIENT_COMPUTE` | Return a JSON computation description for an application-supplied client implementation. |
-
-Artifact reuse requires `PUBLIC_IMMUTABLE`; this also allows `BOUNDED_COMPUTE` to
-reuse an existing artifact. `PUBLIC` permits sharing a running computation without
-persistent reuse.
+Bounded Origin complements authentication, TLS termination, rate limits and CDN/WAF
+controls. It does not identify bots or stop incoming traffic.
 
 ## License
 
 The runtime is **AGPL-3.0-only**; `bounded-origin-api` is **Apache-2.0**.
-See [Licensing](LICENSING.md) for component and third-party terms.
+See [Licensing](LICENSING.md) for terms and [Security](SECURITY.md) to report a vulnerability.
