@@ -2,6 +2,7 @@
 
 [![CI](https://github.com/aalsanie/bounded-origin/actions/workflows/ci.yml/badge.svg)](https://github.com/aalsanie/bounded-origin/actions/workflows/ci.yml)
 [![Maven Central](https://img.shields.io/maven-central/v/io.github.aalsanie/bounded-origin-core?label=Maven%20Central)](https://central.sonatype.com/artifact/io.github.aalsanie/bounded-origin-core)
+[![Mutation testing](https://img.shields.io/badge/mutation%20testing-%E2%89%A590%25%20score%20%7C%20%E2%89%A590%25%20strength-brightgreen)](build.gradle.kts)
 [![License](https://img.shields.io/badge/license-AGPL--3.0--only%20%7C%20API%20Apache--2.0-blue)](LICENSING.md)
 
 Bounded Origin is an **HTTP gateway and Java library for controlling expensive
@@ -42,15 +43,16 @@ again with zero request-triggered cgit.
 
 [![Native cgit CPU and content delivery for 512 distinct pages across eight configurations.](https://raw.githubusercontent.com/aalsanie/bounded-origin-git/a8ca9fd93a3a562073f800a8f1a7c289898136eb/benchmarks/results/2026-10-03/generated/origin-and-delivery.svg)](https://github.com/aalsanie/bounded-origin-git/blob/a8ca9fd93a3a562073f800a8f1a7c289898136eb/README.md#what-the-campaign-establishes)
 
-Preparing those pages required **512 trusted renders**. Unprepared pages return
-404. Warm nginx was faster for cached content, and the client comparison path
-completed **28/64 attempts** within its fixed limits. The
-[full report](https://github.com/aalsanie/bounded-origin-git/blob/a8ca9fd93a3a562073f800a8f1a7c289898136eb/BENCHMARKS.md)
-includes preparation costs, comparison coverage and reproduction instructions.
+Preparation required **512 trusted renders**; unprepared pages return 404.
+Client-side comparisons have a separate cost and coverage tradeoff:
+
+[![Client comparison workload: server CPU, client CPU and latency, with 28/64 comparisons delivered by prepared BO.](https://raw.githubusercontent.com/aalsanie/bounded-origin-git/a8ca9fd93a3a562073f800a8f1a7c289898136eb/benchmarks/results/2026-10-03/generated/comparison-tradeoff.svg)](https://github.com/aalsanie/bounded-origin-git/blob/a8ca9fd93a3a562073f800a8f1a7c289898136eb/BENCHMARKS.md#comparison-coverage)
+
+[Full results, preparation costs and reproduction instructions](https://github.com/aalsanie/bounded-origin-git/blob/a8ca9fd93a3a562073f800a8f1a7c289898136eb/BENCHMARKS.md).
 
 ## Usage
 
-### Try it
+### Quick start
 
 The gateway runs from YAML and requires **Java 21**. Download the
 [0.1.0 distribution](https://github.com/aalsanie/bounded-origin/releases/tag/v0.1.0):

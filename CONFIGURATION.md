@@ -19,7 +19,7 @@ The file has five required top-level fields:
 ## Start with one route
 
 This is the complete [example configuration](examples/materialize.yaml) used by
-the [packaged quick start](README.md#try-it). It serves `/hello/{name}` from a
+the [packaged quick start](README.md#quick-start). It serves `/hello/{name}` from a
 loopback origin and persists the result. Both listeners bind to loopback.
 
 ```yaml
