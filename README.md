@@ -19,9 +19,7 @@ flowchart LR
 
 Serving a result can be cheap while producing it is expensive. Request counts alone
 do not capture that cost: many URLs may ask for the same work, while distinct
-requests can continuously create new work. The scraper-triggered rendering in
-[Creepy crawlies](https://people.kernel.org/monsieuricon/creepy-crawlies) motivated
-this repository.
+requests can continuously create new work on cache miss.
 
 You configure which inputs identify the same operation and set global and
 per-policy limits on active and queued work. Excess requests receive **503 with
