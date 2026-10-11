@@ -1,0 +1,72 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="444" viewBox="0 0 1000 444" role="img" aria-labelledby="flow-title flow-description">
+<title id="flow-title">Bounded Origin request decision flow</title>
+<desc id="flow-description">An HTTP request is validated and its body spooled, then policy matching establishes a semantic operation identity. Denied and client-compute policies return without origin execution. Other policies look for saved artifacts, join active or queued work, or admit new work within budgets. New upstream work reserves durable ownership before execution and optionally persists the result. Artifact-only misses return 404, and exhausted budgets return 503.</desc>
+<defs><marker id="arrow" markerWidth="6" markerHeight="6" refX="5.2" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0 0 L6 3 L0 6Z" fill="#7E91A8"/></marker></defs>
+<g font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Arial, sans-serif">
+<rect x="0" y="0" width="1000" height="444" rx="0" fill="#FFFFFF" stroke="none" stroke-width="0"/>
+<rect x="24" y="24" width="140" height="70" rx="12" fill="#F8FAFD" stroke="#D8E3EC" stroke-width="1.35"/>
+<text x="40" y="43" font-size="11" font-weight="700" fill="#53718F" text-anchor="start" letter-spacing="0.07em">REQUEST</text>
+<text x="40" y="66" font-size="17" font-weight="640" fill="#15253C" text-anchor="start">HTTP</text>
+<text x="40" y="83" font-size="12.5" font-weight="420" fill="#56677D" text-anchor="start">Incoming</text>
+<rect x="200" y="24" width="260" height="70" rx="12" fill="#F8FAFD" stroke="#D8E3EC" stroke-width="1.35"/>
+<text x="216" y="43" font-size="11" font-weight="700" fill="#53718F" text-anchor="start" letter-spacing="0.07em">VALIDATE</text>
+<text x="216" y="66" font-size="17" font-weight="640" fill="#15253C" text-anchor="start">HTTP boundaries</text>
+<text x="216" y="83" font-size="12.5" font-weight="420" fill="#56677D" text-anchor="start">Spool request body</text>
+<rect x="496" y="24" width="480" height="70" rx="12" fill="#F0F6FF" stroke="#B9D4F3" stroke-width="1.35"/>
+<text x="512" y="43" font-size="11" font-weight="700" fill="#53718F" text-anchor="start" letter-spacing="0.07em">IDENTIFY</text>
+<text x="512" y="66" font-size="17" font-weight="640" fill="#15253C" text-anchor="start">Policy + semantic operation key</text>
+<text x="512" y="83" font-size="12.5" font-weight="420" fill="#56677D" text-anchor="start">Classify strategy and equivalent work</text>
+<path d="M164 59 H199" fill="none" stroke="#7E91A8" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M460 59 H495" fill="none" stroke="#7E91A8" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M736 94 V117" fill="none" stroke="#7E91A8" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M216 117 H855" fill="none" stroke="#7E91A8" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M216 117 V139" fill="none" stroke="#7E91A8" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M572 117 V139" fill="none" stroke="#7E91A8" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M855 117 V139" fill="none" stroke="#7E91A8" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<rect x="24" y="140" width="384" height="60" rx="12" fill="#EAF4FF" stroke="#BDDBFC" stroke-width="1.35"/>
+<text x="40" y="162" font-size="11.5" font-weight="750" fill="#1D65A2" text-anchor="start" letter-spacing="0.04em">ORIGIN / ARTIFACT PATH</text>
+<text x="40" y="185" font-size="16.5" font-weight="650" fill="#15253C" text-anchor="start">Continue to reuse or admission</text>
+<rect x="436" y="140" width="272" height="60" rx="12" fill="#F7F9FC" stroke="#D9E2ED" stroke-width="1.35"/>
+<text x="452" y="162" font-size="11.5" font-weight="750" fill="#53718F" text-anchor="start" letter-spacing="0.04em">CLIENT_COMPUTE</text>
+<text x="452" y="185" font-size="16.5" font-weight="650" fill="#15253C" text-anchor="start">Return decision</text>
+<rect x="735" y="140" width="241" height="60" rx="12" fill="#F7F9FC" stroke="#D9E2ED" stroke-width="1.35"/>
+<text x="751" y="162" font-size="11.5" font-weight="750" fill="#53718F" text-anchor="start" letter-spacing="0.04em">DENY</text>
+<text x="751" y="185" font-size="16.5" font-weight="650" fill="#15253C" text-anchor="start">Reject request</text>
+<path d="M216 200 V220 H131 V245" fill="none" stroke="#7E91A8" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<rect x="24" y="246" width="214" height="75" rx="12" fill="#FFFFFF" stroke="#D8E3EC" stroke-width="1.35"/>
+<text x="40" y="265" font-size="11" font-weight="700" fill="#53718F" text-anchor="start" letter-spacing="0.07em">CHECK 01</text>
+<text x="40" y="288" font-size="17" font-weight="640" fill="#15253C" text-anchor="start">Saved artifact?</text>
+<text x="40" y="305" font-size="12.5" font-weight="420" fill="#56677D" text-anchor="start">Where reuse is enabled</text>
+<rect x="270" y="246" width="214" height="75" rx="12" fill="#FFFFFF" stroke="#D8E3EC" stroke-width="1.35"/>
+<text x="286" y="265" font-size="11" font-weight="700" fill="#53718F" text-anchor="start" letter-spacing="0.07em">CHECK 02</text>
+<text x="286" y="288" font-size="17" font-weight="640" fill="#15253C" text-anchor="start">Existing flight?</text>
+<text x="286" y="305" font-size="12.5" font-weight="420" fill="#56677D" text-anchor="start">Active or queued</text>
+<rect x="516" y="246" width="214" height="75" rx="12" fill="#FFFFFF" stroke="#D8E3EC" stroke-width="1.35"/>
+<text x="532" y="265" font-size="11" font-weight="700" fill="#53718F" text-anchor="start" letter-spacing="0.07em">CHECK 03</text>
+<text x="532" y="288" font-size="17" font-weight="640" fill="#15253C" text-anchor="start">Admit or queue?</text>
+<text x="532" y="305" font-size="12.5" font-weight="420" fill="#56677D" text-anchor="start">Within active/queue limits</text>
+<rect x="762" y="246" width="214" height="75" rx="12" fill="#F0F6FF" stroke="#B9D4F3" stroke-width="1.35"/>
+<text x="778" y="265" font-size="11" font-weight="700" fill="#53718F" text-anchor="start" letter-spacing="0.07em">EXECUTE</text>
+<text x="778" y="288" font-size="17" font-weight="640" fill="#15253C" text-anchor="start">Origin work</text>
+<text x="778" y="305" font-size="12.5" font-weight="420" fill="#56677D" text-anchor="start">Reserve ownership first</text>
+<path d="M238 283 H269" fill="none" stroke="#7E91A8" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M484 283 H515" fill="none" stroke="#7E91A8" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M730 283 H761" fill="none" stroke="#7E91A8" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<rect x="24" y="347" width="214" height="57" rx="10" fill="#F7F9FC" stroke="#D9E2ED" stroke-width="1.35"/>
+<text x="39" y="367" font-size="11.5" font-weight="700" fill="#496786" text-anchor="start" letter-spacing="0.05em">HIT → REUSE</text>
+<text x="39" y="388" font-size="15.5" font-weight="620" fill="#15253C" text-anchor="start">Artifact-only miss → 404</text>
+<rect x="270" y="347" width="214" height="57" rx="10" fill="#F7F9FC" stroke="#D9E2ED" stroke-width="1.35"/>
+<text x="285" y="367" font-size="11.5" font-weight="700" fill="#496786" text-anchor="start" letter-spacing="0.05em">MATCH → JOIN</text>
+<text x="285" y="388" font-size="15.5" font-weight="620" fill="#15253C" text-anchor="start">Reuse the shared flight</text>
+<rect x="516" y="347" width="214" height="57" rx="10" fill="#F7F9FC" stroke="#D9E2ED" stroke-width="1.35"/>
+<text x="531" y="367" font-size="11.5" font-weight="700" fill="#496786" text-anchor="start" letter-spacing="0.05em">AT LIMIT → 503</text>
+<text x="531" y="388" font-size="15.5" font-weight="620" fill="#15253C" text-anchor="start">No new work admitted</text>
+<rect x="762" y="347" width="214" height="57" rx="10" fill="#EAF4FF" stroke="#BDDBFC" stroke-width="1.35"/>
+<text x="777" y="367" font-size="11.5" font-weight="700" fill="#496786" text-anchor="start" letter-spacing="0.05em">MATERIALIZE → SAVE</text>
+<text x="777" y="388" font-size="15.5" font-weight="620" fill="#15253C" text-anchor="start">Otherwise return result</text>
+<path d="M131 321 V346" fill="none" stroke="#7E91A8" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M377 321 V346" fill="none" stroke="#7E91A8" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M623 321 V346" fill="none" stroke="#7E91A8" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M869 321 V346" fill="none" stroke="#7E91A8" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<text x="24" y="431" font-size="13.5" font-weight="440" fill="#586B80" text-anchor="start">Continue right only when a permitted computation has no reusable artifact or existing flight.</text>
+</g></svg>

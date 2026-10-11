@@ -9,13 +9,9 @@ Bounded Origin is an **HTTP gateway and Java library for controlling expensive
 server-side work**. Equivalent requests can share one computation, new work runs
 within explicit limits, and saved results can be reused across restarts.
 
-```mermaid
-flowchart LR
-    R[Request] --> B[Bounded Origin]
-    B -->|Reuse| S[Saved result]
-    B -->|Join| W[Work already running]
-    B -->|Start within limits| O[New computation at your origin]
-```
+<img src="docs/request-flow.svg"
+alt="Bounded Origin request processing flow"
+width="650">
 
 Serving a result can be cheap while producing it is expensive. Request counts alone
 do not capture that cost: many URLs may ask for the same work, while distinct
