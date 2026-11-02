@@ -222,6 +222,8 @@ jobs:
     needs: [preflight, authorize]
     if: needs.authorize.result == 'success' && needs.preflight.outputs.release == 'true'
     uses: ./.github/workflows/release-verification.yml
+    with:
+      approved: true
     permissions:
       contents: read
 
