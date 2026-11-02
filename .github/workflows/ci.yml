@@ -225,6 +225,7 @@ jobs:
     with:
       approved: true
     permissions:
+      actions: read
       contents: read
 
   required:
