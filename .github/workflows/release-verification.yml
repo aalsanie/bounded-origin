@@ -1,22 +1,12 @@
 name: Release Verification
 
 on:
+  workflow_call:
   push:
     branches: [release/0.1.0]
-  pull_request:
-    branches: [main]
-    paths:
-      - build.gradle.kts
-      - bounded-origin-cli/build.gradle.kts
-      - release-tests/**
-      - scripts/verify-release-*.sh
-      - .github/workflows/release-verification.yml
-      - .github/workflows/release.yml
-      - .github/workflows/central-preflight.yml
-      - scripts/central-portal.sh
-      - scripts/verify-release-workflow-policy.sh
 
 permissions:
+  actions: read
   contents: read
 
 concurrency:
@@ -24,7 +14,36 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  preflight:
+    name: Release verification preflight
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Verify required CI approver
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh api "repos/${GITHUB_REPOSITORY}/environments/ci-approved" --jq \
+            'if .can_admins_bypass == false then [.protection_rules[] | select(.type == "required_reviewers" and .prevent_self_review == false and (.reviewers | length) == 1 and .reviewers[0].type == "User" and .reviewers[0].reviewer.id == 22101794)] | length else 0 end' \
+            | grep -qx '1'
+
+  authorize:
+    name: Approve release verification
+    if: github.event_name == 'push'
+    needs: preflight
+    runs-on: ubuntu-latest
+    environment:
+      name: ci-approved
+      deployment: false
+    steps:
+      - run: echo "Release verification approved"
+
   central-bundle:
+    needs: authorize
+    if: always() && (github.event_name == 'workflow_call' || needs.authorize.result == 'success')
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -93,6 +112,8 @@ jobs:
         run: bash scripts/verify-release-negative.sh
 
   cli-release:
+    needs: authorize
+    if: always() && (github.event_name == 'workflow_call' || needs.authorize.result == 'success')
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -115,6 +136,8 @@ jobs:
         run: ./gradlew :bounded-origin-cli:cliReleaseArtifacts --stacktrace
 
   external-consumer:
+    needs: authorize
+    if: always() && (github.event_name == 'workflow_call' || needs.authorize.result == 'success')
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -137,6 +160,8 @@ jobs:
         run: ./gradlew verifyExternalMavenConsumer --stacktrace
 
   release-reproducibility:
+    needs: authorize
+    if: always() && (github.event_name == 'workflow_call' || needs.authorize.result == 'success')
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -160,6 +185,8 @@ jobs:
         run: bash scripts/verify-release-reproducible.sh
 
   release-policy:
+    needs: authorize
+    if: always() && (github.event_name == 'workflow_call' || needs.authorize.result == 'success')
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
